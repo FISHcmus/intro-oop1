@@ -94,9 +94,11 @@ JetBrains MCP provides **IDE-level** operations. Prefer JetBrains for:
 
 After writing or editing any code, ALWAYS run `mcp__jetbrains__get_file_problems` to check for errors and warnings. Fix all issues before considering the task done.
 
-## Verification
+**Inline diagnostics:** When JetBrains diagnostics appear in `<new-diagnostics>` tags during edits, NEVER ignore them. Fix every diagnostic immediately — even info-level hints. No exceptions.
 
-After writing or modifying code, ALWAYS verify using one or both methods:
+## Verification (MANDATORY)
+
+**Every code change MUST be compiled and tested before considering it done.** No exceptions — always run at least one of these methods after any edit:
 
 ### 1. Automated Programmatic Test
 - Write a test that pipes input via `echo` and checks output with `grep`/`diff`
@@ -112,3 +114,10 @@ After writing or modifying code, ALWAYS verify using one or both methods:
   4. Send input: `tmux send-keys -t 1 '15 3 2000' Enter`
   5. Read output: `tmux capture-pane -t 1 -p`
 - Good for interactive programs, verifying UI/UX flow, and programs that require multi-step input
+
+### 3. Code Coverage (gcovr)
+- Compile with `--coverage`: `g++ -std=c++14 --coverage -o /tmp/prog file.cpp`
+- Run program with test inputs, then: `gcovr --root . --filter <dir>/ --object-directory /tmp`
+- For HTML report: `gcovr --root . --filter <dir>/ --object-directory /tmp --html-details coverage.html`
+- Aim for high coverage on multi-function code (Caro project, larger exercises)
+- Tools installed: `gcov` (GCC), `lcov` (HTML), `gcovr` (terminal + HTML/XML)
