@@ -1,0 +1,36 @@
+name: MSVC Build Check
+
+on:
+  push:
+    paths:
+      - 'week*/**/*.cpp'
+      - 'week*/**/*.c'
+      - 'CMakeLists.txt'
+      - '.github/workflows/msvc-build.yml'
+  pull_request:
+    paths:
+      - 'week*/**/*.cpp'
+      - 'week*/**/*.c'
+      - 'CMakeLists.txt'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Generate VS project files and build
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64
+          cmake --build build --config Release
+
+      - name: Upload VS project files (.sln + .vcxproj)
+        uses: actions/upload-artifact@v4
+        with:
+          name: vs-project-files
+          path: |
+            build/*.sln
+            build/**/*.vcxproj
+            build/**/*.vcxproj.filters

@@ -1,8 +1,18 @@
 {
   "mcpServers": {
-    "browsermcp": {
-      "command": "npx",
-      "args": ["@browsermcp/mcp@latest"]
+    "serena-oop1": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "claude-code",
+        "--project",
+        "/data/nextcloud/nhannht/files/documents/hcmus/semester2/intro-oop1"
+      ]
     }
   }
 }
