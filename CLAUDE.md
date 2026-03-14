@@ -3,9 +3,14 @@
 ## Course Info
 - **Student ID:** 25310023
 - **Language:** C++14 strict (must load into Visual Studio before submission)
-- **Homework naming:** `MSSV_______.cpp` (e.g. `25310023.cpp`)
+- **Homework naming:** `25310023_25310057_25310043.cpp` (group submission, MSSV1_MSSV2_MSSV3)
+- **Group members:**
+  - Nguyen Huu Thien Nhan — 25310023 (always first)
+  - Bui Thi Minh Hang — 25310057
+  - Pham Ngoc Tram — 25310043
 - **Final project:** Caro game with raylib (see `DoAnCaro.pdf`)
 - **Slides:** PPSX in `baigiang/`, extracted markdown in `extracted_content/`
+- **Research:** Course analysis and strategy docs in `research/`
 
 ## Directory Structure
 ```
@@ -15,6 +20,7 @@ intro-oop1/
 ├── ...
 ├── baigiang/       # Lecture slides (PPSX)
 ├── extracted_content/  # Markdown from slides
+├── research/       # Course analysis, style guide, algo reference
 ├── .serena/        # Serena MCP config (project-scoped)
 └── .mcp.json       # MCP servers config
 ```
@@ -89,6 +95,26 @@ JetBrains MCP provides **IDE-level** operations. Prefer JetBrains for:
 1. `jetbrains::build_project` — compile
 2. `jetbrains::get_run_configurations` — list available configs
 3. `jetbrains::execute_run_configuration` — run
+
+## Code Style Rules
+
+- **Clear, simple C++14** — readable code, split into small functions, handle all edge cases
+- **Use all semester techniques freely** — don't limit to what's been taught that week
+- **Only course-taught libraries** — `<cstdio>`, `<cstdlib>`, `<cmath>`, `<iostream>`, `<string>`, `<vector>`, `<cstring>`, `<cctype>`, `<ctime>`, `<fstream>`. No external/advanced libraries in homework.
+- **Caro project exempt** — can use raylib and additional libraries as needed
+- **Linter/IDE > teacher's outdated patterns** — when clang-tidy or IDE flags something, follow the modern standard:
+  - `int main()` not `void main()`
+  - `<cstdio>` not `<stdio.h>`
+  - `strtol`/`strtoll` not `scanf` for integer conversion
+  - `static_cast<>()` not C-style casts
+- Vietnamese function/variable names: `tinhTuoi`, `docSoNguyen`, `menhGia`, `soNgayTrongThang`
+
+## Quality Checklist (after every code change)
+
+1. `g++ -std=c++14` — must compile clean
+2. `mcp__jetbrains__get_file_problems` with `errorsOnly: false` — zero warnings
+3. `lizard file.cpp` — all functions CCN < 15 (installed via `uv tool install lizard`)
+4. Test all edge cases via piped input: `echo "input" | ./program`
 
 ## Code Quality
 

@@ -1,1 +1,6 @@
 .venv/
+.idea/
+build/
+
+# Compiled binaries (no extension)
+week1/25310023
