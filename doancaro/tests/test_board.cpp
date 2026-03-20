@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include "Board.h"
+#include <cstdlib>
+#include <string>
 
 TEST_CASE("Board initializes empty", "[board]") {
     Board board;
@@ -177,7 +179,10 @@ TEST_CASE("Board save and load", "[board][file]") {
     board.placeMove(1, 1, CellState::PlayerO);
     board.placeMove(2, 2, CellState::PlayerX);
 
-    std::string filename = "/tmp/caro_test_board.dat";
+    const char* tmpdir = std::getenv("TEMP");
+    if (!tmpdir) tmpdir = std::getenv("TMPDIR");
+    if (!tmpdir) tmpdir = "/tmp";
+    std::string filename = std::string(tmpdir) + "/caro_test_board.dat";
     REQUIRE(board.saveToFile(filename));
 
     Board loaded;
