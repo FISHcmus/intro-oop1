@@ -1,6 +1,6 @@
 #include "AIPlayer.h"
-#include <limits>
 #include <algorithm>
+#include <chrono>
 
 AIPlayer::AIPlayer(const std::string& name, CellState mark, int searchDepth)
     : Player(name, mark), searchDepth(searchDepth) {}
@@ -29,6 +29,7 @@ int AIPlayer::scoreMove(Board& board, int row, int col, CellState moveMark,
 }
 
 Move AIPlayer::getMove(const Board& board) {
+    transTable.clear();
     auto candidates = board.getCandidateMoves();
     if (candidates.empty()) {
         return {Board::SIZE / 2, Board::SIZE / 2};
@@ -44,6 +45,17 @@ Move AIPlayer::getMove(const Board& board) {
 
     // Mutable copy for place/undo during search
     Board searchBoard = board;
+
+    // Threat-space search (Medium/Hard only — searchDepth >= 4)
+    if (searchDepth >= 4) {
+        // Check for forced AI win
+        Move threatWin = findThreatWin(searchBoard, aiMark, opponentMark, 0);
+        if (threatWin.row >= 0) return threatWin;
+
+        // Check for forced opponent win (and block their first threat)
+        Move opponentThreat = findThreatWin(searchBoard, opponentMark, aiMark, 0);
+        if (opponentThreat.row >= 0) return opponentThreat;
+    }
 
     // Score and sort candidates for better alpha-beta pruning
     std::vector<std::pair<int, Move>> scored;
@@ -62,38 +74,106 @@ Move AIPlayer::getMove(const Board& board) {
         return scored[0].second;
     }
 
-    int bestScore = -1000000;
+    // Easy mode (depth 2): direct minimax, no time limit needed
+    if (searchDepth <= 2) {
+        int initialScore = evaluate(searchBoard, aiMark, opponentMark);
+        int bestScore = -1000000;
+        Move bestMove = scored[0].second;
+        for (const auto& pair : scored) {
+            const Move& move = pair.second;
+            int localBefore = computeLocalScore(searchBoard, move.row, move.col,
+                                                aiMark, opponentMark);
+            Move prevLast = searchBoard.getLastMove();
+            searchBoard.placeMove(move.row, move.col, aiMark);
+            int localAfter = computeLocalScore(searchBoard, move.row, move.col,
+                                               aiMark, opponentMark);
+            int newScore = initialScore - localBefore + localAfter;
+            int score = minimax(searchBoard, searchDepth - 1, -1000000, 1000000,
+                                false, aiMark, opponentMark, newScore);
+            searchBoard.undoMove(move.row, move.col, prevLast);
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = move;
+            }
+        }
+        return bestMove;
+    }
+
+    // Medium/Hard: iterative deepening with time limit
+    int timeLimitMs = (searchDepth >= 6) ? TIME_LIMIT_HARD_MS : TIME_LIMIT_MEDIUM_MS;
+    return iterativeDeepening(searchBoard, scored, aiMark, opponentMark, timeLimitMs);
+}
+
+Move AIPlayer::iterativeDeepening(Board& searchBoard,
+                                   const std::vector<std::pair<int, Move>>& scored,
+                                   CellState aiMark, CellState opponentMark,
+                                   int timeLimitMs) {
+    auto startTime = std::chrono::steady_clock::now();
     Move bestMove = scored[0].second;
 
-    for (const auto& pair : scored) {
-        const Move& move = pair.second;
-        Move prevLast = searchBoard.getLastMove();
-        searchBoard.placeMove(move.row, move.col, aiMark);
+    for (int curDepth = 2; curDepth <= searchDepth; curDepth += 2) {
+        transTable.clear();
+        int initScore = evaluate(searchBoard, aiMark, opponentMark);
+        int bestScore = -1000000;
+        Move depthBest = scored[0].second;
+        bool timeUp = false;
 
-        int score = minimax(searchBoard, searchDepth - 1, -1000000, 1000000,
-                            false, aiMark, opponentMark);
+        for (const auto& pair : scored) {
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - startTime).count();
+            if (elapsed >= timeLimitMs) { timeUp = true; break; }
 
-        searchBoard.undoMove(move.row, move.col, prevLast);
+            const Move& move = pair.second;
+            int lb = computeLocalScore(searchBoard, move.row, move.col,
+                                       aiMark, opponentMark);
+            Move prev = searchBoard.getLastMove();
+            searchBoard.placeMove(move.row, move.col, aiMark);
+            int la = computeLocalScore(searchBoard, move.row, move.col,
+                                       aiMark, opponentMark);
+            int score = minimax(searchBoard, curDepth - 1, -1000000, 1000000,
+                                false, aiMark, opponentMark, initScore - lb + la);
+            searchBoard.undoMove(move.row, move.col, prev);
 
-        if (score > bestScore) {
-            bestScore = score;
-            bestMove = move;
+            if (score > bestScore) { bestScore = score; depthBest = move; }
         }
+
+        if (!timeUp) bestMove = depthBest;
+
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - startTime).count();
+        if (elapsed >= timeLimitMs) break;
     }
+
     return bestMove;
 }
 
 int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
-                      bool maximizing, CellState aiMark, CellState opponentMark) {
+                      bool maximizing, CellState aiMark, CellState opponentMark,
+                      int boardScore) {
     // Lightweight winner check (no vector allocation)
     CellState winner = board.hasWinner();
     if (winner == aiMark) return 100000 + depth;
     if (winner == opponentMark) return -100000 - depth;
     if (board.isFull()) return 0;
-    if (depth <= 0) return evaluate(board, aiMark, opponentMark);
+    if (depth <= 0) return boardScore;
+
+    // Transposition table probe
+    uint64_t hash = board.getHash();
+    auto it = transTable.find(hash);
+    if (it != transTable.end()) {
+        const TTEntry& entry = it->second;
+        if (entry.depth >= depth) {
+            if (entry.flag == 0) return entry.score;        // exact
+            if (entry.flag == 1 && entry.score > alpha)     // lower bound
+                alpha = entry.score;
+            if (entry.flag == 2 && entry.score < beta)      // upper bound
+                beta = entry.score;
+            if (alpha >= beta) return entry.score;
+        }
+    }
 
     auto candidates = board.getCandidateMoves();
-    if (candidates.empty()) return evaluate(board, aiMark, opponentMark);
+    if (candidates.empty()) return boardScore;
 
     // Move ordering: score and sort candidates
     CellState moveMark = maximizing ? aiMark : opponentMark;
@@ -108,33 +188,61 @@ int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
                   return a.first > b.first;
               });
 
+    int origAlpha = alpha;
+    int bestEval;
+
     if (maximizing) {
-        int maxEval = -1000000;
+        bestEval = -1000000;
         for (const auto& pair : scored) {
             const Move& move = pair.second;
+            int localBefore = computeLocalScore(board, move.row, move.col,
+                                                aiMark, opponentMark);
             Move prevLast = board.getLastMove();
             board.placeMove(move.row, move.col, aiMark);
-            int eval = minimax(board, depth - 1, alpha, beta, false, aiMark, opponentMark);
+            int localAfter = computeLocalScore(board, move.row, move.col,
+                                               aiMark, opponentMark);
+            int newScore = boardScore - localBefore + localAfter;
+            int eval = minimax(board, depth - 1, alpha, beta, false,
+                               aiMark, opponentMark, newScore);
             board.undoMove(move.row, move.col, prevLast);
-            if (eval > maxEval) maxEval = eval;
-            if (maxEval > alpha) alpha = maxEval;
+            if (eval > bestEval) bestEval = eval;
+            if (bestEval > alpha) alpha = bestEval;
             if (beta <= alpha) break;
         }
-        return maxEval;
     } else {
-        int minEval = 1000000;
+        bestEval = 1000000;
         for (const auto& pair : scored) {
             const Move& move = pair.second;
+            int localBefore = computeLocalScore(board, move.row, move.col,
+                                                aiMark, opponentMark);
             Move prevLast = board.getLastMove();
             board.placeMove(move.row, move.col, opponentMark);
-            int eval = minimax(board, depth - 1, alpha, beta, true, aiMark, opponentMark);
+            int localAfter = computeLocalScore(board, move.row, move.col,
+                                               aiMark, opponentMark);
+            int newScore = boardScore - localBefore + localAfter;
+            int eval = minimax(board, depth - 1, alpha, beta, true,
+                               aiMark, opponentMark, newScore);
             board.undoMove(move.row, move.col, prevLast);
-            if (eval < minEval) minEval = eval;
-            if (minEval < beta) beta = minEval;
+            if (eval < bestEval) bestEval = eval;
+            if (bestEval < beta) beta = bestEval;
             if (beta <= alpha) break;
         }
-        return minEval;
     }
+
+    // Store in transposition table
+    TTEntry newEntry{};
+    newEntry.depth = depth;
+    newEntry.score = bestEval;
+    if (bestEval <= origAlpha) {
+        newEntry.flag = 2;  // upper bound (failed low)
+    } else if (bestEval >= beta) {
+        newEntry.flag = 1;  // lower bound (failed high)
+    } else {
+        newEntry.flag = 0;  // exact
+    }
+    transTable[hash] = newEntry;
+
+    return bestEval;
 }
 
 int AIPlayer::evaluate(const Board& board, CellState aiMark,
@@ -146,6 +254,26 @@ int AIPlayer::evaluate(const Board& board, CellState aiMark,
         for (int c = 0; c < Board::SIZE; c++) {
             if (board.getCell(r, c) == CellState::Empty) continue;
             for (auto& d : dirs) {
+                score += evaluateDirection(board, r, c, d[0], d[1], aiMark, opponentMark);
+            }
+        }
+    }
+    return score;
+}
+
+// Score contribution of cells near (row, col) along the 4 directional axes.
+// Covers all cells whose evaluateDirection result could change when (row, col) is modified.
+int AIPlayer::computeLocalScore(const Board& board, int row, int col,
+                                CellState aiMark, CellState opponentMark) {
+    int score = 0;
+    int dirs[][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
+
+    for (auto& d : dirs) {
+        for (int i = -5; i <= 5; i++) {
+            int r = row + i * d[0];
+            int c = col + i * d[1];
+            if (r >= 0 && r < Board::SIZE && c >= 0 && c < Board::SIZE
+                && board.getCell(r, c) != CellState::Empty) {
                 score += evaluateDirection(board, r, c, d[0], d[1], aiMark, opponentMark);
             }
         }
@@ -207,4 +335,196 @@ int AIPlayer::evaluateDirection(const Board& board, int row, int col,
     }
 
     return isAI ? score : -score;
+}
+
+// ---------------------------------------------------------------------------
+// Threat-space search
+// ---------------------------------------------------------------------------
+
+// Classify the threat level of placing `mark` at (row, col).
+// Returns: 0=none, 1=open three, 2=closed four, 3=open four, 4=win
+int AIPlayer::classifyThreat(const Board& board, int row, int col, CellState mark) {
+    static const int DR[] = {0, 1, 1, 1};
+    static const int DC[] = {1, 0, 1, -1};
+
+    int bestLevel = 0;
+
+    for (int d = 0; d < 4; d++) {
+        int dr = DR[d];
+        int dc = DC[d];
+
+        // Count consecutive pieces in both directions from (row, col)
+        // (row, col) is assumed to already hold `mark`
+        int fwd = board.countDirection(row, col, dr, dc, mark);
+        int bwd = board.countDirection(row, col, -dr, -dc, mark);
+        int total = 1 + fwd + bwd;  // including the piece at (row, col)
+
+        if (total >= 5) {
+            return 4;  // win — no need to check further
+        }
+
+        // Check open ends
+        int openEnds = 0;
+        int fr = row + dr * (fwd + 1);
+        int fc = col + dc * (fwd + 1);
+        if (fr >= 0 && fr < Board::SIZE && fc >= 0 && fc < Board::SIZE
+            && board.getCell(fr, fc) == CellState::Empty) {
+            openEnds++;
+        }
+        int br = row - dr * (bwd + 1);
+        int bc = col - dc * (bwd + 1);
+        if (br >= 0 && br < Board::SIZE && bc >= 0 && bc < Board::SIZE
+            && board.getCell(br, bc) == CellState::Empty) {
+            openEnds++;
+        }
+
+        int level = 0;
+        if (total == 4 && openEnds == 2) {
+            level = 3;  // open four
+        } else if (total == 4 && openEnds == 1) {
+            level = 2;  // closed four
+        } else if (total == 3 && openEnds == 2) {
+            level = 1;  // open three
+        }
+
+        if (level > bestLevel) {
+            bestLevel = level;
+        }
+    }
+
+    return bestLevel;
+}
+
+// Find all moves for `mark` that create a threat (level >= 1).
+// Sorted by threat level descending.
+std::vector<Move> AIPlayer::findThreats(Board& board, CellState mark) {
+    auto candidates = board.getCandidateMoves();
+    std::vector<std::pair<int, Move>> threats;
+
+    Move prevLast = board.getLastMove();
+    for (const auto& m : candidates) {
+        board.placeMove(m.row, m.col, mark);
+        int level = classifyThreat(board, m.row, m.col, mark);
+        board.undoMove(m.row, m.col, prevLast);
+
+        if (level >= 2) {  // only fours and wins are truly forcing
+            threats.emplace_back(level, m);
+        }
+    }
+
+    std::sort(threats.begin(), threats.end(),
+              [](const std::pair<int, Move>& a, const std::pair<int, Move>& b) {
+                  return a.first > b.first;
+              });
+
+    std::vector<Move> result;
+    result.reserve(threats.size());
+    for (const auto& t : threats) {
+        result.push_back(t.second);
+    }
+    return result;
+}
+
+// Find defensive moves the opponent must play after attacker places at (row, col).
+// Returns the cells that block the threat.
+std::vector<Move> AIPlayer::findDefenses(Board& board, int row, int col,
+                                          CellState attackMark) {
+    static const int DR[] = {0, 1, 1, 1};
+    static const int DC[] = {1, 0, 1, -1};
+
+    std::vector<Move> defenses;
+
+    for (int d = 0; d < 4; d++) {
+        int dr = DR[d];
+        int dc = DC[d];
+
+        int fwd = board.countDirection(row, col, dr, dc, attackMark);
+        int bwd = board.countDirection(row, col, -dr, -dc, attackMark);
+        int total = 1 + fwd + bwd;
+
+        // Check open ends
+        int fr = row + dr * (fwd + 1);
+        int fc = col + dc * (fwd + 1);
+        bool fwdOpen = (fr >= 0 && fr < Board::SIZE && fc >= 0 && fc < Board::SIZE
+                        && board.getCell(fr, fc) == CellState::Empty);
+
+        int br = row - dr * (bwd + 1);
+        int bc = col - dc * (bwd + 1);
+        bool bwdOpen = (br >= 0 && br < Board::SIZE && bc >= 0 && bc < Board::SIZE
+                        && board.getCell(br, bc) == CellState::Empty);
+
+        int openEnds = (fwdOpen ? 1 : 0) + (bwdOpen ? 1 : 0);
+
+        // Four in a row — must block the open end(s)
+        if (total == 4) {
+            if (fwdOpen) defenses.push_back({fr, fc});
+            if (bwdOpen) defenses.push_back({br, bc});
+        }
+    }
+
+    // Deduplicate
+    std::sort(defenses.begin(), defenses.end(),
+              [](const Move& a, const Move& b) {
+                  return a.row < b.row || (a.row == b.row && a.col < b.col);
+              });
+    defenses.erase(std::unique(defenses.begin(), defenses.end(),
+                                [](const Move& a, const Move& b) {
+                                    return a.row == b.row && a.col == b.col;
+                                }),
+                   defenses.end());
+
+    return defenses;
+}
+
+// Recursive threat-space search. Returns the first move of a forced winning
+// sequence for `attackMark`, or {-1,-1} if none found.
+Move AIPlayer::findThreatWin(Board& board, CellState attackMark,
+                              CellState defendMark, int depth) {
+    if (depth > MAX_THREAT_DEPTH) return {-1, -1};
+
+    auto threats = findThreats(board, attackMark);
+
+    for (const auto& threat : threats) {
+        Move prevLast = board.getLastMove();
+        board.placeMove(threat.row, threat.col, attackMark);
+
+        // Check for immediate win
+        int level = classifyThreat(board, threat.row, threat.col, attackMark);
+        if (level == 4) {
+            board.undoMove(threat.row, threat.col, prevLast);
+            return threat;  // winning move
+        }
+
+        // Find forced defensive responses
+        auto defenses = findDefenses(board, threat.row, threat.col, attackMark);
+
+        if (defenses.empty()) {
+            // No forced defense — this threat isn't actually forcing
+            board.undoMove(threat.row, threat.col, prevLast);
+            continue;
+        }
+
+        bool allDefensesLose = true;
+        for (const auto& def : defenses) {
+            Move prevLast2 = board.getLastMove();
+            board.placeMove(def.row, def.col, defendMark);
+
+            Move result = findThreatWin(board, attackMark, defendMark, depth + 1);
+
+            board.undoMove(def.row, def.col, prevLast2);
+
+            if (result.row < 0) {
+                allDefensesLose = false;
+                break;
+            }
+        }
+
+        board.undoMove(threat.row, threat.col, prevLast);
+
+        if (allDefensesLose) {
+            return threat;  // forced win found
+        }
+    }
+
+    return {-1, -1};
 }

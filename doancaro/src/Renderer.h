@@ -28,9 +28,11 @@ public:
     // Camera UI buttons (draw after EndMode3D, in 2D overlay)
     void drawCameraControls();
 
-    // Game action buttons (Save/Load) — returns true if clicked this frame
+    // Game action buttons — returns true if clicked this frame
     bool drawSaveButton();
     bool drawLoadButton();
+    bool drawMenuButton();
+    bool drawSettingsButton();
 
     // Returns true if screen point is over a UI button (prevents board clicks)
     bool isPointOnUI(Vector2 point) const;
@@ -74,6 +76,8 @@ private:
     Rectangle btnReset;
     Rectangle btnSave;
     Rectangle btnLoad;
+    Rectangle btnMenu;
+    Rectangle btnSettings;
 
     // Cached hover from ray cast
     bool hoverValid;

@@ -15,12 +15,14 @@ if(CCACHE_PROGRAM)
     message(STATUS "ccache found: ${CCACHE_PROGRAM}")
 endif()
 
-# 2. mold linker: 3-8x faster linking
-find_program(MOLD_PROGRAM mold)
-if(MOLD_PROGRAM)
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=mold")
-    message(STATUS "mold linker found: ${MOLD_PROGRAM}")
+# 2. mold linker: 3-8x faster linking (native builds only — mold doesn't support cross-compilation)
+if(NOT CMAKE_CROSSCOMPILING)
+    find_program(MOLD_PROGRAM mold)
+    if(MOLD_PROGRAM)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=mold")
+        message(STATUS "mold linker found: ${MOLD_PROGRAM}")
+    endif()
 endif()
 
 # 3. Compiler flags for faster builds

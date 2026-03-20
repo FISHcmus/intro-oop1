@@ -2,6 +2,15 @@
 #define AIPLAYER_H
 
 #include "Player.h"
+#include <cstdint>
+#include <unordered_map>
+
+// Transposition table entry
+struct TTEntry {
+    int depth;
+    int score;
+    int flag;  // 0 = exact, 1 = lower bound, 2 = upper bound
+};
 
 class AIPlayer : public Player {
 public:
@@ -14,14 +23,32 @@ public:
 
 private:
     int searchDepth;
+    std::unordered_map<uint64_t, TTEntry> transTable;
+
+    static constexpr int MAX_THREAT_DEPTH = 20;
+    static constexpr int TIME_LIMIT_MEDIUM_MS = 1000;
+    static constexpr int TIME_LIMIT_HARD_MS = 3000;
 
     int minimax(Board& board, int depth, int alpha, int beta,
-                bool maximizing, CellState aiMark, CellState opponentMark);
+                bool maximizing, CellState aiMark, CellState opponentMark,
+                int boardScore);
+    Move iterativeDeepening(Board& searchBoard,
+                            const std::vector<std::pair<int, Move>>& scored,
+                            CellState aiMark, CellState opponentMark,
+                            int timeLimitMs);
     static int scoreMove(Board& board, int row, int col, CellState moveMark,
                          CellState aiMark, CellState opponentMark);
     static int evaluate(const Board& board, CellState aiMark, CellState opponentMark);
+    static int computeLocalScore(const Board& board, int row, int col,
+                                 CellState aiMark, CellState opponentMark);
     static int evaluateDirection(const Board& board, int row, int col,
                                  int dr, int dc, CellState aiMark, CellState opponentMark);
+
+    // Threat-space search
+    Move findThreatWin(Board& board, CellState attackMark, CellState defendMark, int depth);
+    static int classifyThreat(const Board& board, int row, int col, CellState mark);
+    static std::vector<Move> findThreats(Board& board, CellState mark);
+    static std::vector<Move> findDefenses(Board& board, int row, int col, CellState attackMark);
 };
 
 #endif

@@ -21,7 +21,7 @@ Renderer::Renderer()
       cameraTarget({}), defaultAngle(0), defaultPitch(0), defaultDistance(0),
       isDragging(false), dragStart({}),
       btnRotateLeft({}), btnRotateRight({}), btnZoomIn({}), btnZoomOut({}), btnReset({}),
-      btnSave({}), btnLoad({}),
+      btnSave({}), btnLoad({}), btnMenu({}), btnSettings({}),
       hoverValid(false), hoverRow(0), hoverCol(0),
       prevCells{}, pieceAnimStart{}, lastMove{-1, -1},
       winLineStart(0.0f), showingWinLine(false) {}
@@ -62,6 +62,10 @@ void Renderer::init(int width, int height) {
     // Save/Load buttons — top-left
     btnSave = {BTN_PAD, BTN_PAD, 60, BTN_SIZE};
     btnLoad = {BTN_PAD + 60 + BTN_PAD, BTN_PAD, 60, BTN_SIZE};
+
+    // Menu/Settings buttons — top-right
+    btnSettings = {static_cast<float>(width) - BTN_PAD - 80, BTN_PAD, 80, BTN_SIZE};
+    btnMenu = {static_cast<float>(width) - BTN_PAD - 80 - BTN_PAD - 60, BTN_PAD, 60, BTN_SIZE};
 }
 
 void Renderer::shutdown() {}
@@ -212,7 +216,9 @@ bool Renderer::isPointOnUI(Vector2 point) const {
         || CheckCollisionPointRec(point, btnZoomOut)
         || CheckCollisionPointRec(point, btnReset)
         || CheckCollisionPointRec(point, btnSave)
-        || CheckCollisionPointRec(point, btnLoad);
+        || CheckCollisionPointRec(point, btnLoad)
+        || CheckCollisionPointRec(point, btnMenu)
+        || CheckCollisionPointRec(point, btnSettings);
 }
 
 bool Renderer::drawButton(Rectangle rect, const char* label, int fontSize) {
@@ -248,6 +254,14 @@ bool Renderer::drawSaveButton() {
 
 bool Renderer::drawLoadButton() {
     return drawButton(btnLoad, "Load", 14);
+}
+
+bool Renderer::drawMenuButton() {
+    return drawButton(btnMenu, "Menu", 14);
+}
+
+bool Renderer::drawSettingsButton() {
+    return drawButton(btnSettings, "Settings", 14);
 }
 
 void Renderer::drawBoard(const Board& board, int cursorRow, int cursorCol,

@@ -26,6 +26,7 @@ public:
 private:
     // State
     GameState state;
+    GameState settingsReturnState;  // where to go after settings screen
     Board board;
     Player* player1;
     Player* player2;

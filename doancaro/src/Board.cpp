@@ -1,8 +1,31 @@
 #include "Board.h"
-#include <fstream>
 #include <cmath>
+#include <fstream>
+#include <random>
 
-Board::Board() : moveCount(0), lastMove({-1, -1}) {
+// Zobrist static members
+uint64_t Board::zobristTable[Board::SIZE][Board::SIZE][2] = {};
+bool Board::zobristInitialized = false;
+
+void Board::initZobrist() {
+    if (zobristInitialized) return;
+    std::mt19937_64 rng(0x12345678);  // fixed seed for determinism
+    for (int r = 0; r < SIZE; r++) {
+        for (int c = 0; c < SIZE; c++) {
+            for (int m = 0; m < 2; m++) {
+                zobristTable[r][c][m] = rng();
+            }
+        }
+    }
+    zobristInitialized = true;
+}
+
+int Board::markIndex(CellState mark) {
+    return (mark == CellState::PlayerX) ? 0 : 1;
+}
+
+Board::Board() : moveCount(0), lastMove({-1, -1}), zobristHash(0) {
+    initZobrist();
     reset();
 }
 
@@ -14,6 +37,7 @@ void Board::reset() {
     }
     moveCount = 0;
     lastMove = {-1, -1};
+    zobristHash = 0;
 }
 
 bool Board::placeMove(int row, int col, CellState mark) {
@@ -21,12 +45,14 @@ bool Board::placeMove(int row, int col, CellState mark) {
     if (cells[row][col] != CellState::Empty) return false;
 
     cells[row][col] = mark;
+    zobristHash ^= zobristTable[row][col][markIndex(mark)];
     lastMove = {row, col};
     moveCount++;
     return true;
 }
 
 void Board::undoMove(int row, int col, Move previousLastMove) {
+    zobristHash ^= zobristTable[row][col][markIndex(cells[row][col])];
     cells[row][col] = CellState::Empty;
     lastMove = previousLastMove;
     moveCount--;
@@ -158,11 +184,15 @@ bool Board::loadFromFile(const std::string& filename) {
 
     file >> moveCount;
     file >> lastMove.row >> lastMove.col;
+    zobristHash = 0;
     for (int r = 0; r < SIZE; r++) {
         for (int c = 0; c < SIZE; c++) {
             int val;
             file >> val;
             cells[r][c] = static_cast<CellState>(val);
+            if (cells[r][c] != CellState::Empty) {
+                zobristHash ^= zobristTable[r][c][markIndex(cells[r][c])];
+            }
         }
     }
     return file.good();

@@ -1,6 +1,7 @@
 #ifndef BOARD_H
 #define BOARD_H
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -41,13 +42,22 @@ public:
 
     int getMoveCount() const { return moveCount; }
     Move getLastMove() const { return lastMove; }
+    uint64_t getHash() const { return zobristHash; }
+
+    // Count consecutive pieces in a direction (used by AI threat search)
+    int countDirection(int row, int col, int dr, int dc, CellState mark) const;
 
 private:
     CellState cells[SIZE][SIZE];
     int moveCount;
     Move lastMove;
 
-    int countDirection(int row, int col, int dr, int dc, CellState mark) const;
+    // Zobrist hashing
+    uint64_t zobristHash;
+    static uint64_t zobristTable[SIZE][SIZE][2];  // [row][col][markIndex]
+    static bool zobristInitialized;
+    static void initZobrist();
+    static int markIndex(CellState mark);
 };
 
 #endif

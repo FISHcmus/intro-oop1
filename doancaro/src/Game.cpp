@@ -6,7 +6,7 @@ static const int SCREEN_WIDTH = 1000;
 static const int SCREEN_HEIGHT = 700;
 
 Game::Game()
-    : state(GameState::Menu),
+    : state(GameState::Menu), settingsReturnState(GameState::Menu),
       player1(nullptr), player2(nullptr), currentPlayer(nullptr),
       cursorRow(Board::SIZE / 2), cursorCol(Board::SIZE / 2),
       vsAI(true), aiDepth(4), playTime(0.0f),
@@ -22,6 +22,7 @@ Game::~Game() {
 void Game::run() {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Caro Game — OOP1 Project");
     SetTargetFPS(60);
+    SetExitKey(0);  // Disable ESC auto-close; we handle ESC ourselves
 
     renderer.init(SCREEN_WIDTH, SCREEN_HEIGHT);
     audioManager.init();
@@ -59,6 +60,10 @@ void Game::run() {
 }
 
 void Game::updateMenu() {
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        CloseWindow();
+        return;
+    }
     menuScreen.update();
     MenuChoice choice = menuScreen.getChoice();
 
@@ -74,6 +79,7 @@ void Game::updateMenu() {
         case MenuChoice::Settings:
             settingsScreen.setSettings({vsAI, aiDepth});
             settingsScreen.reset();
+            settingsReturnState = GameState::Menu;
             state = GameState::Settings;
             menuScreen.reset();
             break;
@@ -91,7 +97,15 @@ void Game::updateSettings() {
         GameSettings s = settingsScreen.getSettings();
         vsAI = s.vsAI;
         aiDepth = s.aiDepth;
-        state = GameState::Menu;
+
+        // If returning to a game in progress, update existing AI player's depth
+        if (settingsReturnState == GameState::Playing && player2 != nullptr) {
+            auto* ai = dynamic_cast<AIPlayer*>(player2);
+            if (ai != nullptr) ai->setSearchDepth(aiDepth);
+        }
+
+        state = settingsReturnState;
+        settingsReturnState = GameState::Menu;
     }
 }
 
@@ -179,6 +193,20 @@ void Game::drawPlaying() {
     if (renderer.drawLoadButton()) {
         saveLoadScreen.open(SlotScreenMode::Load);
         state = GameState::LoadScreen;
+    }
+
+    // Menu/Settings buttons
+    if (renderer.drawMenuButton()) {
+        if (aiThread.joinable()) aiThread.join();
+        aiThinking.store(false);
+        aiResult = {-1, -1};
+        state = GameState::Menu;
+    }
+    if (renderer.drawSettingsButton()) {
+        settingsScreen.setSettings({vsAI, aiDepth});
+        settingsScreen.reset();
+        settingsReturnState = GameState::Playing;
+        state = GameState::Settings;
     }
 
     // Toast notification
@@ -272,6 +300,15 @@ void Game::handleKeyboardInput() {
             && board.isEmpty(cursorRow, cursorCol)) {
             applyMove({cursorRow, cursorCol});
         }
+    }
+
+    // ESC → return to menu
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        if (aiThread.joinable()) aiThread.join();
+        aiThinking.store(false);
+        aiResult = {-1, -1};
+        state = GameState::Menu;
+        return;
     }
 
     // Save/Load shortcuts (Ctrl+S / Ctrl+L)
