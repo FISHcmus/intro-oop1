@@ -2,6 +2,8 @@
 
 **Group:** Nguyen Huu Thien Nhan (25310023), Bui Thi Minh Hang (25310057), Pham Ngoc Tram (25310043)
 
+![Demo](demo.png)
+
 ## Quick Start (Windows)
 
 1. Extract the ZIP

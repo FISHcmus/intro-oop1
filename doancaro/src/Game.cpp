@@ -200,6 +200,7 @@ void Game::drawPlaying() {
         if (aiThread.joinable()) aiThread.join();
         aiThinking.store(false);
         aiResult = {-1, -1};
+        menuScreen.reset();
         state = GameState::Menu;
     }
     if (renderer.drawSettingsButton()) {
@@ -307,6 +308,7 @@ void Game::handleKeyboardInput() {
         if (aiThread.joinable()) aiThread.join();
         aiThinking.store(false);
         aiResult = {-1, -1};
+        menuScreen.reset();
         state = GameState::Menu;
         return;
     }
