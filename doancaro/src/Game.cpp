@@ -67,6 +67,7 @@ void Game::updateMenu() {
 }
 
 void Game::updatePlaying() {
+    renderer.updateCamera();
     handleInput();
 
     // If current player is AI, get AI move
@@ -119,13 +120,12 @@ void Game::drawPlaying() {
 }
 
 void Game::drawGameOver() {
-    // Draw the final board state
+    // Draw the final board state with win line highlight
     drawPlaying();
 
-    // Overlay message
-    winLine.clear();
-    CellState winner = board.checkWinner(winLine);
-    if (winner != CellState::Empty) {
+    // Overlay message — use cached winLine from when game ended
+    if (!winLine.empty()) {
+        CellState winner = board.getCell(winLine[0].row, winLine[0].col);
         const char* winnerName = (winner == player1->getMark())
                                      ? player1->getName().c_str()
                                      : player2->getName().c_str();
