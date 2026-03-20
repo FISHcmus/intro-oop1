@@ -26,6 +26,12 @@ bool Board::placeMove(int row, int col, CellState mark) {
     return true;
 }
 
+void Board::undoMove(int row, int col, Move previousLastMove) {
+    cells[row][col] = CellState::Empty;
+    lastMove = previousLastMove;
+    moveCount--;
+}
+
 CellState Board::getCell(int row, int col) const {
     if (row < 0 || row >= SIZE || col < 0 || col >= SIZE)
         return CellState::Empty;
@@ -79,6 +85,23 @@ CellState Board::checkWinner(std::vector<Move>& winLine) const {
             }
             return mark;
         }
+    }
+    return CellState::Empty;
+}
+
+CellState Board::hasWinner() const {
+    if (lastMove.row < 0) return CellState::Empty;
+
+    int row = lastMove.row;
+    int col = lastMove.col;
+    CellState mark = cells[row][col];
+    if (mark == CellState::Empty) return CellState::Empty;
+
+    int dirs[][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
+    for (auto& d : dirs) {
+        int total = countDirection(row, col, d[0], d[1], mark)
+                  + countDirection(row, col, -d[0], -d[1], mark) + 1;
+        if (total >= 5) return mark;
     }
     return CellState::Empty;
 }

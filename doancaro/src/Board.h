@@ -20,6 +20,7 @@ public:
 
     void reset();
     bool placeMove(int row, int col, CellState mark);
+    void undoMove(int row, int col, Move previousLastMove);
     CellState getCell(int row, int col) const;
     bool isFull() const;
     bool isEmpty(int row, int col) const;
@@ -27,6 +28,9 @@ public:
     // Win detection: returns the winning CellState, or Empty if no winner.
     // If a winner is found, winLine is filled with the 5 winning positions.
     CellState checkWinner(std::vector<Move>& winLine) const;
+
+    // Lightweight win check (no allocation, for AI use)
+    CellState hasWinner() const;
 
     // Serialization
     bool saveToFile(const std::string& filename) const;

@@ -22,7 +22,9 @@ Renderer::Renderer()
       isDragging(false), dragStart({}),
       btnRotateLeft({}), btnRotateRight({}), btnZoomIn({}), btnZoomOut({}), btnReset({}),
       btnSave({}), btnLoad({}),
-      hoverValid(false), hoverRow(0), hoverCol(0) {}
+      hoverValid(false), hoverRow(0), hoverCol(0),
+      prevCells{}, pieceAnimStart{}, lastMove{-1, -1},
+      winLineStart(0.0f), showingWinLine(false) {}
 
 Renderer::~Renderer() = default;
 
@@ -250,18 +252,38 @@ bool Renderer::drawLoadButton() {
 
 void Renderer::drawBoard(const Board& board, int cursorRow, int cursorCol,
                           CellState currentTurn) {
+    auto now = static_cast<float>(GetTime());
+
     BeginMode3D(camera);
 
     drawBoardSurface();
     drawGrid3D();
 
+    // Detect new pieces and draw with animation
     for (int r = 0; r < Board::SIZE; r++) {
         for (int c = 0; c < Board::SIZE; c++) {
             CellState cell = board.getCell(r, c);
+            if (cell != CellState::Empty && prevCells[r][c] == CellState::Empty) {
+                pieceAnimStart[r][c] = now;
+                lastMove = {r, c};
+            }
+            prevCells[r][c] = cell;
+
             if (cell != CellState::Empty) {
-                drawPiece3D(r, c, cell);
+                float anim = 1.0f;
+                if (pieceAnimStart[r][c] > 0.0f) {
+                    anim = (now - pieceAnimStart[r][c]) / PIECE_ANIM_DURATION;
+                    if (anim > 1.0f) anim = 1.0f;
+                    if (anim < 0.0f) anim = 0.0f;
+                }
+                drawPiece3D(r, c, cell, anim);
             }
         }
+    }
+
+    // Last move indicator
+    if (lastMove.row >= 0 && lastMove.col >= 0) {
+        drawLastMoveIndicator(lastMove.row, lastMove.col, now);
     }
 
     if (hoverValid) {
@@ -274,13 +296,32 @@ void Renderer::drawBoard(const Board& board, int cursorRow, int cursorCol,
 }
 
 void Renderer::drawWinLine(const std::vector<Move>& winLine) {
+    auto now = static_cast<float>(GetTime());
+
+    if (!showingWinLine) {
+        winLineStart = now;
+        showingWinLine = true;
+    }
+
     BeginMode3D(camera);
 
-    for (const auto& m : winLine) {
+    for (int i = 0; i < static_cast<int>(winLine.size()); i++) {
+        const auto& m = winLine[static_cast<size_t>(i)];
         float x = static_cast<float>(m.col) + 0.5f;
         float z = static_cast<float>(m.row) + 0.5f;
-        DrawCube({x, 0.02f, z}, 0.95f, 0.04f, 0.95f, Fade(GOLD, 0.6f));
-        DrawCubeWires({x, 0.02f, z}, 0.95f, 0.04f, 0.95f, GOLD);
+
+        // Sequential delay: each cell lights up 0.1s after the previous
+        float cellStart = winLineStart + static_cast<float>(i) * 0.1f;
+        if (now < cellStart) continue;
+
+        // Pulsing alpha and height
+        float pulse = std::sin(now * WIN_PULSE_SPEED);
+        float alpha = 0.5f + 0.3f * pulse;
+        float height = 0.04f + 0.04f * (0.5f + 0.5f * pulse);
+        float y = height * 0.5f;
+
+        DrawCube({x, y, z}, 0.95f, height, 0.95f, Fade(GOLD, alpha));
+        DrawCubeWires({x, y, z}, 0.95f, height, 0.95f, GOLD);
     }
 
     EndMode3D();
@@ -336,16 +377,29 @@ void Renderer::drawGrid3D() {
     }
 }
 
-void Renderer::drawPiece3D(int row, int col, CellState state) {
+void Renderer::drawPiece3D(int row, int col, CellState state, float anim) {
     float x = static_cast<float>(col) + 0.5f;
     float z = static_cast<float>(row) + 0.5f;
 
+    // easeOutQuad for smooth drop
+    float t = anim;
+    float easedT = t < 1.0f ? (1.0f - (1.0f - t) * (1.0f - t)) : 1.0f;
+
+    // Drop from above: y goes from 2.0 to 0.0
+    float y = 2.0f * (1.0f - easedT);
+    // Scale from 0.5 to 1.0
+    float scale = 0.5f + 0.5f * easedT;
+
     if (state == CellState::PlayerX) {
-        DrawCylinder({x, 0.0f, z}, 0.0f, 0.3f, 0.4f, 8, {50, 120, 220, 255});
-        DrawCylinderWires({x, 0.0f, z}, 0.0f, 0.3f, 0.4f, 8, {30, 80, 180, 255});
+        float radius = 0.3f * scale;
+        float height = 0.4f * scale;
+        DrawCylinder({x, y, z}, 0.0f, radius, height, 8, {50, 120, 220, 255});
+        DrawCylinderWires({x, y, z}, 0.0f, radius, height, 8, {30, 80, 180, 255});
     } else if (state == CellState::PlayerO) {
-        DrawCylinder({x, 0.0f, z}, 0.35f, 0.35f, 0.2f, 16, {220, 60, 60, 255});
-        DrawCylinderWires({x, 0.0f, z}, 0.35f, 0.35f, 0.2f, 16, {180, 30, 30, 255});
+        float radius = 0.35f * scale;
+        float height = 0.2f * scale;
+        DrawCylinder({x, y, z}, radius, radius, height, 16, {220, 60, 60, 255});
+        DrawCylinderWires({x, y, z}, radius, radius, height, 16, {180, 30, 30, 255});
     }
 }
 
@@ -362,4 +416,29 @@ void Renderer::drawCursor3D(int row, int col, CellState currentTurn) {
 
     DrawCube({x, 0.025f, z}, 0.9f, 0.05f, 0.9f, cursorColor);
     DrawCubeWires({x, 0.025f, z}, 0.9f, 0.05f, 0.9f, wireColor);
+}
+
+void Renderer::drawLastMoveIndicator(int row, int col, float time) {
+    float x = static_cast<float>(col) + 0.5f;
+    float z = static_cast<float>(row) + 0.5f;
+
+    // Pulsing ring around the last placed piece
+    float pulse = std::sin(time * LAST_MOVE_PULSE_SPEED);
+    float alpha = 0.3f + 0.2f * pulse;
+    float radius = 0.4f + 0.05f * pulse;
+
+    DrawCircle3D({x, 0.01f, z}, radius, {1.0f, 0.0f, 0.0f}, 90.0f,
+                 Fade(WHITE, alpha));
+}
+
+void Renderer::resetAnimations() {
+    for (int r = 0; r < Board::SIZE; r++) {
+        for (int c = 0; c < Board::SIZE; c++) {
+            prevCells[r][c] = CellState::Empty;
+            pieceAnimStart[r][c] = 0.0f;
+        }
+    }
+    lastMove = {-1, -1};
+    winLineStart = 0.0f;
+    showingWinLine = false;
 }

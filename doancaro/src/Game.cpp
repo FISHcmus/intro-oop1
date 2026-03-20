@@ -221,6 +221,7 @@ void Game::startNewGame() {
     board.reset();
     winLine.clear();
     playTime = 0.0f;
+    renderer.resetAnimations();
     currentPlayer = player1;
     cursorRow = Board::SIZE / 2;
     cursorCol = Board::SIZE / 2;

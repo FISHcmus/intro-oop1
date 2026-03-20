@@ -3,6 +3,7 @@
 
 #include "Board.h"
 #include "raylib.h"
+#include <cmath>
 #include <vector>
 
 class Renderer {
@@ -17,6 +18,9 @@ public:
     void drawBoard(const Board& board, int cursorRow, int cursorCol,
                    CellState currentTurn);
     void drawWinLine(const std::vector<Move>& winLine);
+
+    // Animation control
+    void resetAnimations();
 
     // Camera update (call every frame)
     void updateCamera();
@@ -76,6 +80,18 @@ private:
     int hoverRow;
     int hoverCol;
 
+    // Animation state
+    CellState prevCells[Board::SIZE][Board::SIZE];
+    float pieceAnimStart[Board::SIZE][Board::SIZE];
+    Move lastMove;
+    float winLineStart;
+    bool showingWinLine;
+
+    // Animation constants
+    static constexpr float PIECE_ANIM_DURATION = 0.3f;
+    static constexpr float LAST_MOVE_PULSE_SPEED = 3.0f;
+    static constexpr float WIN_PULSE_SPEED = 3.0f;
+
     // Camera helpers
     void rebuildCameraFromOrbit();
     void handleRightClickDrag();
@@ -84,9 +100,10 @@ private:
 
     // 3D drawing helpers
     static void drawGrid3D();
-    static void drawPiece3D(int row, int col, CellState state);
+    static void drawPiece3D(int row, int col, CellState state, float anim);
     static void drawCursor3D(int row, int col, CellState currentTurn);
     static void drawBoardSurface();
+    static void drawLastMoveIndicator(int row, int col, float time);
 
     // UI helper
     static bool drawButton(Rectangle rect, const char* label, int fontSize);
