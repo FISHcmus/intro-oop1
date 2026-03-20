@@ -63,6 +63,43 @@ static const char* glossFS =
     "    finalColor = vec4(result, texColor.a);\n"
     "}\n";
 
+// Matte wood shader for the board — low specular, soft diffuse
+static const char* matteFS =
+    "#version 330\n"
+    "in vec3 fragPosition;\n"
+    "in vec2 fragTexCoord;\n"
+    "in vec3 fragNormal;\n"
+    "uniform sampler2D texture0;\n"
+    "uniform vec4 colDiffuse;\n"
+    "uniform vec3 viewPos;\n"
+    "out vec4 finalColor;\n"
+    "void main() {\n"
+    "    vec3 lightPos = vec3(10.0, 20.0, 10.0);\n"
+    "    vec3 lightColor = vec3(1.0, 0.98, 0.95);\n"
+    "    float ambientStrength = 0.4;\n"
+    "    float specularStrength = 0.12;\n"
+    "    float shininess = 8.0;\n"
+    "    vec4 texColor = texture(texture0, fragTexCoord) * colDiffuse;\n"
+    "    vec3 norm = normalize(fragNormal);\n"
+    "    vec3 lightDir = normalize(lightPos - fragPosition);\n"
+    "    float diff = max(dot(norm, lightDir), 0.0);\n"
+    "    vec3 viewDir = normalize(viewPos - fragPosition);\n"
+    "    vec3 halfDir = normalize(lightDir + viewDir);\n"
+    "    float spec = pow(max(dot(norm, halfDir), 0.0), shininess);\n"
+    "    vec3 ambient = ambientStrength * lightColor;\n"
+    "    vec3 diffuse = diff * lightColor;\n"
+    "    vec3 specular = specularStrength * spec * lightColor;\n"
+    "    vec3 lightPos2 = vec3(-5.0, 12.0, -5.0);\n"
+    "    vec3 lightDir2 = normalize(lightPos2 - fragPosition);\n"
+    "    float diff2 = max(dot(norm, lightDir2), 0.0) * 0.3;\n"
+    "    vec3 halfDir2 = normalize(lightDir2 + viewDir);\n"
+    "    float spec2 = pow(max(dot(norm, halfDir2), 0.0), shininess) * 0.3;\n"
+    "    diffuse += diff2 * lightColor;\n"
+    "    specular += specularStrength * spec2 * lightColor;\n"
+    "    vec3 result = (ambient + diffuse) * texColor.rgb + specular;\n"
+    "    finalColor = vec4(result, texColor.a);\n"
+    "}\n";
+
 // Board sits on XZ plane at Y=0, cells [0..SIZE) on both axes
 // Each cell is 1.0 world unit
 
@@ -90,6 +127,7 @@ Renderer::Renderer()
       boardModel({}), boardModelLoaded(false),
       pieceModelLight({}), pieceModelDark({}), pieceModelsLoaded(false),
       glossShader({}), glossShaderLoaded(false), glossViewPosLoc(0),
+      matteShader({}), matteShaderLoaded(false), matteViewPosLoc(0),
       groundModel({}), groundLoaded(false) {}
 
 Renderer::~Renderer() = default;
@@ -235,6 +273,20 @@ void Renderer::init(int width, int height) {
         pieceModelDark.materials[0].shader = glossShader;
     }
 
+    // Load matte Phong shader for board (low specular, satin wood finish)
+    matteShader = LoadShaderFromMemory(glossVS, matteFS);
+    matteShader.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(matteShader, "matModel");
+    matteShader.locs[SHADER_LOC_MATRIX_NORMAL] = GetShaderLocation(matteShader, "matNormal");
+    matteViewPosLoc = GetShaderLocation(matteShader, "viewPos");
+    matteShaderLoaded = true;
+
+    // Assign matte shader to board model
+    if (boardModelLoaded) {
+        for (int i = 0; i < boardModel.materialCount; i++) {
+            boardModel.materials[i].shader = matteShader;
+        }
+    }
+
     // Load ground texture and create tiled plane
     if (FileExists("assets/textures/ground.png")) {
         // Large plane, 4x4 subdivisions for tiling UV
@@ -261,6 +313,10 @@ void Renderer::shutdown() {
     if (glossShaderLoaded) {
         UnloadShader(glossShader);
         glossShaderLoaded = false;
+    }
+    if (matteShaderLoaded) {
+        UnloadShader(matteShader);
+        matteShaderLoaded = false;
     }
     if (groundLoaded) {
         UnloadModel(groundModel);
@@ -473,10 +529,13 @@ void Renderer::drawBoard(const Board& board, int cursorRow, int cursorCol,
 
     BeginMode3D(camera);
 
-    // Update glossy shader with current camera position for specular reflections
+    // Update shaders with current camera position for specular reflections
+    float viewPos[3] = {camera.position.x, camera.position.y, camera.position.z};
     if (glossShaderLoaded) {
-        float viewPos[3] = {camera.position.x, camera.position.y, camera.position.z};
         SetShaderValue(glossShader, glossViewPosLoc, viewPos, SHADER_UNIFORM_VEC3);
+    }
+    if (matteShaderLoaded) {
+        SetShaderValue(matteShader, matteViewPosLoc, viewPos, SHADER_UNIFORM_VEC3);
     }
 
     drawBoardSurface();
@@ -626,8 +685,6 @@ void Renderer::drawBoardSurface() {
 
     if (boardModelLoaded) {
         // Go board model: ~35 units wide, 19x19 grid baked into wood texture
-        // Grid occupies ~90% of the model surface → MODEL_GRID_EXTENT ≈ 31.5
-        // World grid: 19 intersections at spacing 1.0, from 0.5 to 18.5 → extent = 18.0
         static constexpr float MODEL_GRID_EXTENT = 31.5f;
         static constexpr float MODEL_TOP_Y = 1.1f;
 
@@ -636,6 +693,7 @@ void Renderer::drawBoardSurface() {
         float worldCenter = Board::SIZE / 2.0f;  // 9.5
         float yOffset = -MODEL_TOP_Y * scale;
 
+        // Board uses default shader — no glossy reflection, just natural wood
         DrawModelEx(boardModel,
                     {worldCenter, yOffset, worldCenter},
                     {0.0f, 1.0f, 0.0f}, 0.0f,
@@ -684,31 +742,82 @@ void Renderer::drawPiece3D(int row, int col, CellState state, float anim) {
     float x = static_cast<float>(col) + 0.5f;
     float z = static_cast<float>(row) + 0.5f;
 
-    // easeOutQuad for smooth drop
-    float t = anim;
-    float easedT = t < 1.0f ? (1.0f - (1.0f - t) * (1.0f - t)) : 1.0f;
+    float t = (anim < 1.0f) ? anim : 1.0f;  // 0..1 over PIECE_ANIM_DURATION
 
-    // Drop from above: y goes from 2.0 to 0.0
-    float y = 2.0f * (1.0f - easedT);
-    // Scale from 0.5 to 1.0
-    float s = 0.5f + 0.5f * easedT;
+    // --- Smooth drop with one gentle settle ---
+    static constexpr float DROP_HEIGHT = 3.0f;
+    static constexpr float SETTLE_HEIGHT = 0.15f;
+    static constexpr float PHASE1_END = 0.6f;
 
+    float y;
+    float squashX = 1.0f;
+    float squashY = 1.0f;
+
+    if (t < PHASE1_END) {
+        float p = t / PHASE1_END;
+        float eased = 1.0f - (1.0f - p) * (1.0f - p) * (1.0f - p);
+        y = DROP_HEIGHT * (1.0f - eased);
+
+        if (y < 0.2f) {
+            float proximity = 1.0f - (y / 0.2f);
+            float squash = 0.15f * proximity;
+            squashY = 1.0f - squash;
+            squashX = 1.0f + squash * 0.5f;
+        }
+    } else {
+        float p = (t - PHASE1_END) / (1.0f - PHASE1_END);
+        y = SETTLE_HEIGHT * 4.0f * p * (1.0f - p) * 0.7f;
+        if (p > 0.7f) {
+            float tail = (p - 0.7f) / 0.3f;
+            float squash = 0.05f * tail;
+            squashY = 1.0f - squash;
+            squashX = 1.0f + squash * 0.3f;
+        }
+    }
+
+    // Scale: fade in during first 20% of animation
+    float scaleFactor;
+    if (t < 0.2f) {
+        float st = t / 0.2f;
+        scaleFactor = 0.5f + 0.5f * st;
+    } else {
+        scaleFactor = 1.0f;
+    }
+
+    // --- Drop shadow: filled dark disc on board surface ---
+    {
+        float shadowAlpha;
+        float shadowRadius;
+        if (t < 1.0f) {
+            float heightRatio = y / DROP_HEIGHT;
+            shadowAlpha = 0.35f * (1.0f - heightRatio);
+            shadowRadius = 0.2f + 0.15f * (1.0f - heightRatio);
+        } else {
+            shadowAlpha = 0.2f;
+            shadowRadius = 0.35f;
+        }
+        auto alpha = static_cast<unsigned char>(shadowAlpha * 255.0f);
+        // DrawCylinder with zero height = filled disc
+        DrawCylinder({x, 0.01f, z}, shadowRadius, shadowRadius, 0.001f, 16,
+                     {0, 0, 0, alpha});
+    }
+
+    // --- Draw the piece ---
+    float s = scaleFactor;
     if (pieceModelsLoaded) {
-        // Flattened sphere — Go stone shape (squish Y to 0.5)
         Vector3 pos = {x, y + 0.15f * s, z};
-        Vector3 scaleVec = {s, s * 0.5f, s};
+        Vector3 scaleVec = {s * squashX, s * 0.5f * squashY, s * squashX};
         Model& model = (state == CellState::PlayerX) ? pieceModelLight : pieceModelDark;
         DrawModelEx(model, pos, {0.0f, 1.0f, 0.0f}, 0.0f, scaleVec, WHITE);
     } else {
-        // Fallback: solid color cylinders
         if (state == CellState::PlayerX) {
-            float radius = 0.3f * s;
-            float height = 0.4f * s;
+            float radius = 0.3f * s * squashX;
+            float height = 0.4f * s * squashY;
             DrawCylinder({x, y, z}, 0.0f, radius, height, 8, {50, 120, 220, 255});
             DrawCylinderWires({x, y, z}, 0.0f, radius, height, 8, {30, 80, 180, 255});
         } else if (state == CellState::PlayerO) {
-            float radius = 0.35f * s;
-            float height = 0.2f * s;
+            float radius = 0.35f * s * squashX;
+            float height = 0.2f * s * squashY;
             DrawCylinder({x, y, z}, radius, radius, height, 16, {220, 60, 60, 255});
             DrawCylinderWires({x, y, z}, radius, radius, height, 16, {180, 30, 30, 255});
         }

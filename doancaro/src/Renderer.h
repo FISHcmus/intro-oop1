@@ -117,12 +117,17 @@ private:
     bool glossShaderLoaded;
     int glossViewPosLoc;
 
+    // Matte Phong lighting shader for board
+    Shader matteShader;
+    bool matteShaderLoaded;
+    int matteViewPosLoc;
+
     // Ground plane
     Model groundModel;
     bool groundLoaded;
 
     // Animation constants
-    static constexpr float PIECE_ANIM_DURATION = 0.3f;
+    static constexpr float PIECE_ANIM_DURATION = 0.7f;
     static constexpr float LAST_MOVE_PULSE_SPEED = 3.0f;
     static constexpr float WIN_PULSE_SPEED = 3.0f;
 
