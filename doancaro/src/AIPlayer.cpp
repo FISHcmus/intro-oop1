@@ -17,12 +17,8 @@ int AIPlayer::scoreMove(Board& board, int row, int col, CellState moveMark,
         return (moveMark == aiMark) ? 200000 : 150000;
     }
 
-    // Quick local evaluation around the placed move
-    int score = 0;
-    int dirs[][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
-    for (auto& d : dirs) {
-        score += evaluateDirection(board, row, col, d[0], d[1], aiMark, opponentMark);
-    }
+    // Local evaluation using pattern table around the placed move
+    int score = computeLocalScore(board, row, col, aiMark, opponentMark);
 
     board.undoMove(row, col, prevLast);
     return (score < 0) ? -score : score;  // threats are also important to search
@@ -45,17 +41,6 @@ Move AIPlayer::getMove(const Board& board) {
 
     // Mutable copy for place/undo during search
     Board searchBoard = board;
-
-    // Threat-space search (Medium/Hard only — searchDepth >= 4)
-    if (searchDepth >= 4) {
-        // Check for forced AI win
-        Move threatWin = findThreatWin(searchBoard, aiMark, opponentMark, 0);
-        if (threatWin.row >= 0) return threatWin;
-
-        // Check for forced opponent win (and block their first threat)
-        Move opponentThreat = findThreatWin(searchBoard, opponentMark, aiMark, 0);
-        if (opponentThreat.row >= 0) return opponentThreat;
-    }
 
     // Score and sort candidates for better alpha-beta pruning
     std::vector<std::pair<int, Move>> scored;
@@ -247,14 +232,53 @@ int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
 
 int AIPlayer::evaluate(const Board& board, CellState aiMark,
                        CellState opponentMark) {
-    int score = 0;
-    int dirs[][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
+    if (!patternTableInit) initPatternTable();
 
-    for (int r = 0; r < Board::SIZE; r++) {
-        for (int c = 0; c < Board::SIZE; c++) {
-            if (board.getCell(r, c) == CellState::Empty) continue;
-            for (auto& d : dirs) {
-                score += evaluateDirection(board, r, c, d[0], d[1], aiMark, opponentMark);
+    int score = 0;
+    static const int DR[] = {0, 1, 1, 1};
+    static const int DC[] = {1, 0, 1, -1};
+
+    for (int dir = 0; dir < 4; dir++) {
+        int dr = DR[dir];
+        int dc = DC[dir];
+
+        // Determine valid starting positions to avoid duplicate scanning
+        int rStart = 0, rEnd = Board::SIZE;
+        int cStart = 0, cEnd = Board::SIZE;
+
+        // For each direction, we scan all lines by iterating start positions
+        // on the "perpendicular" edge
+        for (int r = rStart; r < rEnd; r++) {
+            for (int c = cStart; c < cEnd; c++) {
+                // Only start a line scan from the edge perpendicular to the direction
+                bool validStart = false;
+                if (dir == 0) validStart = (c == 0);                    // horizontal
+                else if (dir == 1) validStart = (r == 0);               // vertical
+                else if (dir == 2) validStart = (r == 0 || c == 0);     // diagonal
+                else validStart = (r == 0 || c == Board::SIZE - 1);     // anti-diagonal
+                if (!validStart) continue;
+
+                // Walk along this line, scanning 5-cell windows
+                int lr = r, lc = c;
+                int lineLen = 0;
+                // Count line length first
+                int tr = lr, tc = lc;
+                while (tr >= 0 && tr < Board::SIZE && tc >= 0 && tc < Board::SIZE) {
+                    lineLen++;
+                    tr += dr;
+                    tc += dc;
+                }
+
+                if (lineLen < 5) continue;
+
+                // Scan windows along this line
+                for (int i = 0; i <= lineLen - 5; i++) {
+                    int wr = lr + i * dr;
+                    int wc = lc + i * dc;
+                    int aiIdx = encodeWindow(board, wr, wc, dr, dc, aiMark);
+                    int opIdx = encodeWindow(board, wr, wc, dr, dc, opponentMark);
+                    score += patternScore[aiIdx] - patternScore[opIdx];
+                }
             }
         }
     }
@@ -262,80 +286,129 @@ int AIPlayer::evaluate(const Board& board, CellState aiMark,
 }
 
 // Score contribution of cells near (row, col) along the 4 directional axes.
-// Covers all cells whose evaluateDirection result could change when (row, col) is modified.
+// Evaluate all 5-cell windows that include (row, col) using pattern table.
 int AIPlayer::computeLocalScore(const Board& board, int row, int col,
                                 CellState aiMark, CellState opponentMark) {
-    int score = 0;
-    int dirs[][2] = {{0, 1}, {1, 0}, {1, 1}, {1, -1}};
+    if (!patternTableInit) initPatternTable();
 
-    for (auto& d : dirs) {
-        for (int i = -5; i <= 5; i++) {
-            int r = row + i * d[0];
-            int c = col + i * d[1];
-            if (r >= 0 && r < Board::SIZE && c >= 0 && c < Board::SIZE
-                && board.getCell(r, c) != CellState::Empty) {
-                score += evaluateDirection(board, r, c, d[0], d[1], aiMark, opponentMark);
-            }
+    int score = 0;
+    static const int DR[] = {0, 1, 1, 1};
+    static const int DC[] = {1, 0, 1, -1};
+
+    // Only evaluate 5-cell windows that include (row, col)
+    for (int dir = 0; dir < 4; dir++) {
+        int dr = DR[dir];
+        int dc = DC[dir];
+
+        // (row,col) can appear at position 0..4 within a 5-cell window
+        // Window starts at (row - k*dr, col - k*dc) for k = 0..4
+        for (int k = 0; k < 5; k++) {
+            int wr = row - k * dr;
+            int wc = col - k * dc;
+
+            // Check that all 5 cells of this window are in bounds
+            int endR = wr + 4 * dr;
+            int endC = wc + 4 * dc;
+            if (wr < 0 || wr >= Board::SIZE || wc < 0 || wc >= Board::SIZE) continue;
+            if (endR < 0 || endR >= Board::SIZE || endC < 0 || endC >= Board::SIZE) continue;
+
+            int aiIdx = encodeWindow(board, wr, wc, dr, dc, aiMark);
+            int opIdx = encodeWindow(board, wr, wc, dr, dc, opponentMark);
+            score += patternScore[aiIdx] - patternScore[opIdx];
         }
     }
     return score;
 }
 
-int AIPlayer::evaluateDirection(const Board& board, int row, int col,
-                                int dr, int dc, CellState aiMark,
-                                CellState opponentMark) {
-    // Count consecutive pieces from (row,col) in direction (dr,dc)
-    CellState cell = board.getCell(row, col);
-    if (cell == CellState::Empty) return 0;
+// Pattern table: 3^5 = 243 entries
+// Encoding: cell 0=empty, 1=self, 2=opponent
+// Index = c0 + c1*3 + c2*9 + c3*27 + c4*81
+int AIPlayer::patternScore[243] = {};
+bool AIPlayer::patternTableInit = false;
 
-    int count = 0;
-    int openEnds = 0;
-    int r = row;
-    int c = col;
+void AIPlayer::initPatternTable() {
+    for (int idx = 0; idx < 243; idx++) {
+        int cells[5];
+        int tmp = idx;
+        for (int& cell : cells) {
+            cell = tmp % 3;
+            tmp /= 3;
+        }
 
-    // Count consecutive same-color pieces
-    while (r >= 0 && r < Board::SIZE && c >= 0 && c < Board::SIZE
-           && board.getCell(r, c) == cell) {
-        count++;
-        r += dr;
-        c += dc;
+        // If any opponent piece present, window is blocked for self
+        bool hasOpponent = false;
+        int selfCount = 0;
+        for (int cell : cells) {
+            if (cell == 2) { hasOpponent = true; break; }
+            if (cell == 1) selfCount++;
+        }
+
+        if (hasOpponent || selfCount == 0) {
+            patternScore[idx] = 0;
+            continue;
+        }
+
+        // Score based on count and arrangement
+        if (selfCount == 5) {
+            patternScore[idx] = 100000;
+        } else if (selfCount == 4) {
+            // Four in a window = one move from winning
+            patternScore[idx] = 15000;
+        } else if (selfCount == 3) {
+            // Check how consecutive the pieces are
+            int maxRun = 0, run = 0;
+            for (int cell : cells) {
+                if (cell == 1) { run++; if (run > maxRun) maxRun = run; }
+                else run = 0;
+            }
+            if (maxRun == 3) {
+                // Consecutive three (e.g., _SSS_, __SSS, SSS__)
+                // Check if centered (more open) vs edge
+                if (cells[0] == 0 && cells[4] == 0) {
+                    patternScore[idx] = 1500;  // _SSS_ — open on both sides in window
+                } else {
+                    patternScore[idx] = 1000;  // SSS__ or __SSS
+                }
+            } else if (maxRun == 2) {
+                // One gap (e.g., SS_S_, _S_SS, S_SS_)
+                patternScore[idx] = 900;
+            } else {
+                // S_S_S — very spread
+                patternScore[idx] = 400;
+            }
+        } else if (selfCount == 2) {
+            int maxRun = 0, run = 0;
+            for (int cell : cells) {
+                if (cell == 1) { run++; if (run > maxRun) maxRun = run; }
+                else run = 0;
+            }
+            patternScore[idx] = (maxRun == 2) ? 100 : 50;
+        } else {
+            // Single piece
+            patternScore[idx] = 10;
+        }
     }
-
-    // Check if end is open (empty)
-    if (r >= 0 && r < Board::SIZE && c >= 0 && c < Board::SIZE
-        && board.getCell(r, c) == CellState::Empty) {
-        openEnds++;
-    }
-
-    // Check if start is open (one step before row,col)
-    int sr = row - dr;
-    int sc = col - dc;
-    if (sr >= 0 && sr < Board::SIZE && sc >= 0 && sc < Board::SIZE
-        && board.getCell(sr, sc) == CellState::Empty) {
-        openEnds++;
-    }
-
-    // No open ends = blocked, worthless
-    if (openEnds == 0) return 0;
-
-    // Score based on count and open ends
-    int score = 0;
-    bool isAI = (cell == aiMark);
-
-    if (count >= 5) {
-        score = 100000;
-    } else if (count == 4) {
-        score = (openEnds == 2) ? 10000 : 1000;
-    } else if (count == 3) {
-        score = (openEnds == 2) ? 1000 : 100;
-    } else if (count == 2) {
-        score = (openEnds == 2) ? 100 : 10;
-    } else {
-        score = openEnds;
-    }
-
-    return isAI ? score : -score;
+    patternTableInit = true;
 }
+
+int AIPlayer::encodeWindow(const Board& board, int r, int c, int dr, int dc,
+                           CellState selfMark) {
+    int idx = 0;
+    int pow3 = 1;
+    for (int i = 0; i < 5; i++) {
+        int cr = r + i * dr;
+        int cc = c + i * dc;
+        CellState cell = board.getCell(cr, cc);
+        int val = 0;  // empty
+        if (cell == selfMark) val = 1;
+        else if (cell != CellState::Empty) val = 2;  // opponent
+        idx += val * pow3;
+        pow3 *= 3;
+    }
+    return idx;
+}
+
+
 
 // ---------------------------------------------------------------------------
 // Threat-space search

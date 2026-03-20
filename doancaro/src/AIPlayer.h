@@ -29,6 +29,14 @@ private:
     static constexpr int TIME_LIMIT_MEDIUM_MS = 1000;
     static constexpr int TIME_LIMIT_HARD_MS = 3000;
 
+    // Pattern table: 3^5 = 243 entries, indexed by 5-cell window encoding
+    // Cell encoding: 0=empty, 1=self, 2=opponent
+    static int patternScore[243];
+    static bool patternTableInit;
+    static void initPatternTable();
+    static int encodeWindow(const Board& board, int r, int c, int dr, int dc,
+                            CellState selfMark);
+
     int minimax(Board& board, int depth, int alpha, int beta,
                 bool maximizing, CellState aiMark, CellState opponentMark,
                 int boardScore);
@@ -41,8 +49,6 @@ private:
     static int evaluate(const Board& board, CellState aiMark, CellState opponentMark);
     static int computeLocalScore(const Board& board, int row, int col,
                                  CellState aiMark, CellState opponentMark);
-    static int evaluateDirection(const Board& board, int row, int col,
-                                 int dr, int dc, CellState aiMark, CellState opponentMark);
 
     // Threat-space search
     Move findThreatWin(Board& board, CellState attackMark, CellState defendMark, int depth);
