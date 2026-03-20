@@ -17,9 +17,9 @@ private:
 
     int minimax(Board& board, int depth, int alpha, int beta,
                 bool maximizing, CellState aiMark, CellState opponentMark);
-    int evaluate(const Board& board, CellState aiMark, CellState opponentMark) const;
-    int evaluateDirection(const Board& board, int row, int col,
-                          int dr, int dc, CellState aiMark, CellState opponentMark) const;
+    static int evaluate(const Board& board, CellState aiMark, CellState opponentMark);
+    static int evaluateDirection(const Board& board, int row, int col,
+                                 int dr, int dc, CellState aiMark, CellState opponentMark);
 };
 
 #endif

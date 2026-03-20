@@ -117,6 +117,9 @@ void Game::drawPlaying() {
 
     bool isP1Turn = (currentPlayer == player1);
     gameScreen.drawHUD(*player1, *player2, isP1Turn, board.getMoveCount());
+
+    // Camera control buttons (2D overlay)
+    renderer.drawCameraControls();
 }
 
 void Game::drawGameOver() {
@@ -168,6 +171,8 @@ void Game::handleInput() {
 void Game::handleMouseInput() {
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mousePos = GetMousePosition();
+        // Don't place pieces when clicking UI buttons
+        if (renderer.isPointOnUI(mousePos)) return;
         int row, col;
         if (renderer.screenToBoard(mousePos, row, col)) {
             if (board.isEmpty(row, col) && dynamic_cast<AIPlayer*>(currentPlayer) == nullptr) {
