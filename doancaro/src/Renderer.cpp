@@ -1,6 +1,67 @@
 #include "Renderer.h"
 #include "raymath.h"
+#include "rlgl.h"
 #include <cmath>
+
+// Embedded Phong vertex shader (GLSL 330)
+static const char* glossVS =
+    "#version 330\n"
+    "in vec3 vertexPosition;\n"
+    "in vec2 vertexTexCoord;\n"
+    "in vec3 vertexNormal;\n"
+    "uniform mat4 mvp;\n"
+    "uniform mat4 matModel;\n"
+    "uniform mat4 matNormal;\n"
+    "out vec3 fragPosition;\n"
+    "out vec2 fragTexCoord;\n"
+    "out vec3 fragNormal;\n"
+    "void main() {\n"
+    "    fragPosition = vec3(matModel * vec4(vertexPosition, 1.0));\n"
+    "    fragTexCoord = vertexTexCoord;\n"
+    "    fragNormal = normalize(vec3(matNormal * vec4(vertexNormal, 1.0)));\n"
+    "    gl_Position = mvp * vec4(vertexPosition, 1.0);\n"
+    "}\n";
+
+// Embedded Phong fragment shader — glossy/wet look with strong specular
+static const char* glossFS =
+    "#version 330\n"
+    "in vec3 fragPosition;\n"
+    "in vec2 fragTexCoord;\n"
+    "in vec3 fragNormal;\n"
+    "uniform sampler2D texture0;\n"
+    "uniform vec4 colDiffuse;\n"
+    "uniform vec3 viewPos;\n"
+    "out vec4 finalColor;\n"
+    "void main() {\n"
+    "    vec3 lightPos = vec3(10.0, 20.0, 10.0);\n"
+    "    vec3 lightColor = vec3(1.0, 0.98, 0.95);\n"
+    "    float ambientStrength = 0.35;\n"
+    "    float specularStrength = 0.8;\n"
+    "    float shininess = 64.0;\n"
+    "    vec4 texColor = texture(texture0, fragTexCoord) * colDiffuse;\n"
+    "    vec3 norm = normalize(fragNormal);\n"
+    "    vec3 lightDir = normalize(lightPos - fragPosition);\n"
+    // Diffuse
+    "    float diff = max(dot(norm, lightDir), 0.0);\n"
+    // Specular (Blinn-Phong)
+    "    vec3 viewDir = normalize(viewPos - fragPosition);\n"
+    "    vec3 halfDir = normalize(lightDir + viewDir);\n"
+    "    float spec = pow(max(dot(norm, halfDir), 0.0), shininess);\n"
+    // Combine
+    "    vec3 ambient = ambientStrength * lightColor;\n"
+    "    vec3 diffuse = diff * lightColor;\n"
+    "    vec3 specular = specularStrength * spec * lightColor;\n"
+    // Second fill light from opposite side (softer)
+    "    vec3 lightPos2 = vec3(-5.0, 12.0, -5.0);\n"
+    "    vec3 lightDir2 = normalize(lightPos2 - fragPosition);\n"
+    "    float diff2 = max(dot(norm, lightDir2), 0.0) * 0.3;\n"
+    "    vec3 halfDir2 = normalize(lightDir2 + viewDir);\n"
+    "    float spec2 = pow(max(dot(norm, halfDir2), 0.0), shininess) * 0.3;\n"
+    "    diffuse += diff2 * lightColor;\n"
+    "    specular += specularStrength * spec2 * lightColor;\n"
+    "    vec3 result = (ambient + diffuse) * texColor.rgb + specular;\n"
+    "    finalColor = vec4(result, texColor.a);\n"
+    "}\n";
 
 // Board sits on XZ plane at Y=0, cells [0..SIZE) on both axes
 // Each cell is 1.0 world unit
@@ -26,7 +87,9 @@ Renderer::Renderer()
       prevCells{}, pieceAnimStart{}, lastMove{-1, -1},
       winLineStart(0.0f), showingWinLine(false),
       winParticlesEmitted(false),
-      boardModel({}), boardModelLoaded(false) {}
+      boardModel({}), boardModelLoaded(false),
+      pieceModelLight({}), pieceModelDark({}), pieceModelsLoaded(false),
+      glossShader({}), glossShaderLoaded(false), glossViewPosLoc(0) {}
 
 Renderer::~Renderer() = default;
 
@@ -80,12 +143,111 @@ void Renderer::init(int width, int height) {
     btnSettings = {static_cast<float>(width) - BTN_PAD - 80, BTN_PAD, 80, BTN_SIZE};
     btnMenu = {static_cast<float>(width) - BTN_PAD - 80 - BTN_PAD - 60, BTN_PAD, 60, BTN_SIZE};
     btnRestart = {static_cast<float>(width) - BTN_PAD - 80 - BTN_PAD - 60 - BTN_PAD - 70, BTN_PAD, 70, BTN_SIZE};
+
+    // Generate procedural wood textures and piece models
+    {
+        const int texW = 128;
+        const int texH = 128;
+
+        // Lambda to generate a wood grain texture image
+        auto generateWoodImage = [](int w, int h,
+                                     Color base, Color ring, Color highlight) -> Image {
+            Image img = GenImageColor(w, h, base);
+            // Wood ring pattern: concentric ellipses with noise
+            for (int py = 0; py < h; py++) {
+                for (int px = 0; px < w; px++) {
+                    float nx = (static_cast<float>(px) / static_cast<float>(w)) - 0.5f;
+                    float ny = (static_cast<float>(py) / static_cast<float>(h)) - 0.5f;
+                    // Distance from center with stretching for oval rings
+                    float dist = sqrtf(nx * nx * 4.0f + ny * ny);
+                    // Ring pattern
+                    float ringVal = sinf(dist * 40.0f);
+                    // Simple pseudo-noise using trig
+                    float noise = sinf(static_cast<float>(px) * 0.7f + static_cast<float>(py) * 1.3f) *
+                                  cosf(static_cast<float>(px) * 1.1f - static_cast<float>(py) * 0.9f);
+                    ringVal += noise * 0.3f;
+
+                    auto clamp = [](int v) -> unsigned char {
+                        return static_cast<unsigned char>(v < 0 ? 0 : (v > 255 ? 255 : v));
+                    };
+
+                    Color c;
+                    if (ringVal > 0.3f) {
+                        // Ring line
+                        float t = (ringVal - 0.3f) / 0.7f;
+                        c.r = clamp(base.r + static_cast<int>(static_cast<float>(ring.r - base.r) * t));
+                        c.g = clamp(base.g + static_cast<int>(static_cast<float>(ring.g - base.g) * t));
+                        c.b = clamp(base.b + static_cast<int>(static_cast<float>(ring.b - base.b) * t));
+                    } else {
+                        // Between rings — subtle highlight variation
+                        float t = (ringVal + 1.0f) / 1.3f;
+                        c.r = clamp(base.r + static_cast<int>(static_cast<float>(highlight.r - base.r) * t * 0.3f));
+                        c.g = clamp(base.g + static_cast<int>(static_cast<float>(highlight.g - base.g) * t * 0.3f));
+                        c.b = clamp(base.b + static_cast<int>(static_cast<float>(highlight.b - base.b) * t * 0.3f));
+                    }
+                    c.a = 255;
+                    ImageDrawPixel(&img, px, py, c);
+                }
+            }
+            return img;
+        };
+
+        // Light maple wood (PlayerX)
+        Image imgLight = generateWoodImage(texW, texH,
+            {210, 180, 140, 255},   // base: warm light wood
+            {180, 145, 100, 255},   // ring: darker grain lines
+            {230, 205, 170, 255});  // highlight: lighter between rings
+        Texture2D texLight = LoadTextureFromImage(imgLight);
+        UnloadImage(imgLight);
+
+        // Dark walnut wood (PlayerO)
+        Image imgDark = generateWoodImage(texW, texH,
+            {100, 65, 40, 255},     // base: dark walnut
+            {70, 42, 25, 255},      // ring: darker grain
+            {125, 85, 55, 255});    // highlight: lighter between rings
+        Texture2D texDark = LoadTextureFromImage(imgDark);
+        UnloadImage(imgDark);
+
+        // Create sphere mesh (flattened when drawn to look like Go stones)
+        Mesh stoneMesh = GenMeshSphere(0.35f, 16, 16);
+
+        // Build light piece model
+        pieceModelLight = LoadModelFromMesh(stoneMesh);
+        pieceModelLight.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = texLight;
+
+        // Build dark piece model — need a separate mesh copy since LoadModelFromMesh takes ownership
+        Mesh stoneMesh2 = GenMeshSphere(0.35f, 16, 16);
+        pieceModelDark = LoadModelFromMesh(stoneMesh2);
+        pieceModelDark.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = texDark;
+
+        pieceModelsLoaded = true;
+
+        // Load glossy Phong shader from embedded strings
+        glossShader = LoadShaderFromMemory(glossVS, glossFS);
+        glossShader.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(glossShader, "matModel");
+        glossShader.locs[SHADER_LOC_MATRIX_NORMAL] = GetShaderLocation(glossShader, "matNormal");
+        glossViewPosLoc = GetShaderLocation(glossShader, "viewPos");
+        glossShaderLoaded = true;
+
+        // Assign the glossy shader to both piece models
+        pieceModelLight.materials[0].shader = glossShader;
+        pieceModelDark.materials[0].shader = glossShader;
+    }
 }
 
 void Renderer::shutdown() {
     if (boardModelLoaded) {
         UnloadModel(boardModel);
         boardModelLoaded = false;
+    }
+    if (pieceModelsLoaded) {
+        UnloadModel(pieceModelLight);
+        UnloadModel(pieceModelDark);
+        pieceModelsLoaded = false;
+    }
+    if (glossShaderLoaded) {
+        UnloadShader(glossShader);
+        glossShaderLoaded = false;
     }
 }
 
@@ -294,6 +456,12 @@ void Renderer::drawBoard(const Board& board, int cursorRow, int cursorCol,
 
     BeginMode3D(camera);
 
+    // Update glossy shader with current camera position for specular reflections
+    if (glossShaderLoaded) {
+        float viewPos[3] = {camera.position.x, camera.position.y, camera.position.z};
+        SetShaderValue(glossShader, glossViewPosLoc, viewPos, SHADER_UNIFORM_VEC3);
+    }
+
     drawBoardSurface();
 
     // Detect new pieces and draw with animation
@@ -464,18 +632,27 @@ void Renderer::drawPiece3D(int row, int col, CellState state, float anim) {
     // Drop from above: y goes from 2.0 to 0.0
     float y = 2.0f * (1.0f - easedT);
     // Scale from 0.5 to 1.0
-    float scale = 0.5f + 0.5f * easedT;
+    float s = 0.5f + 0.5f * easedT;
 
-    if (state == CellState::PlayerX) {
-        float radius = 0.3f * scale;
-        float height = 0.4f * scale;
-        DrawCylinder({x, y, z}, 0.0f, radius, height, 8, {50, 120, 220, 255});
-        DrawCylinderWires({x, y, z}, 0.0f, radius, height, 8, {30, 80, 180, 255});
-    } else if (state == CellState::PlayerO) {
-        float radius = 0.35f * scale;
-        float height = 0.2f * scale;
-        DrawCylinder({x, y, z}, radius, radius, height, 16, {220, 60, 60, 255});
-        DrawCylinderWires({x, y, z}, radius, radius, height, 16, {180, 30, 30, 255});
+    if (pieceModelsLoaded) {
+        // Flattened sphere — Go stone shape (squish Y to 0.5)
+        Vector3 pos = {x, y + 0.15f * s, z};
+        Vector3 scaleVec = {s, s * 0.5f, s};
+        Model& model = (state == CellState::PlayerX) ? pieceModelLight : pieceModelDark;
+        DrawModelEx(model, pos, {0.0f, 1.0f, 0.0f}, 0.0f, scaleVec, WHITE);
+    } else {
+        // Fallback: solid color cylinders
+        if (state == CellState::PlayerX) {
+            float radius = 0.3f * s;
+            float height = 0.4f * s;
+            DrawCylinder({x, y, z}, 0.0f, radius, height, 8, {50, 120, 220, 255});
+            DrawCylinderWires({x, y, z}, 0.0f, radius, height, 8, {30, 80, 180, 255});
+        } else if (state == CellState::PlayerO) {
+            float radius = 0.35f * s;
+            float height = 0.2f * s;
+            DrawCylinder({x, y, z}, radius, radius, height, 16, {220, 60, 60, 255});
+            DrawCylinderWires({x, y, z}, radius, radius, height, 16, {180, 30, 30, 255});
+        }
     }
 }
 

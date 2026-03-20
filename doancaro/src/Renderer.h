@@ -106,6 +106,16 @@ private:
     Model boardModel;
     bool boardModelLoaded;
 
+    // Piece models (sphere mesh + procedural wood textures)
+    Model pieceModelLight;  // PlayerX — light maple wood
+    Model pieceModelDark;   // PlayerO — dark walnut wood
+    bool pieceModelsLoaded;
+
+    // Glossy Phong lighting shader for pieces
+    Shader glossShader;
+    bool glossShaderLoaded;
+    int glossViewPosLoc;
+
     // Animation constants
     static constexpr float PIECE_ANIM_DURATION = 0.3f;
     static constexpr float LAST_MOVE_PULSE_SPEED = 3.0f;
@@ -119,7 +129,7 @@ private:
 
     // 3D drawing helpers
     // drawGrid3D removed — using baked grid from Go board model
-    static void drawPiece3D(int row, int col, CellState state, float anim);
+    void drawPiece3D(int row, int col, CellState state, float anim);
     static void drawCursor3D(int row, int col, CellState currentTurn);
     void drawBoardSurface();
     static void drawLastMoveIndicator(int row, int col, float time);
