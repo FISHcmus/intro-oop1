@@ -2,6 +2,7 @@
 #define RENDERER_H
 
 #include "Board.h"
+#include "ParticleSystem.h"
 #include "raylib.h"
 #include <cmath>
 #include <vector>
@@ -33,6 +34,7 @@ public:
     bool drawLoadButton();
     bool drawMenuButton();
     bool drawSettingsButton();
+    bool drawRestartButton();
 
     // Returns true if screen point is over a UI button (prevents board clicks)
     bool isPointOnUI(Vector2 point) const;
@@ -43,6 +45,10 @@ public:
 
     // Mouse hover (updated each frame via ray cast)
     bool getHoveredCell(int& row, int& col) const;
+
+    // Particle effects
+    void updateParticles(float dt);
+    void triggerWinParticles(const std::vector<Move>& winLine);
 
     float getCellSize() const { return cellSize; }
     Camera3D getCamera() const { return camera; }
@@ -78,6 +84,7 @@ private:
     Rectangle btnLoad;
     Rectangle btnMenu;
     Rectangle btnSettings;
+    Rectangle btnRestart;
 
     // Cached hover from ray cast
     bool hoverValid;
@@ -90,6 +97,14 @@ private:
     Move lastMove;
     float winLineStart;
     bool showingWinLine;
+    bool winParticlesEmitted;
+
+    // Particle system
+    ParticleSystem particles;
+
+    // 3D board model
+    Model boardModel;
+    bool boardModelLoaded;
 
     // Animation constants
     static constexpr float PIECE_ANIM_DURATION = 0.3f;
@@ -103,10 +118,10 @@ private:
     void handleScrollZoom();
 
     // 3D drawing helpers
-    static void drawGrid3D();
+    // drawGrid3D removed — using baked grid from Go board model
     static void drawPiece3D(int row, int col, CellState state, float anim);
     static void drawCursor3D(int row, int col, CellState currentTurn);
-    static void drawBoardSurface();
+    void drawBoardSurface();
     static void drawLastMoveIndicator(int row, int col, float time);
 
     // UI helper

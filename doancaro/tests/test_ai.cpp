@@ -97,7 +97,7 @@ TEST_CASE("AI handles single candidate move", "[ai]") {
     // Fill board except one cell
     for (int r = 0; r < Board::SIZE; r++) {
         for (int c = 0; c < Board::SIZE; c++) {
-            if (r == 11 && c == 11) continue; // leave one empty
+            if (r == Board::SIZE - 1 && c == Board::SIZE - 1) continue; // leave one empty
             CellState mark = ((r + c) % 2 == 0) ? CellState::PlayerX : CellState::PlayerO;
             board.placeMove(r, c, mark);
         }
@@ -105,6 +105,6 @@ TEST_CASE("AI handles single candidate move", "[ai]") {
 
     AIPlayer ai("AI", CellState::PlayerO, 2);
     Move move = ai.getMove(board);
-    REQUIRE(move.row == 11);
-    REQUIRE(move.col == 11);
+    REQUIRE(move.row == Board::SIZE - 1);
+    REQUIRE(move.col == Board::SIZE - 1);
 }

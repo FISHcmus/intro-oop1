@@ -9,7 +9,7 @@ static const float ORBIT_SPEED = 0.005f;     // radians per pixel of drag
 static const float BUTTON_ORBIT_SPEED = 0.05f; // radians per frame when button held
 static const float ZOOM_SPEED = 0.5f;
 static const float MIN_DISTANCE = 8.0f;
-static const float MAX_DISTANCE = 30.0f;
+static const float MAX_DISTANCE = 45.0f;
 static const float MIN_PITCH = 0.2f;          // ~11 degrees (don't go below board)
 static const float MAX_PITCH = 1.4f;          // ~80 degrees (nearly top-down)
 static const int BTN_SIZE = 36;
@@ -21,10 +21,12 @@ Renderer::Renderer()
       cameraTarget({}), defaultAngle(0), defaultPitch(0), defaultDistance(0),
       isDragging(false), dragStart({}),
       btnRotateLeft({}), btnRotateRight({}), btnZoomIn({}), btnZoomOut({}), btnReset({}),
-      btnSave({}), btnLoad({}), btnMenu({}), btnSettings({}),
+      btnSave({}), btnLoad({}), btnMenu({}), btnSettings({}), btnRestart({}),
       hoverValid(false), hoverRow(0), hoverCol(0),
       prevCells{}, pieceAnimStart{}, lastMove{-1, -1},
-      winLineStart(0.0f), showingWinLine(false) {}
+      winLineStart(0.0f), showingWinLine(false),
+      winParticlesEmitted(false),
+      boardModel({}), boardModelLoaded(false) {}
 
 Renderer::~Renderer() = default;
 
@@ -33,12 +35,12 @@ void Renderer::init(int width, int height) {
     screenHeight = height;
 
     float center = Board::SIZE / 2.0f;
-    cameraTarget = {center, 0.0f, center};
+    cameraTarget = {center, -0.5f, center};
 
     // Default orbital parameters
     defaultAngle = 0.0f;          // looking from front
     defaultPitch = 0.85f;         // ~49 degrees down
-    defaultDistance = 16.0f;
+    defaultDistance = 28.0f;
 
     cameraAngle = defaultAngle;
     cameraPitch = defaultPitch;
@@ -48,6 +50,17 @@ void Renderer::init(int width, int height) {
     camera.fovy = 45.0f;
     camera.projection = CAMERA_PERSPECTIVE;
     rebuildCameraFromOrbit();
+
+    // Load 3D board/table model
+    if (FileExists("assets/models/table.glb")) {
+        boardModel = LoadModel("assets/models/table.glb");
+        boardModelLoaded = true;
+        // raylib GLB loader puts default material at [0] and loaded material at [1]
+        // Assign the textured material to the mesh
+        if (boardModel.materialCount > 1) {
+            boardModel.meshMaterial[0] = 1;
+        }
+    }
 
     // Layout UI buttons in bottom-left corner
     float bx = BTN_PAD;
@@ -63,12 +76,18 @@ void Renderer::init(int width, int height) {
     btnSave = {BTN_PAD, BTN_PAD, 60, BTN_SIZE};
     btnLoad = {BTN_PAD + 60 + BTN_PAD, BTN_PAD, 60, BTN_SIZE};
 
-    // Menu/Settings buttons — top-right
+    // Menu/Settings/Restart buttons — top-right
     btnSettings = {static_cast<float>(width) - BTN_PAD - 80, BTN_PAD, 80, BTN_SIZE};
     btnMenu = {static_cast<float>(width) - BTN_PAD - 80 - BTN_PAD - 60, BTN_PAD, 60, BTN_SIZE};
+    btnRestart = {static_cast<float>(width) - BTN_PAD - 80 - BTN_PAD - 60 - BTN_PAD - 70, BTN_PAD, 70, BTN_SIZE};
 }
 
-void Renderer::shutdown() {}
+void Renderer::shutdown() {
+    if (boardModelLoaded) {
+        UnloadModel(boardModel);
+        boardModelLoaded = false;
+    }
+}
 
 void Renderer::rebuildCameraFromOrbit() {
     // Convert spherical coordinates to camera position
@@ -218,7 +237,8 @@ bool Renderer::isPointOnUI(Vector2 point) const {
         || CheckCollisionPointRec(point, btnSave)
         || CheckCollisionPointRec(point, btnLoad)
         || CheckCollisionPointRec(point, btnMenu)
-        || CheckCollisionPointRec(point, btnSettings);
+        || CheckCollisionPointRec(point, btnSettings)
+        || CheckCollisionPointRec(point, btnRestart);
 }
 
 bool Renderer::drawButton(Rectangle rect, const char* label, int fontSize) {
@@ -264,6 +284,10 @@ bool Renderer::drawSettingsButton() {
     return drawButton(btnSettings, "Settings", 14);
 }
 
+bool Renderer::drawRestartButton() {
+    return drawButton(btnRestart, "Restart", 14);
+}
+
 void Renderer::drawBoard(const Board& board, int cursorRow, int cursorCol,
                           CellState currentTurn) {
     auto now = static_cast<float>(GetTime());
@@ -271,7 +295,6 @@ void Renderer::drawBoard(const Board& board, int cursorRow, int cursorCol,
     BeginMode3D(camera);
 
     drawBoardSurface();
-    drawGrid3D();
 
     // Detect new pieces and draw with animation
     for (int r = 0; r < Board::SIZE; r++) {
@@ -280,6 +303,15 @@ void Renderer::drawBoard(const Board& board, int cursorRow, int cursorCol,
             if (cell != CellState::Empty && prevCells[r][c] == CellState::Empty) {
                 pieceAnimStart[r][c] = now;
                 lastMove = {r, c};
+
+                // Emit placement particles
+                float px = static_cast<float>(c) + 0.5f;
+                float pz = static_cast<float>(r) + 0.5f;
+                Color baseColor = (cell == CellState::PlayerX)
+                    ? Color{50, 120, 220, 255}
+                    : Color{220, 60, 60, 255};
+                particles.emitPlacement(px, 0.2f, pz, baseColor);
+                particles.emitLanding(px, pz, baseColor);
             }
             prevCells[r][c] = cell;
 
@@ -306,6 +338,9 @@ void Renderer::drawBoard(const Board& board, int cursorRow, int cursorCol,
         drawCursor3D(cursorRow, cursorCol, currentTurn);
     }
 
+    // Draw particles in 3D space
+    particles.draw();
+
     EndMode3D();
 }
 
@@ -315,6 +350,19 @@ void Renderer::drawWinLine(const std::vector<Move>& winLine) {
     if (!showingWinLine) {
         winLineStart = now;
         showingWinLine = true;
+    }
+
+    // Emit win celebration particles once
+    if (!winParticlesEmitted) {
+        winParticlesEmitted = true;
+        std::vector<std::pair<float, float>> positions;
+        for (const auto& m : winLine) {
+            positions.push_back({
+                static_cast<float>(m.col) + 0.5f,
+                static_cast<float>(m.row) + 0.5f
+            });
+        }
+        particles.emitWinCelebration(positions);
     }
 
     BeginMode3D(camera);
@@ -373,21 +421,35 @@ bool Renderer::getHoveredCell(int& row, int& col) const {
 // --- Private 3D drawing helpers ---
 
 void Renderer::drawBoardSurface() {
-    float half = Board::SIZE / 2.0f;
-    DrawPlane({half, 0.0f, half},
-              {static_cast<float>(Board::SIZE), static_cast<float>(Board::SIZE)},
-              {60, 40, 20, 255});
-}
+    if (boardModelLoaded) {
+        // Go board model: ~35 units wide, 19x19 grid baked into wood texture
+        // Grid occupies ~90% of the model surface → MODEL_GRID_EXTENT ≈ 31.5
+        // World grid: 19 intersections at spacing 1.0, from 0.5 to 18.5 → extent = 18.0
+        static constexpr float MODEL_GRID_EXTENT = 31.5f;
+        static constexpr float MODEL_TOP_Y = 1.1f;
 
-void Renderer::drawGrid3D() {
-    Color gridColor = {140, 120, 90, 255};
+        float worldGridExtent = static_cast<float>(Board::SIZE - 1);  // 18.0
+        float scale = worldGridExtent / MODEL_GRID_EXTENT;
+        float worldCenter = Board::SIZE / 2.0f;  // 9.5
+        float yOffset = -MODEL_TOP_Y * scale;
 
-    for (int i = 0; i <= Board::SIZE; i++) {
-        auto pos = static_cast<float>(i);
-        auto boardLen = static_cast<float>(Board::SIZE);
-
-        DrawLine3D({0.0f, 0.01f, pos}, {boardLen, 0.01f, pos}, gridColor);
-        DrawLine3D({pos, 0.01f, 0.0f}, {pos, 0.01f, boardLen}, gridColor);
+        DrawModelEx(boardModel,
+                    {worldCenter, yOffset, worldCenter},
+                    {0.0f, 1.0f, 0.0f}, 0.0f,
+                    {scale, scale, scale},
+                    WHITE);
+    } else {
+        // Fallback: plain wooden box if model not loaded
+        float half = Board::SIZE / 2.0f;
+        float boardLen = static_cast<float>(Board::SIZE);
+        float padding = 0.5f;
+        float boardHeight = 0.3f;
+        DrawCube({half, -boardHeight / 2.0f, half},
+                 boardLen + padding * 2, boardHeight, boardLen + padding * 2,
+                 {220, 179, 92, 255});
+        DrawCubeWires({half, -boardHeight / 2.0f, half},
+                      boardLen + padding * 2, boardHeight, boardLen + padding * 2,
+                      {180, 140, 60, 255});
     }
 }
 
@@ -455,4 +517,21 @@ void Renderer::resetAnimations() {
     lastMove = {-1, -1};
     winLineStart = 0.0f;
     showingWinLine = false;
+    winParticlesEmitted = false;
+    particles.clear();
+}
+
+void Renderer::updateParticles(float dt) {
+    particles.update(dt);
+}
+
+void Renderer::triggerWinParticles(const std::vector<Move>& winLine) {
+    std::vector<std::pair<float, float>> positions;
+    for (const auto& m : winLine) {
+        positions.push_back({
+            static_cast<float>(m.col) + 0.5f,
+            static_cast<float>(m.row) + 0.5f
+        });
+    }
+    particles.emitWinCelebration(positions);
 }

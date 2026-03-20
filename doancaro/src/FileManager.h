@@ -6,7 +6,7 @@
 #include <string>
 
 static const uint32_t SAVE_MAGIC = 0x4341524F;  // "CARO"
-static const uint16_t SAVE_VERSION = 1;
+static const uint16_t SAVE_VERSION = 2;
 static const int MAX_SLOTS = 4;  // 0=autosave, 1-3=manual
 
 struct SaveHeader {

@@ -62,6 +62,7 @@ set(SOURCES
     src/SaveLoadScreen.cpp
     src/AudioManager.cpp
     src/FileManager.cpp
+    src/ParticleSystem.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})

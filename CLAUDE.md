@@ -99,6 +99,18 @@ Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro
 7. **Need to check errors?** → `get_file_problems` (per file) or `build_project` (whole project)
 8. **Non-code file?** → Use built-in Read/Edit/Write tools
 
+## raylib Gotchas
+- **GLB material mapping**: `LoadModel("file.glb")` puts blank default at `materials[0]`, loaded texture at `materials[1]`. Fix: `model.meshMaterial[0] = 1;`
+- **GLB model stripping**: Remove node mesh refs with Python, then `npx @gltf-transform/cli prune in.glb out.glb` to shrink file
+- **Working directory**: Must run `./CaroGame` from `doancaro/build/` — assets use relative paths. Running from another dir causes silent asset load failures.
+- **GLFW init error**: Kill old game process before relaunching: `pkill -f CaroGame`
+- **New .cpp files**: Must add to `SOURCES` list in `doancaro/CMakeLists.txt`
+
+## Caro Project Assets
+- 3D models in `doancaro/assets/models/` (copied to build dir by CMake post-build)
+- Raw/original models in `doancaro/.raw-assets/` (gitignored, not bundled)
+- Board model: `table.glb` — Go board from Sketchfab, wood texture, 35 units wide, scaled to fit 12x12 grid
+
 ## Code Style Rules
 
 - **Clear, simple C++14** — readable code, split into small functions, handle all edge cases

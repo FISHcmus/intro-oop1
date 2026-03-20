@@ -114,6 +114,7 @@ void Game::updatePlaying() {
     if (toastTimer > 0.0f) toastTimer -= GetFrameTime();
 
     renderer.updateCamera();
+    renderer.updateParticles(GetFrameTime());
 
     // Check if AI finished thinking
     if (aiThinking.load() == false && aiResult.row >= 0) {
@@ -145,6 +146,8 @@ void Game::updatePlaying() {
 }
 
 void Game::updateGameOver() {
+    renderer.updateParticles(GetFrameTime());
+
     if (IsKeyPressed(KEY_ENTER)) {
         startNewGame();
     }
@@ -208,6 +211,11 @@ void Game::drawPlaying() {
         settingsScreen.reset();
         settingsReturnState = GameState::Playing;
         state = GameState::Settings;
+    }
+
+    // Restart button
+    if (renderer.drawRestartButton()) {
+        startNewGame();
     }
 
     // Toast notification
