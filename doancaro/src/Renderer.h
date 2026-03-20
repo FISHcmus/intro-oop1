@@ -19,6 +19,7 @@ public:
     void drawBoard(const Board& board, int cursorRow, int cursorCol,
                    CellState currentTurn);
     void drawWinLine(const std::vector<Move>& winLine);
+    void drawVignette();
 
     // Animation control
     void resetAnimations();
@@ -115,6 +116,10 @@ private:
     Shader glossShader;
     bool glossShaderLoaded;
     int glossViewPosLoc;
+
+    // Ground plane
+    Model groundModel;
+    bool groundLoaded;
 
     // Animation constants
     static constexpr float PIECE_ANIM_DURATION = 0.3f;

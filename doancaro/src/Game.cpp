@@ -40,7 +40,7 @@ void Game::run() {
 
         // Draw
         BeginDrawing();
-        ClearBackground({30, 30, 30, 255});
+        ClearBackground({35, 28, 22, 255});  // warm dark wood tone
 
         switch (state) {
             case GameState::Menu:       drawMenu();           break;
@@ -168,6 +168,7 @@ void Game::drawSettings() {
 void Game::drawPlaying() {
     CellState turnMark = currentPlayer->getMark();
     renderer.drawBoard(board, cursorRow, cursorCol, turnMark);
+    renderer.drawVignette();
 
     if (!winLine.empty()) {
         renderer.drawWinLine(winLine);

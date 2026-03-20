@@ -89,7 +89,8 @@ Renderer::Renderer()
       winParticlesEmitted(false),
       boardModel({}), boardModelLoaded(false),
       pieceModelLight({}), pieceModelDark({}), pieceModelsLoaded(false),
-      glossShader({}), glossShaderLoaded(false), glossViewPosLoc(0) {}
+      glossShader({}), glossShaderLoaded(false), glossViewPosLoc(0),
+      groundModel({}), groundLoaded(false) {}
 
 Renderer::~Renderer() = default;
 
@@ -233,6 +234,18 @@ void Renderer::init(int width, int height) {
         pieceModelLight.materials[0].shader = glossShader;
         pieceModelDark.materials[0].shader = glossShader;
     }
+
+    // Load ground texture and create tiled plane
+    if (FileExists("assets/textures/ground.png")) {
+        // Large plane, 4x4 subdivisions for tiling UV
+        Mesh plane = GenMeshPlane(20.0f, 20.0f, 1, 1);
+        groundModel = LoadModelFromMesh(plane);
+        Texture2D groundTex = LoadTexture("assets/textures/ground.png");
+        SetTextureFilter(groundTex, TEXTURE_FILTER_BILINEAR);
+        SetTextureWrap(groundTex, TEXTURE_WRAP_REPEAT);
+        groundModel.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = groundTex;
+        groundLoaded = true;
+    }
 }
 
 void Renderer::shutdown() {
@@ -248,6 +261,10 @@ void Renderer::shutdown() {
     if (glossShaderLoaded) {
         UnloadShader(glossShader);
         glossShaderLoaded = false;
+    }
+    if (groundLoaded) {
+        UnloadModel(groundModel);
+        groundLoaded = false;
     }
 }
 
@@ -589,6 +606,24 @@ bool Renderer::getHoveredCell(int& row, int& col) const {
 // --- Private 3D drawing helpers ---
 
 void Renderer::drawBoardSurface() {
+    float half = Board::SIZE / 2.0f;
+
+    // Tiled textured ground — 7x7 grid of 20x20 tiles centered on board
+    if (groundLoaded) {
+        float tileSize = 20.0f;
+        for (int tx = -3; tx <= 3; tx++) {
+            for (int tz = -3; tz <= 3; tz++) {
+                float gx = half + static_cast<float>(tx) * tileSize;
+                float gz = half + static_cast<float>(tz) * tileSize;
+                DrawModel(groundModel, {gx, -0.8f, gz}, 1.0f, WHITE);
+            }
+        }
+    }
+
+    // Soft shadow under the board
+    float shadowSize = static_cast<float>(Board::SIZE) + 3.0f;
+    DrawPlane({half, -0.79f, half}, {shadowSize, shadowSize}, {0, 0, 0, 60});
+
     if (boardModelLoaded) {
         // Go board model: ~35 units wide, 19x19 grid baked into wood texture
         // Grid occupies ~90% of the model surface → MODEL_GRID_EXTENT ≈ 31.5
@@ -618,6 +653,30 @@ void Renderer::drawBoardSurface() {
         DrawCubeWires({half, -boardHeight / 2.0f, half},
                       boardLen + padding * 2, boardHeight, boardLen + padding * 2,
                       {180, 140, 60, 255});
+    }
+}
+
+void Renderer::drawVignette() {
+    // Darken screen edges with semi-transparent black rectangles (gradient approximation)
+    int w = screenWidth;
+    int h = screenHeight;
+    int bands = 8;
+    int edgeSize = w / 4;  // vignette covers outer 25% of each edge
+
+    for (int i = 0; i < bands; i++) {
+        float t = static_cast<float>(i) / static_cast<float>(bands);
+        auto alpha = static_cast<unsigned char>(40.0f * (1.0f - t));  // fade from 40 to 0
+        Color c = {0, 0, 0, alpha};
+        int bandW = static_cast<int>(static_cast<float>(edgeSize) * (1.0f - t));
+
+        // Left edge
+        DrawRectangle(0, 0, bandW / bands, h, c);
+        // Right edge
+        DrawRectangle(w - bandW / bands, 0, bandW / bands, h, c);
+        // Top edge
+        DrawRectangle(0, 0, w, bandW / bands, c);
+        // Bottom edge
+        DrawRectangle(0, h - bandW / bands, w, bandW / bands, c);
     }
 }
 
