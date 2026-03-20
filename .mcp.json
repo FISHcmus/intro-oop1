@@ -11,7 +11,7 @@
         "--context",
         "claude-code",
         "--project",
-        "/data/nextcloud/nhannht/files/documents/hcmus/semester2/intro-oop1"
+        "/home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1"
       ]
     }
   }

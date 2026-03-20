@@ -1,12 +1,8 @@
 #include "MenuScreen.h"
 #include "raylib.h"
 
-MenuScreen::MenuScreen() : selectedIndex(0), choice(MenuChoice::None) {
-    items[0] = "New Game";
-    items[1] = "Load Game";
-    items[2] = "Settings";
-    items[3] = "Exit";
-}
+MenuScreen::MenuScreen() : selectedIndex(0), choice(MenuChoice::None),
+    items{"New Game", "Load Game", "Settings", "Exit"} {}
 
 void MenuScreen::update() {
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
@@ -21,6 +17,39 @@ void MenuScreen::update() {
             case 1: choice = MenuChoice::LoadGame; break;
             case 2: choice = MenuChoice::Settings; break;
             case 3: choice = MenuChoice::Exit; break;
+        }
+    }
+
+    // Mouse support
+    int screenW = GetScreenWidth();
+    int screenH = GetScreenHeight();
+    int itemSize = 30;
+    int startY = screenH / 3;
+    int itemHeight = 50;
+    Vector2 mouse = GetMousePosition();
+
+    for (int i = 0; i < ITEM_COUNT; i++) {
+        int textWidth = MeasureText(items[i], itemSize);
+        int x = (screenW - textWidth) / 2;
+        int y = startY + i * itemHeight;
+        Rectangle itemRect = {
+            static_cast<float>(x - 10),
+            static_cast<float>(y - 5),
+            static_cast<float>(textWidth + 40),
+            static_cast<float>(itemHeight - 5)
+        };
+
+        if (CheckCollisionPointRec(mouse, itemRect)) {
+            selectedIndex = i;
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                switch (i) {
+                    case 0: choice = MenuChoice::NewGame; break;
+                    case 1: choice = MenuChoice::LoadGame; break;
+                    case 2: choice = MenuChoice::Settings; break;
+                    case 3: choice = MenuChoice::Exit; break;
+                    default: break;
+                }
+            }
         }
     }
 }

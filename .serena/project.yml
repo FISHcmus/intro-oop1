@@ -7,7 +7,7 @@ encoding: "utf-8"
 
 line_ending:
 
-language_backend:
+language_backend: LSP
 
 ignore_all_files_in_gitignore: true
 

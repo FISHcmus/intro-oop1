@@ -1,51 +1,135 @@
 #include "FileManager.h"
-#include <fstream>
+#include <cstdio>
+#include <cstring>
+#include <ctime>
+#include <sys/stat.h>
 
-bool FileManager::saveGame(const std::string& filename, const Board& board,
-                            const GameSaveData& data) {
-    // Save board data
-    if (!board.saveToFile(filename)) return false;
+#ifdef _WIN32
+#include <direct.h>
+#define MKDIR(path) _mkdir(path)
+#else
+#define MKDIR(path) mkdir(path, 0755)
+#endif
 
-    // Append player data
-    std::ofstream file(filename, std::ios::app);
-    if (!file.is_open()) return false;
-
-    file << (data.currentTurnIsPlayer1 ? 1 : 0) << "\n";
-    file << data.player1Wins << " " << data.player2Wins << "\n";
-    file << data.player1Moves << " " << data.player2Moves << "\n";
-    file << data.player1Name << "\n";
-    file << data.player2Name << "\n";
-    return file.good();
+std::string FileManager::getSaveDir() {
+    std::string dir = "saves";
+    struct stat st = {};
+    if (stat(dir.c_str(), &st) != 0) {
+        MKDIR(dir.c_str());
+    }
+    return dir;
 }
 
-bool FileManager::loadGame(const std::string& filename, Board& board,
-                            GameSaveData& data) {
-    if (!board.loadFromFile(filename)) return false;
+std::string FileManager::getSlotPath(int slot) {
+    if (slot == 0) return getSaveDir() + "/autosave.caro";
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "/slot%d.caro", slot);
+    return getSaveDir() + buf;
+}
 
-    // Board::loadFromFile reads the first part; we need to read the rest
-    std::ifstream file(filename);
-    if (!file.is_open()) return false;
+uint32_t FileManager::computeCRC32(const void* data, size_t len) {
+    const auto* bytes = static_cast<const uint8_t*>(data);
+    uint32_t crc = 0xFFFFFFFF;
+    for (size_t i = 0; i < len; i++) {
+        crc ^= bytes[i];
+        for (int j = 0; j < 8; j++) {
+            crc = (crc >> 1) ^ (0xEDB88320 & (~(crc & 1) + 1));
+        }
+    }
+    return ~crc;
+}
 
-    // Skip board data: moveCount + lastMove + SIZE*SIZE grid
-    int skip;
-    file >> skip >> skip >> skip; // moveCount, lastMove.row, lastMove.col
-    for (int r = 0; r < Board::SIZE; r++) {
-        for (int c = 0; c < Board::SIZE; c++) {
-            file >> skip;
+bool FileManager::saveSlot(int slot, const SaveData& data) {
+    // Prepare save data with checksum
+    SaveData save = data;
+    save.header.magic = SAVE_MAGIC;
+    save.header.version = SAVE_VERSION;
+    save.header.checksum = 0;
+    save.header.checksum = computeCRC32(&save, sizeof(save));
+
+    std::string path = getSlotPath(slot);
+    std::string tmpPath = path + ".tmp";
+    std::string bakPath = path + ".bak";
+
+    // Write to temp file
+    FILE* f = std::fopen(tmpPath.c_str(), "wb");
+    if (!f) return false;
+
+    size_t written = std::fwrite(&save, 1, sizeof(save), f);
+    std::fclose(f);
+
+    if (written != sizeof(save)) {
+        std::remove(tmpPath.c_str());
+        return false;
+    }
+
+    // Backup existing save
+    struct stat st = {};
+    if (stat(path.c_str(), &st) == 0) {
+        std::rename(path.c_str(), bakPath.c_str());
+    }
+
+    // Atomic rename
+    if (std::rename(tmpPath.c_str(), path.c_str()) != 0) {
+        std::rename(bakPath.c_str(), path.c_str());  // restore
+        return false;
+    }
+
+    return true;
+}
+
+LoadResult FileManager::loadSlot(int slot, SaveData& data) {
+    std::string path = getSlotPath(slot);
+
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return LoadResult::NotFound;
+
+    size_t bytesRead = std::fread(&data, 1, sizeof(data), f);
+    std::fclose(f);
+
+    if (bytesRead != sizeof(data)) return LoadResult::Corrupt;
+    if (data.header.magic != SAVE_MAGIC) return LoadResult::Corrupt;
+    if (data.header.version > SAVE_VERSION) return LoadResult::VersionMismatch;
+
+    // Validate checksum
+    uint32_t storedCRC = data.header.checksum;
+    data.header.checksum = 0;
+    uint32_t computedCRC = computeCRC32(&data, sizeof(data));
+    data.header.checksum = storedCRC;
+
+    if (storedCRC != computedCRC) return LoadResult::Corrupt;
+
+    // Semantic validation
+    if (data.header.currentTurn < 1 || data.header.currentTurn > 2) return LoadResult::Corrupt;
+    for (auto& row : data.cells) {
+        for (int cell : row) {
+            if (cell < 0 || cell > 2) return LoadResult::Corrupt;
         }
     }
 
-    int turnVal;
-    file >> turnVal;
-    data.currentTurnIsPlayer1 = (turnVal == 1);
-    file >> data.player1Wins >> data.player2Wins;
-    file >> data.player1Moves >> data.player2Moves;
-    file >> data.player1Name;
-    file >> data.player2Name;
-    return file.good();
+    return LoadResult::OK;
 }
 
-bool FileManager::fileExists(const std::string& filename) {
-    std::ifstream file(filename);
-    return file.good();
+bool FileManager::loadSlotHeader(int slot, SaveHeader& header) {
+    std::string path = getSlotPath(slot);
+
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+
+    size_t bytesRead = std::fread(&header, 1, sizeof(header), f);
+    std::fclose(f);
+
+    if (bytesRead != sizeof(header)) return false;
+    return header.magic == SAVE_MAGIC;
+}
+
+bool FileManager::deleteSlot(int slot) {
+    std::string path = getSlotPath(slot);
+    return std::remove(path.c_str()) == 0;
+}
+
+bool FileManager::slotExists(int slot) {
+    std::string path = getSlotPath(slot);
+    struct stat st = {};
+    return stat(path.c_str(), &st) == 0;
 }

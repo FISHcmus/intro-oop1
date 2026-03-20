@@ -56,6 +56,8 @@ set(SOURCES
     src/Renderer.cpp
     src/MenuScreen.cpp
     src/GameScreen.cpp
+    src/SettingsScreen.cpp
+    src/SaveLoadScreen.cpp
     src/AudioManager.cpp
     src/FileManager.cpp
 )

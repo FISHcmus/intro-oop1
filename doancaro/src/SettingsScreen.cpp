@@ -1,0 +1,164 @@
+#include "SettingsScreen.h"
+#include "raylib.h"
+
+SettingsScreen::SettingsScreen()
+    : settings{true, 4}, selectedIndex(0), done(false) {}
+
+void SettingsScreen::update() {
+    // Keyboard navigation
+    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
+        selectedIndex = (selectedIndex - 1 + ITEM_COUNT) % ITEM_COUNT;
+    }
+    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
+        selectedIndex = (selectedIndex + 1) % ITEM_COUNT;
+    }
+
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
+        switch (selectedIndex) {
+            case 0:  // Toggle game mode
+                settings.vsAI = !settings.vsAI;
+                break;
+            case 1:  // Cycle AI difficulty
+                if (settings.aiDepth == 2) settings.aiDepth = 4;
+                else if (settings.aiDepth == 4) settings.aiDepth = 6;
+                else settings.aiDepth = 2;
+                break;
+            case 2:  // Back
+                done = true;
+                break;
+        }
+    }
+
+    if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
+        switch (selectedIndex) {
+            case 0:
+                settings.vsAI = !settings.vsAI;
+                break;
+            case 1:
+                if (settings.aiDepth == 6) settings.aiDepth = 4;
+                else if (settings.aiDepth == 4) settings.aiDepth = 2;
+                else settings.aiDepth = 6;
+                break;
+            default:
+                break;
+        }
+    }
+
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        done = true;
+    }
+
+    // Mouse support
+    int screenW = GetScreenWidth();
+    int screenH = GetScreenHeight();
+    int startY = screenH / 3;
+    int itemHeight = 50;
+    Vector2 mouse = GetMousePosition();
+
+    for (int i = 0; i < ITEM_COUNT; i++) {
+        int y = startY + i * itemHeight;
+        Rectangle itemRect = {
+            static_cast<float>(screenW / 2 - 200),
+            static_cast<float>(y - 5),
+            400.0f,
+            static_cast<float>(itemHeight - 5)
+        };
+
+        if (CheckCollisionPointRec(mouse, itemRect)) {
+            selectedIndex = i;
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                switch (i) {
+                    case 0:
+                        settings.vsAI = !settings.vsAI;
+                        break;
+                    case 1:
+                        if (settings.aiDepth == 2) settings.aiDepth = 4;
+                        else if (settings.aiDepth == 4) settings.aiDepth = 6;
+                        else settings.aiDepth = 2;
+                        break;
+                    case 2:
+                        done = true;
+                        break;
+                }
+            }
+        }
+    }
+}
+
+void SettingsScreen::draw() {
+    int titleSize = 50;
+    int itemSize = 26;
+    int screenW = GetScreenWidth();
+    int screenH = GetScreenHeight();
+
+    // Title
+    const char* title = "SETTINGS";
+    int titleWidth = MeasureText(title, titleSize);
+    DrawText(title, (screenW - titleWidth) / 2, screenH / 6, titleSize, WHITE);
+
+    // Items
+    int startY = screenH / 3;
+    int itemHeight = 50;
+
+    // Item 0: Game Mode
+    {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "Game Mode: < %s >", getGameModeLabel());
+        int textWidth = MeasureText(buf, itemSize);
+        int x = (screenW - textWidth) / 2;
+        int y = startY;
+        Color color = (selectedIndex == 0) ? GOLD : LIGHTGRAY;
+        DrawText(buf, x, y, itemSize, color);
+        if (selectedIndex == 0) DrawText(">", x - 30, y, itemSize, GOLD);
+    }
+
+    // Item 1: AI Difficulty
+    {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "AI Difficulty: < %s >", getDifficultyLabel());
+        int textWidth = MeasureText(buf, itemSize);
+        int x = (screenW - textWidth) / 2;
+        int y = startY + itemHeight;
+        Color color;
+        if (!settings.vsAI) {
+            color = DARKGRAY;  // Greyed out when PvP
+        } else {
+            color = (selectedIndex == 1) ? GOLD : LIGHTGRAY;
+        }
+        DrawText(buf, x, y, itemSize, color);
+        if (selectedIndex == 1 && settings.vsAI) DrawText(">", x - 30, y, itemSize, GOLD);
+    }
+
+    // Item 2: Back
+    {
+        const char* label = "Back";
+        int textWidth = MeasureText(label, itemSize);
+        int x = (screenW - textWidth) / 2;
+        int y = startY + 2 * itemHeight;
+        Color color = (selectedIndex == 2) ? GOLD : LIGHTGRAY;
+        DrawText(label, x, y, itemSize, color);
+        if (selectedIndex == 2) DrawText(">", x - 30, y, itemSize, GOLD);
+    }
+
+    // Instructions
+    DrawText("Left/Right to change, Enter to select, ESC to go back",
+             10, screenH - 30, 16, DARKGRAY);
+}
+
+void SettingsScreen::reset() {
+    selectedIndex = 0;
+    done = false;
+}
+
+const char* SettingsScreen::getDifficultyLabel() const {
+    switch (settings.aiDepth) {
+        case 2:  return "Easy";
+        case 4:  return "Medium";
+        case 6:  return "Hard";
+        default: return "Medium";
+    }
+}
+
+const char* SettingsScreen::getGameModeLabel() const {
+    return settings.vsAI ? "Player vs AI" : "Player vs Player";
+}

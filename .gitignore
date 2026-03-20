@@ -4,3 +4,4 @@ build/
 
 # Compiled binaries (no extension)
 week1/25310023
+.claude/settings.local.json

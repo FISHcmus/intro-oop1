@@ -25,32 +25,53 @@ intro-oop1/
 └── .mcp.json       # MCP servers config
 ```
 
-## MCP Tools Workflow
+## Code Editing Tools (MANDATORY)
 
-This project has two complementary MCP tool sets for code intelligence. Use them together.
+**CRITICAL: For ALL code files, you MUST use Serena MCP and JetBrains MCP tools instead of built-in Read/Edit/Grep/Write. Built-in tools are ONLY for non-code files (markdown, PDFs, JSON config, etc.).**
+
+The projectPath for all JetBrains calls is `/home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1`.
+
+Serena uses LSP backend (clangd). JetBrains backend not supported on CLion — see https://github.com/oraios/serena/issues/1193.
+
+### When to use which tool
+
+| Action | Tool | NOT this |
+|---|---|---|
+| See what's in a code file | `mcp__serena-oop1__get_symbols_overview` | `Read` |
+| Read a specific function/class body | `mcp__serena-oop1__find_symbol` with `include_body=true` | `Read` |
+| Read a full code file (rare, avoid) | `mcp__jetbrains__get_file_text_by_path` | `Read` |
+| Search code for a pattern | `mcp__serena-oop1__search_for_pattern` or `mcp__jetbrains__search_in_files_by_text` | `Grep` |
+| Find files by name | `mcp__jetbrains__find_files_by_name_keyword` or `mcp__serena-oop1__find_file` | `Glob` |
+| Replace a function/method body | `mcp__serena-oop1__replace_symbol_body` | `Edit` |
+| Add code after a symbol | `mcp__serena-oop1__insert_after_symbol` | `Edit` |
+| Add code before a symbol | `mcp__serena-oop1__insert_before_symbol` | `Edit` |
+| Rename a symbol project-wide | `mcp__serena-oop1__rename_symbol` or `mcp__jetbrains__rename_refactoring` | `Edit` with replace_all |
+| Small text replacement in file | `mcp__jetbrains__replace_text_in_file` | `Edit` |
+| Check for errors/warnings | `mcp__jetbrains__get_file_problems` | `Bash` g++ |
+| Find who references a symbol | `mcp__serena-oop1__find_referencing_symbols` | `Grep` |
+| Create a new code file | `mcp__jetbrains__create_new_file` | `Write` |
+| Format a file | `mcp__jetbrains__reformat_file` | nothing |
 
 ### Serena (`mcp__serena-oop1__*`) — Semantic Code Analysis
 
-Serena provides **symbol-aware** code operations. Prefer Serena for:
+**Exploring code (token-efficient, start here):**
+1. `get_symbols_overview` — get file structure without reading full source
+2. `find_symbol` with `include_body=true` — read only the symbol you need
+3. `find_referencing_symbols` — find all usages of a symbol
+4. `search_for_pattern` — regex search across codebase
+5. Fall back to full file read only when necessary
 
-| Task | Tool |
-|---|---|
-| Explore project files | `list_dir`, `find_file` |
-| Search code patterns (regex) | `search_for_pattern` |
-| Get symbols in a file (classes, functions) | `jet_brains_get_symbols_overview` |
-| Find a specific symbol by name | `jet_brains_find_symbol` |
-| Find who references a symbol | `jet_brains_find_referencing_symbols` |
-| Get class hierarchy (super/sub) | `jet_brains_type_hierarchy` |
-| Replace a function/class body | `replace_symbol_body` |
-| Insert code before/after a symbol | `insert_before_symbol`, `insert_after_symbol` |
-| Rename across codebase | `rename_symbol` |
-| Store project knowledge | `write_memory`, `read_memory`, `list_memories` |
+**Editing code (symbolic, precise):**
+1. `find_symbol` to locate the symbol
+2. `replace_symbol_body` for whole-symbol replacement
+3. `insert_before_symbol` / `insert_after_symbol` for adding new code
+4. `rename_symbol` for renaming across codebase
 
-**Important:** Serena's `jet_brains_*` tools require CLion open with Serena plugin on this project. File-based tools (`list_dir`, `find_file`, `search_for_pattern`, memories) always work.
+**Project knowledge:** `write_memory`, `read_memory`, `list_memories`
 
 ### JetBrains (`mcp__jetbrains__*`) — IDE Operations
 
-JetBrains MCP provides **IDE-level** operations. Prefer JetBrains for:
+Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1"`.
 
 | Task | Tool |
 |---|---|
@@ -58,43 +79,25 @@ JetBrains MCP provides **IDE-level** operations. Prefer JetBrains for:
 | Project diagnostics (toolchain, CMake) | `get_diagnostic_info` |
 | Build the project | `build_project` |
 | Run a configuration | `execute_run_configuration` |
-| Run terminal commands in IDE | `execute_terminal_command` |
 | Open file in editor | `open_file_in_editor` |
 | Auto-format code | `reformat_file` |
 | Safe rename refactoring | `rename_refactoring` |
-| Search by text/regex across project | `search_in_files_by_text`, `search_in_files_by_regex` |
+| Small text edit in file | `replace_text_in_file` |
+| Create new file | `create_new_file` |
+| Search by text/regex | `search_in_files_by_text`, `search_in_files_by_regex` |
 | Find files by name/glob | `find_files_by_name_keyword`, `find_files_by_glob` |
 | View compiler/SDK info | `get_compiler_info` |
-| View run configurations | `get_run_configurations` |
-| View project dependencies | `get_project_dependencies` |
 
-### Combined Workflow
+### Decision flowchart
 
-**Reading code (token-efficient):**
-1. `serena-oop1::jet_brains_get_symbols_overview` — get file structure without reading full source
-2. `serena-oop1::jet_brains_find_symbol` with `include_body=true` — read only the symbol you need
-3. Fall back to full file read only when necessary
-
-**Editing code:**
-1. Use `serena-oop1::jet_brains_find_symbol` to locate the symbol
-2. Use `serena-oop1::replace_symbol_body` for whole-symbol replacement
-3. Use `serena-oop1::insert_before_symbol` / `insert_after_symbol` for adding new code
-4. Use Claude Code's `Edit` tool for small line-level edits within a symbol
-
-**Diagnosing issues:**
-1. `jetbrains::get_file_problems` — get errors/warnings for a specific file
-2. `jetbrains::get_diagnostic_info` — check toolchain/CMake configuration
-3. `jetbrains::build_project` — verify it compiles
-
-**Refactoring:**
-1. `serena-oop1::jet_brains_find_referencing_symbols` — find all usages before changing
-2. `serena-oop1::rename_symbol` or `jetbrains::rename_refactoring` — safe rename
-3. `jetbrains::get_file_problems` — verify no breakage after refactor
-
-**Building and running:**
-1. `jetbrains::build_project` — compile
-2. `jetbrains::get_run_configurations` — list available configs
-3. `jetbrains::execute_run_configuration` — run
+1. **Need to understand a code file?** → `get_symbols_overview` first, then `find_symbol` with `include_body=true`
+2. **Need to edit a function/class?** → `find_symbol` to read, then `replace_symbol_body` to rewrite
+3. **Need to add new code?** → `insert_after_symbol` or `insert_before_symbol`
+4. **Need to rename?** → `rename_symbol` (Serena) or `rename_refactoring` (JetBrains)
+5. **Need to find usages?** → `find_referencing_symbols`
+6. **Need to search?** → `search_for_pattern` (Serena) or `search_in_files_by_text` (JetBrains)
+7. **Need to check errors?** → `get_file_problems` (per file) or `build_project` (whole project)
+8. **Non-code file?** → Use built-in Read/Edit/Write tools
 
 ## Code Style Rules
 

@@ -7,10 +7,14 @@
 #include "Renderer.h"
 #include "MenuScreen.h"
 #include "GameScreen.h"
+#include "SettingsScreen.h"
+#include "SaveLoadScreen.h"
 #include "AudioManager.h"
 #include "FileManager.h"
+#include <thread>
+#include <atomic>
 
-enum class GameState { Menu, Playing, GameOver };
+enum class GameState { Menu, Settings, Playing, GameOver, SaveScreen, LoadScreen };
 
 class Game {
 public:
@@ -31,6 +35,8 @@ private:
     // Components
     Renderer renderer;
     MenuScreen menuScreen;
+    SettingsScreen settingsScreen;
+    SaveLoadScreen saveLoadScreen;
     GameScreen gameScreen;
     AudioManager audioManager;
 
@@ -42,14 +48,31 @@ private:
     bool vsAI;
     int aiDepth;
 
+    // Play time tracking
+    float playTime;
+
+    // Toast notification
+    char toastMessage[64];
+    float toastTimer;
+
+    // Async AI
+    std::thread aiThread;
+    std::atomic<bool> aiThinking;
+    Move aiResult;
+
     // Game loop phases
     void updateMenu();
+    void updateSettings();
     void updatePlaying();
     void updateGameOver();
+    void updateSaveLoadScreen();
 
     void drawMenu();
+    void drawSettings();
     void drawPlaying();
     void drawGameOver();
+    void drawSaveLoadScreen();
+    void drawToast();
 
     // Helpers
     void startNewGame();
@@ -57,8 +80,11 @@ private:
     void handleInput();
     void handleMouseInput();
     void handleKeyboardInput();
-    void saveGame();
-    void loadGame();
+    void performSave(int slot);
+    void performLoad(int slot);
+    void autoSave();
+    void buildSaveData(SaveData& data);
+    void applyMove(Move move);
 };
 
 #endif
