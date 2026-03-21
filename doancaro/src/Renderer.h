@@ -4,7 +4,10 @@
 #include "Board.h"
 #include "ParticleSystem.h"
 #include "raylib.h"
+#include <atomic>
 #include <cmath>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 class Renderer {
@@ -26,6 +29,7 @@ public:
 
     // Camera update (call every frame)
     void updateCamera();
+    void uploadPendingTextures();  // call each frame to upload bg-loaded images to GPU
 
     // Camera UI buttons (draw after EndMode3D, in 2D overlay)
     void drawCameraControls();
@@ -117,6 +121,16 @@ private:
     // Per-position unique textures (each piece has distinct wood grain)
     Texture2D pieceTexLight[Board::SIZE][Board::SIZE];
     Texture2D pieceTexDark[Board::SIZE][Board::SIZE];
+    Texture2D defaultTexLight;  // fallback while async loading
+    Texture2D defaultTexDark;
+    bool pieceTexReady[Board::SIZE][Board::SIZE];
+
+    // Async texture loading
+    Image pieceImgLight[Board::SIZE][Board::SIZE];
+    Image pieceImgDark[Board::SIZE][Board::SIZE];
+    std::atomic<int> imagesLoaded;  // count of images loaded by bg thread
+    std::thread texLoaderThread;
+    int texUploadIndex;  // next index to upload to GPU
 
     // Glossy Phong lighting shader for pieces
     Shader glossShader;

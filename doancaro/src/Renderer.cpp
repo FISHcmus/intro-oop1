@@ -185,92 +185,52 @@ void Renderer::init(int width, int height) {
     btnRestart = {static_cast<float>(width) - BTN_PAD - 80 - BTN_PAD - 60 - BTN_PAD - 70, BTN_PAD, 70, BTN_SIZE};
     btnUndo = {btnRestart.x - BTN_PAD - 60, BTN_PAD, 60, BTN_SIZE};
 
-    // Generate procedural wood textures and piece models
+    // Load piece textures asynchronously
     {
-        const int texW = 128;
-        const int texH = 128;
+        // Create default textures (used until per-position textures are loaded)
+        Image defLight = GenImageColor(4, 4, {210, 180, 140, 255});
+        defaultTexLight = LoadTextureFromImage(defLight);
+        UnloadImage(defLight);
+        Image defDark = GenImageColor(4, 4, {100, 65, 40, 255});
+        defaultTexDark = LoadTextureFromImage(defDark);
+        UnloadImage(defDark);
 
-        // Lambda to generate a wood grain texture image
-        // seed varies ring center, frequency, and noise phase per piece
-        auto generateWoodImage = [](int w, int h,
-                                     Color base, Color ring, Color highlight,
-                                     int seed = 0) -> Image {
-            Image img = GenImageColor(w, h, base);
-            // Derive per-piece variation from seed
-            float cx = 0.5f + 0.2f * sinf(seed * 2.31f);  // ring center X offset
-            float cy = 0.5f + 0.2f * cosf(seed * 3.17f);  // ring center Y offset
-            float freq = 35.0f + 10.0f * sinf(seed * 1.73f);  // ring frequency
-            float stretch = 3.0f + 2.0f * sinf(seed * 0.97f); // oval stretch
-            float noisePhase = seed * 1.41f;  // noise offset
-            // Wood ring pattern: concentric ellipses with noise
-            for (int py = 0; py < h; py++) {
-                for (int px = 0; px < w; px++) {
-                    float nx = (static_cast<float>(px) / static_cast<float>(w)) - cx;
-                    float ny = (static_cast<float>(py) / static_cast<float>(h)) - cy;
-                    // Distance from offset center with variable stretching
-                    float dist = sqrtf(nx * nx * stretch + ny * ny);
-                    // Ring pattern with variable frequency
-                    float ringVal = sinf(dist * freq);
-                    // Simple pseudo-noise using trig with phase offset
-                    float noise = sinf(static_cast<float>(px) * 0.7f + static_cast<float>(py) * 1.3f + noisePhase) *
-                                  cosf(static_cast<float>(px) * 1.1f - static_cast<float>(py) * 0.9f + noisePhase * 0.7f);
-                    ringVal += noise * 0.3f;
-
-                    auto clamp = [](int v) -> unsigned char {
-                        return static_cast<unsigned char>(v < 0 ? 0 : (v > 255 ? 255 : v));
-                    };
-
-                    Color c;
-                    if (ringVal > 0.3f) {
-                        // Ring line
-                        float t = (ringVal - 0.3f) / 0.7f;
-                        c.r = clamp(base.r + static_cast<int>(static_cast<float>(ring.r - base.r) * t));
-                        c.g = clamp(base.g + static_cast<int>(static_cast<float>(ring.g - base.g) * t));
-                        c.b = clamp(base.b + static_cast<int>(static_cast<float>(ring.b - base.b) * t));
-                    } else {
-                        // Between rings — subtle highlight variation
-                        float t = (ringVal + 1.0f) / 1.3f;
-                        c.r = clamp(base.r + static_cast<int>(static_cast<float>(highlight.r - base.r) * t * 0.3f));
-                        c.g = clamp(base.g + static_cast<int>(static_cast<float>(highlight.g - base.g) * t * 0.3f));
-                        c.b = clamp(base.b + static_cast<int>(static_cast<float>(highlight.b - base.b) * t * 0.3f));
-                    }
-                    c.a = 255;
-                    ImageDrawPixel(&img, px, py, c);
-                }
-            }
-            return img;
-        };
-
-        // Generate per-position unique wood textures
+        // Initialize all textures to defaults
         for (int r = 0; r < Board::SIZE; r++) {
             for (int c = 0; c < Board::SIZE; c++) {
-                int seed = r * Board::SIZE + c;
-                // Light maple wood (PlayerX)
-                Image imgL = generateWoodImage(texW, texH,
-                    {210, 180, 140, 255}, {180, 145, 100, 255},
-                    {230, 205, 170, 255}, seed);
-                pieceTexLight[r][c] = LoadTextureFromImage(imgL);
-                UnloadImage(imgL);
-                // Dark walnut wood (PlayerO)
-                Image imgD = generateWoodImage(texW, texH,
-                    {100, 65, 40, 255}, {70, 42, 25, 255},
-                    {125, 85, 55, 255}, seed + 1000);
-                pieceTexDark[r][c] = LoadTextureFromImage(imgD);
-                UnloadImage(imgD);
+                pieceTexLight[r][c] = defaultTexLight;
+                pieceTexDark[r][c] = defaultTexDark;
+                pieceTexReady[r][c] = false;
             }
         }
+
+        // Start background thread to load images from disk (CPU only, no OpenGL)
+        imagesLoaded.store(0);
+        texUploadIndex = 0;
+        texLoaderThread = std::thread([this]() {
+            char path[128];
+            for (int r = 0; r < Board::SIZE; r++) {
+                for (int c = 0; c < Board::SIZE; c++) {
+                    std::snprintf(path, sizeof(path), "assets/pieces/light_%d_%d.png", r, c);
+                    pieceImgLight[r][c] = LoadImage(path);
+                    std::snprintf(path, sizeof(path), "assets/pieces/dark_%d_%d.png", r, c);
+                    pieceImgDark[r][c] = LoadImage(path);
+                    imagesLoaded.fetch_add(1);
+                }
+            }
+        });
 
         // Create sphere mesh (flattened when drawn to look like Go stones)
         Mesh stoneMesh = GenMeshSphere(0.35f, 16, 16);
 
         // Build light piece model (texture swapped per-piece during draw)
         pieceModelLight = LoadModelFromMesh(stoneMesh);
-        pieceModelLight.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = pieceTexLight[0][0];
+        pieceModelLight.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = defaultTexLight;
 
         // Build dark piece model — need a separate mesh copy since LoadModelFromMesh takes ownership
         Mesh stoneMesh2 = GenMeshSphere(0.35f, 16, 16);
         pieceModelDark = LoadModelFromMesh(stoneMesh2);
-        pieceModelDark.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = pieceTexDark[0][0];
+        pieceModelDark.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = defaultTexDark;
 
         pieceModelsLoaded = true;
 
@@ -313,7 +273,25 @@ void Renderer::init(int width, int height) {
     }
 }
 
+void Renderer::uploadPendingTextures() {
+    int loaded = imagesLoaded.load();
+    int total = Board::SIZE * Board::SIZE;
+    // Upload up to 10 textures per frame to avoid stutter
+    for (int i = 0; i < 10 && texUploadIndex < loaded && texUploadIndex < total; i++, texUploadIndex++) {
+        int r = texUploadIndex / Board::SIZE;
+        int c = texUploadIndex % Board::SIZE;
+        pieceTexLight[r][c] = LoadTextureFromImage(pieceImgLight[r][c]);
+        UnloadImage(pieceImgLight[r][c]);
+        pieceTexDark[r][c] = LoadTextureFromImage(pieceImgDark[r][c]);
+        UnloadImage(pieceImgDark[r][c]);
+        pieceTexReady[r][c] = true;
+    }
+}
+
 void Renderer::shutdown() {
+    // Wait for texture loader thread
+    if (texLoaderThread.joinable()) texLoaderThread.join();
+
     if (boardModelLoaded) {
         UnloadModel(boardModel);
         boardModelLoaded = false;

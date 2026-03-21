@@ -15,6 +15,7 @@
 - **Keyboard**: WASD/Arrow keys to move cursor, Enter to place
 - **ESC**: Return to menu (from game) / Exit (from menu)
 - **Ctrl+S / Ctrl+L**: Quick save/load
+- **F3**: Toggle AI debug panel
 
 ## Build from Source
 
@@ -36,9 +37,14 @@ Then open `CaroGame.sln` and build (Release, x64).
 
 ## Features
 
-- 2.5D board with orbital camera (rotate, zoom, reset)
-- AI opponent with 3 difficulty levels (Easy/Medium/Hard)
-- Threat-space search for forced win detection
-- Iterative deepening with time limit (1s medium, 3s hard)
-- Save/Load game (3 slots)
-- Settings changeable mid-game
+- 15x15 board with 3D Go-stone pieces and unique wood grain per piece
+- Orbital camera (rotate, zoom, reset)
+- Three AI difficulty levels:
+  - **Easy** — Minimax depth 2
+  - **Medium** — Minimax depth 4, iterative deepening (1s time limit)
+  - **Hard (Rapfi)** — [Rapfi](https://github.com/dhbloo/rapfi) NNUE engine (GomoCup 2024 champion), 10s max/move
+- Cinematic piece drop animations with squash/stretch and shadows
+- Save/Load game (3 slots + autosave)
+- Undo support
+- Settings persist between sessions
+- Fallback to minimax if Rapfi engine unavailable

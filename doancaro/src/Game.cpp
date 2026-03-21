@@ -121,6 +121,7 @@ void Game::updatePlaying() {
     if (toastTimer > 0.0f) toastTimer -= GetFrameTime();
 
     renderer.updateCamera();
+    renderer.uploadPendingTextures();
     renderer.updateParticles(GetFrameTime());
 
     // Check if AI finished thinking
