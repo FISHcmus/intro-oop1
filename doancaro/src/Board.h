@@ -15,7 +15,7 @@ struct Move {
 
 class Board {
 public:
-    static const int SIZE = 19;
+    static const int SIZE = 15;
 
     Board();
 

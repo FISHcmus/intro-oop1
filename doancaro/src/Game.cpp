@@ -13,7 +13,9 @@ Game::Game()
       vsAI(true), aiDepth(4), playTime(0.0f),
       toastMessage{}, toastTimer(0.0f),
       showDebugPanel(false),
-      aiThinking(false), aiResult{-1, -1} {}
+      aiThinking(false), aiResult{-1, -1} {
+    loadSettings();
+}
 
 Game::~Game() {
     if (aiThread.joinable()) aiThread.join();
@@ -101,6 +103,7 @@ void Game::updateSettings() {
         GameSettings s = settingsScreen.getSettings();
         vsAI = s.vsAI;
         aiDepth = s.aiDepth;
+        saveSettings();
 
         // If returning to a game in progress, update existing AI player's depth
         if (settingsReturnState == GameState::Playing && player2 != nullptr) {
@@ -604,6 +607,10 @@ void Game::undoLastMove() {
 
     // Reset renderer animation state for undone cells
     renderer.resetAnimations();
+
+    // Force Rapfi engine to resync board state on next move
+    auto* ai = dynamic_cast<AIPlayer*>(player2);
+    if (ai) ai->resetEngine();
 }
 
 void Game::autoSave() {
@@ -611,4 +618,29 @@ void Game::autoSave() {
     SaveData data{};
     buildSaveData(data);
     FileManager::saveSlot(0, data);
+}
+
+void Game::saveSettings() const {
+    FILE* f = fopen("settings.cfg", "w");
+    if (!f) return;
+    fprintf(f, "%d %d\n", vsAI ? 1 : 0, aiDepth);
+    fclose(f);
+}
+
+void Game::loadSettings() {
+    FILE* f = fopen("settings.cfg", "r");
+    if (!f) return;
+    char buf[64];
+    if (fgets(buf, sizeof(buf), f)) {
+        char* end = nullptr;
+        long ai = strtol(buf, &end, 10);
+        if (end && end != buf) {
+            long depth = strtol(end, &end, 10);
+            vsAI = (ai != 0);
+            if (depth == 2 || depth == 4 || depth == 6) {
+                aiDepth = static_cast<int>(depth);
+            }
+        }
+    }
+    fclose(f);
 }

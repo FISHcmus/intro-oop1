@@ -1,9 +1,12 @@
 #include "AIPlayer.h"
+#include "RapfiEngine.h"
 #include <algorithm>
 #include <chrono>
 
 AIPlayer::AIPlayer(const std::string& name, CellState mark, int searchDepth)
     : Player(name, mark), searchDepth(searchDepth) {}
+
+AIPlayer::~AIPlayer() = default;
 
 // Quick heuristic score for move ordering (higher = search first)
 int AIPlayer::scoreMove(Board& board, int row, int col, CellState moveMark,
@@ -25,6 +28,13 @@ int AIPlayer::scoreMove(Board& board, int row, int col, CellState moveMark,
 }
 
 Move AIPlayer::getMove(const Board& board) {
+    // Hard mode: delegate to Rapfi engine
+    if (searchDepth >= 6 && !rapfiFailed) {
+        Move m = getRapfiMove(board);
+        if (m.row >= 0) return m;
+        // Rapfi failed — fall through to minimax
+    }
+
     transTable.clear();
     auto candidates = board.getCandidateMoves();
     if (candidates.empty()) {
@@ -652,4 +662,73 @@ Move AIPlayer::findThreatWin(Board& board, CellState attackMark,
     }
 
     return {-1, -1};
+}
+
+Move AIPlayer::getRapfiMove(const Board& board) {
+    // Lazy initialization
+    if (!rapfiEngine) {
+        rapfiEngine = std::make_unique<RapfiEngine>("assets/rapfi", 10000);
+        if (!rapfiEngine->start()) {
+            rapfiFailed = true;
+            rapfiEngine.reset();
+            return {-1, -1};
+        }
+        boardSynced = false;
+        lastSentMoveCount = 0;
+    }
+
+    if (!rapfiEngine->isRunning()) {
+        rapfiFailed = true;
+        rapfiEngine.reset();
+        return {-1, -1};
+    }
+
+    int moveCount = board.getMoveCount();
+    Move result{-1, -1};
+
+    if (moveCount == 0) {
+        // Engine plays first on empty board
+        result = rapfiEngine->sendBegin();
+        lastSentMoveCount = 1;
+        boardSynced = true;
+    } else if (!boardSynced || moveCount != lastSentMoveCount + 1) {
+        // Board state mismatch — full resync
+        result = rapfiEngine->sendBoard(board, mark);
+        lastSentMoveCount = moveCount + 1;
+        boardSynced = true;
+    } else {
+        // Normal incremental play
+        result = rapfiEngine->sendTurn(board.getLastMove());
+        lastSentMoveCount = moveCount + 1;
+        boardSynced = true;
+    }
+
+    if (result.row < 0) {
+        rapfiFailed = true;
+        rapfiEngine.reset();
+        return {-1, -1};
+    }
+
+    // Validate move
+    if (board.getCell(result.row, result.col) != CellState::Empty) {
+        rapfiFailed = true;
+        rapfiEngine.reset();
+        return {-1, -1};
+    }
+
+    // Populate debug info
+    lastDebug = {};
+    lastDebug.chosenMove = result;
+    lastDebug.reason = "rapfi_engine";
+    lastDebug.depthCompleted = 0;
+    lastDebug.totalCandidates = 0;
+    lastDebug.searchTimeMs = rapfiEngine->getLastResponseTimeMs();
+    lastDebug.topMoves.push_back({result, 0, 0});
+
+    return result;
+}
+
+void AIPlayer::resetEngine() {
+    boardSynced = false;
+    // Don't kill the process — just mark for BOARD resync on next move
 }

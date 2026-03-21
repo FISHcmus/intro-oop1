@@ -55,6 +55,7 @@ set(SOURCES
     src/Board.cpp
     src/Player.cpp
     src/AIPlayer.cpp
+    src/RapfiEngine.cpp
     src/Renderer.cpp
     src/MenuScreen.cpp
     src/GameScreen.cpp
@@ -103,6 +104,7 @@ if (BUILD_TESTS)
         src/Board.cpp
         src/Player.cpp
         src/AIPlayer.cpp
+        src/RapfiEngine.cpp
     )
     add_library(GameLogic STATIC ${GAME_LOGIC_SOURCES})
     target_include_directories(GameLogic PUBLIC src)

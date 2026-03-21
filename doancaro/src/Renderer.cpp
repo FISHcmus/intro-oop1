@@ -143,7 +143,7 @@ void Renderer::init(int width, int height) {
     // Default orbital parameters
     defaultAngle = 0.0f;          // looking from front
     defaultPitch = 0.85f;         // ~49 degrees down
-    defaultDistance = 28.0f;
+    defaultDistance = 22.0f;
 
     cameraAngle = defaultAngle;
     cameraPitch = defaultPitch;
@@ -695,9 +695,9 @@ void Renderer::drawBoardSurface() {
         static constexpr float MODEL_GRID_EXTENT = 31.5f;
         static constexpr float MODEL_TOP_Y = 1.1f;
 
-        float worldGridExtent = static_cast<float>(Board::SIZE - 1);  // 18.0
+        float worldGridExtent = static_cast<float>(Board::SIZE - 1);  // 14.0
         float scale = worldGridExtent / MODEL_GRID_EXTENT;
-        float worldCenter = Board::SIZE / 2.0f;  // 9.5
+        float worldCenter = Board::SIZE / 2.0f;  // 7.5
         float yOffset = -MODEL_TOP_Y * scale;
 
         // Board uses default shader — no glossy reflection, just natural wood

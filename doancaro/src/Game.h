@@ -97,6 +97,8 @@ private:
     void performLoad(int slot);
     void autoSave();
     void buildSaveData(SaveData& data);
+    void saveSettings() const;
+    void loadSettings();
     void applyMove(Move move);
     void undoLastMove();
 };

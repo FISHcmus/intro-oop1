@@ -3,8 +3,11 @@
 
 #include "Player.h"
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_map>
+
+class RapfiEngine;
 
 // Transposition table entry
 struct TTEntry {
@@ -16,6 +19,7 @@ struct TTEntry {
 class AIPlayer : public Player {
 public:
     AIPlayer(const std::string& name, CellState mark, int searchDepth = 4);
+    ~AIPlayer() override;
 
     Move getMove(const Board& board) override;
 
@@ -39,8 +43,16 @@ public:
     DebugInfo lastDebug;
     const DebugInfo& getLastDebug() const { return lastDebug; }
 
+    void resetEngine();
+
 private:
     int searchDepth;
+    std::unique_ptr<RapfiEngine> rapfiEngine;
+    bool rapfiFailed = false;
+    bool boardSynced = false;
+    int lastSentMoveCount = 0;
+
+    Move getRapfiMove(const Board& board);
     std::unordered_map<uint64_t, TTEntry> transTable;
 
     static constexpr int MAX_THREAT_DEPTH = 20;

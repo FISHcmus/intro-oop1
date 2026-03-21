@@ -109,7 +109,7 @@ Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro
 ## Caro Project Assets
 - 3D models in `doancaro/assets/models/` (copied to build dir by CMake post-build)
 - Raw/original models in `doancaro/.raw-assets/` (gitignored, not bundled)
-- Board model: `table.glb` — Go board from Sketchfab, wood texture, 35 units wide, scaled to fit 12x12 grid
+- Board model: `table.glb` — Go board from Sketchfab, wood texture, 35 units wide, scaled to fit 19x19 grid
 
 ## Code Style Rules
 

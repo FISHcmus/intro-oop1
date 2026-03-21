@@ -154,7 +154,7 @@ const char* SettingsScreen::getDifficultyLabel() const {
     switch (settings.aiDepth) {
         case 2:  return "Easy";
         case 4:  return "Medium";
-        case 6:  return "Hard";
+        case 6:  return "Hard (Rapfi)";
         default: return "Medium";
     }
 }
