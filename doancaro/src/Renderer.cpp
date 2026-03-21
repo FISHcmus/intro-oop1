@@ -191,21 +191,29 @@ void Renderer::init(int width, int height) {
         const int texH = 128;
 
         // Lambda to generate a wood grain texture image
+        // seed varies ring center, frequency, and noise phase per piece
         auto generateWoodImage = [](int w, int h,
-                                     Color base, Color ring, Color highlight) -> Image {
+                                     Color base, Color ring, Color highlight,
+                                     int seed = 0) -> Image {
             Image img = GenImageColor(w, h, base);
+            // Derive per-piece variation from seed
+            float cx = 0.5f + 0.2f * sinf(seed * 2.31f);  // ring center X offset
+            float cy = 0.5f + 0.2f * cosf(seed * 3.17f);  // ring center Y offset
+            float freq = 35.0f + 10.0f * sinf(seed * 1.73f);  // ring frequency
+            float stretch = 3.0f + 2.0f * sinf(seed * 0.97f); // oval stretch
+            float noisePhase = seed * 1.41f;  // noise offset
             // Wood ring pattern: concentric ellipses with noise
             for (int py = 0; py < h; py++) {
                 for (int px = 0; px < w; px++) {
-                    float nx = (static_cast<float>(px) / static_cast<float>(w)) - 0.5f;
-                    float ny = (static_cast<float>(py) / static_cast<float>(h)) - 0.5f;
-                    // Distance from center with stretching for oval rings
-                    float dist = sqrtf(nx * nx * 4.0f + ny * ny);
-                    // Ring pattern
-                    float ringVal = sinf(dist * 40.0f);
-                    // Simple pseudo-noise using trig
-                    float noise = sinf(static_cast<float>(px) * 0.7f + static_cast<float>(py) * 1.3f) *
-                                  cosf(static_cast<float>(px) * 1.1f - static_cast<float>(py) * 0.9f);
+                    float nx = (static_cast<float>(px) / static_cast<float>(w)) - cx;
+                    float ny = (static_cast<float>(py) / static_cast<float>(h)) - cy;
+                    // Distance from offset center with variable stretching
+                    float dist = sqrtf(nx * nx * stretch + ny * ny);
+                    // Ring pattern with variable frequency
+                    float ringVal = sinf(dist * freq);
+                    // Simple pseudo-noise using trig with phase offset
+                    float noise = sinf(static_cast<float>(px) * 0.7f + static_cast<float>(py) * 1.3f + noisePhase) *
+                                  cosf(static_cast<float>(px) * 1.1f - static_cast<float>(py) * 0.9f + noisePhase * 0.7f);
                     ringVal += noise * 0.3f;
 
                     auto clamp = [](int v) -> unsigned char {
@@ -233,33 +241,36 @@ void Renderer::init(int width, int height) {
             return img;
         };
 
-        // Light maple wood (PlayerX)
-        Image imgLight = generateWoodImage(texW, texH,
-            {210, 180, 140, 255},   // base: warm light wood
-            {180, 145, 100, 255},   // ring: darker grain lines
-            {230, 205, 170, 255});  // highlight: lighter between rings
-        Texture2D texLight = LoadTextureFromImage(imgLight);
-        UnloadImage(imgLight);
-
-        // Dark walnut wood (PlayerO)
-        Image imgDark = generateWoodImage(texW, texH,
-            {100, 65, 40, 255},     // base: dark walnut
-            {70, 42, 25, 255},      // ring: darker grain
-            {125, 85, 55, 255});    // highlight: lighter between rings
-        Texture2D texDark = LoadTextureFromImage(imgDark);
-        UnloadImage(imgDark);
+        // Generate per-position unique wood textures
+        for (int r = 0; r < Board::SIZE; r++) {
+            for (int c = 0; c < Board::SIZE; c++) {
+                int seed = r * Board::SIZE + c;
+                // Light maple wood (PlayerX)
+                Image imgL = generateWoodImage(texW, texH,
+                    {210, 180, 140, 255}, {180, 145, 100, 255},
+                    {230, 205, 170, 255}, seed);
+                pieceTexLight[r][c] = LoadTextureFromImage(imgL);
+                UnloadImage(imgL);
+                // Dark walnut wood (PlayerO)
+                Image imgD = generateWoodImage(texW, texH,
+                    {100, 65, 40, 255}, {70, 42, 25, 255},
+                    {125, 85, 55, 255}, seed + 1000);
+                pieceTexDark[r][c] = LoadTextureFromImage(imgD);
+                UnloadImage(imgD);
+            }
+        }
 
         // Create sphere mesh (flattened when drawn to look like Go stones)
         Mesh stoneMesh = GenMeshSphere(0.35f, 16, 16);
 
-        // Build light piece model
+        // Build light piece model (texture swapped per-piece during draw)
         pieceModelLight = LoadModelFromMesh(stoneMesh);
-        pieceModelLight.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = texLight;
+        pieceModelLight.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = pieceTexLight[0][0];
 
         // Build dark piece model — need a separate mesh copy since LoadModelFromMesh takes ownership
         Mesh stoneMesh2 = GenMeshSphere(0.35f, 16, 16);
         pieceModelDark = LoadModelFromMesh(stoneMesh2);
-        pieceModelDark.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = texDark;
+        pieceModelDark.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = pieceTexDark[0][0];
 
         pieceModelsLoaded = true;
 
@@ -815,6 +826,11 @@ void Renderer::drawPiece3D(int row, int col, CellState state, float anim) {
         Vector3 pos = {x, y + 0.15f * s, z};
         Vector3 scaleVec = {s * squashX, s * 0.5f * squashY, s * squashX};
         Model& model = (state == CellState::PlayerX) ? pieceModelLight : pieceModelDark;
+        // Swap to per-position unique texture
+        Texture2D& tex = (state == CellState::PlayerX)
+                             ? pieceTexLight[row][col]
+                             : pieceTexDark[row][col];
+        model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = tex;
         DrawModelEx(model, pos, {0.0f, 1.0f, 0.0f}, 0.0f, scaleVec, WHITE);
     } else {
         if (state == CellState::PlayerX) {

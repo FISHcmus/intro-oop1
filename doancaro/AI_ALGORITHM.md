@@ -1,10 +1,15 @@
 # Caro Game AI Algorithm — Implementation Reference
 
-Last updated: 2026-03-21
+Last updated: 2026-03-22
 
 ## Overview
 
-The AI uses **minimax with alpha-beta pruning**, enhanced by:
+The AI has **two engines** depending on difficulty:
+
+- **Easy/Medium**: Minimax with alpha-beta pruning, pattern table evaluation, transposition table, iterative deepening
+- **Hard**: **Rapfi** (GomoCup 2024 champion) — NNUE-based engine running as a subprocess via Gomocup protocol
+
+### Minimax Engine (Easy/Medium)
 - Pattern table evaluation (5-cell sliding window)
 - Incremental board scoring (avoid full re-evaluation)
 - Transposition table (Zobrist hashing)
@@ -13,9 +18,13 @@ The AI uses **minimax with alpha-beta pruning**, enhanced by:
 - Defense-weighted evaluation (1.5x multiplier)
 - Threat classification system (used for move ordering, not search)
 
-**What we do NOT use** (tried and reverted):
-- VCF/VCT threat-space search — caused the AI to return wrong moves (opponent's attack square instead of blocking square). Reverted.
-- Candidate pruning — removed alongside VCF/VCT revert.
+### Rapfi Engine (Hard)
+- **NNUE** (Efficiently Updatable Neural Network) evaluation — Mixnet architecture with pattern codebook distillation
+- Alpha-beta search with iterative deepening
+- 428,000 nodes/sec on CPU (Mixnet Small)
+- Standard rule: exactly 5 in a row wins (overlines don't count)
+- Subprocess via Gomocup/Piskvork protocol over stdin/stdout pipes
+- Falls back to minimax depth-6 if Rapfi binary is unavailable
 
 ---
 
@@ -42,7 +51,7 @@ getMove()
 |---|---|---|---|
 | Easy | 2 | None | Direct minimax, all candidates |
 | Medium | 4 | 1000ms | Iterative deepening (depth 2→4) |
-| Hard | 6 | 3000ms | Iterative deepening (depth 2→4→6) |
+| Hard (Rapfi) | 6 | 10s max/move | Rapfi NNUE subprocess (fallback: minimax depth 6, 3000ms) |
 
 ---
 
@@ -188,7 +197,67 @@ Recursive threat search — finds forced wins through continuous fours. Searches
 
 ---
 
-## 8. Debug System
+## 8. Rapfi Engine Integration
+
+### Architecture
+
+```
+AIPlayer::getMove()
+  ├── searchDepth >= 6 && !rapfiFailed?
+  │   └── getRapfiMove()
+  │       ├── Lazy init: create RapfiEngine, fork/exec rapfi subprocess
+  │       ├── boardSynced? → TURN x,y (incremental)
+  │       ├── !boardSynced? → BOARD ... DONE (full resync)
+  │       ├── moveCount == 0? → BEGIN (engine plays first)
+  │       └── Failure? → rapfiFailed = true, fall through to minimax
+  └── Minimax (fallback or Easy/Medium)
+```
+
+### Subprocess Management (`RapfiEngine` class)
+
+- **Lifecycle**: `fork()` + `dup2()` + `execl("./rapfi")`. Child process `chdir()`s to `assets/rapfi/` so Rapfi finds `config.toml` and weight files.
+- **I/O**: Pipes with `poll()`-based timeout reads. Skips `MESSAGE`/`DEBUG`/`ERROR` lines from Rapfi output.
+- **Coordinate conversion**: Gomocup uses `(x,y)` = `(col,row)`. Game uses `(row,col)`.
+- **Board resync**: After undo or save load, `resetEngine()` sets `boardSynced=false`. Next `getMove()` sends full board state via `BOARD` command.
+- **Fallback**: Any failure (process crash, pipe error, timeout, invalid move) sets `rapfiFailed=true` and falls through to minimax.
+
+### Gomocup Protocol Commands Used
+
+| Command | When | Format |
+|---|---|---|
+| `START 15` | Engine init | Initializes empty 15x15 board |
+| `INFO rule 1` | After START | Standard rule (exactly 5 wins) |
+| `INFO timeout_turn 10000` | After START | 10s max per move |
+| `INFO timeout_match 0` | After START | No match budget (turn-only mode) |
+| `INFO PONDERING 1` | After START | Think during opponent's turn |
+| `BEGIN` | AI plays first | Engine returns its first move |
+| `TURN x,y` | Opponent moved | Engine returns its response |
+| `BOARD ... DONE` | Resync | Send full board, engine responds |
+| `END` | Game over | Terminate engine process |
+
+### Rapfi Config (`assets/rapfi/config.toml`)
+
+| Setting | Value | Purpose |
+|---|---|---|
+| `default_thread_num` | 0 | Use all CPU cores |
+| `default_tt_size_kb` | 131072 | 128 MB transposition table |
+| `message_mode` | none | No debug output (faster pipe I/O) |
+| `advanced_stop_ratio` | 0.75 | GomocalC interactive setting — exits early on obvious moves |
+| `type` (evaluator) | mix9svq | NNUE Mixnet architecture |
+| Weight file | `mix9svqstandard_bs15.bin.lz4` | Standard rule, 15x15 board |
+
+### Time Management
+
+Rapfi uses smart time allocation in "turn only" mode (`timeout_match 0`):
+- **Obvious positions** (stable best move, no eval drops): 1-3 seconds
+- **Complex positions** (best move changing, eval dropping): up to ~7.5s (75% of 10s)
+- **Forced moves** (only one non-losing option): <1 second
+- **Mate found**: stops after 24 more iterations, typically <1s
+- **Pondering**: thinks during human's turn, building TT for faster subsequent search
+
+---
+
+## 9. Debug System
 
 Press **F3** during gameplay to toggle the debug panel. Shows after each AI move:
 
@@ -213,7 +282,9 @@ Press **F3** during gameplay to toggle the debug panel. Shows after each AI move
 
 ---
 
-## 9. Known Weaknesses
+## 10. Known Weaknesses
+
+### Easy/Medium (Minimax)
 
 1. **No forced-win detection**: Minimax with depth 4-6 can't see wins/threats beyond ~6 plies. A proper VCF/VCT implementation would fix this but previous attempt was buggy.
 
@@ -225,9 +296,17 @@ Press **F3** during gameplay to toggle the debug panel. Shows after each AI move
 
 5. **Move ordering at internal nodes is expensive**: `scoreMove()` calls `computeLocalScore()` which does 20 window lookups. A cheaper ordering (e.g., killer moves, history heuristic) would help.
 
+### Hard (Rapfi)
+
+1. **GPL v3 binary**: Rapfi is GPL — bundling as subprocess is commonly accepted but legally gray. CC0 weights are fine.
+
+2. **~12 MB added to game size**: Binary (1.8 MB) + weights (9.9 MB) + classical model (23 KB).
+
+3. **First move startup**: Weight loading takes ~1s on first move of a game. Subsequent moves are faster due to pondering.
+
 ---
 
-## 10. Change History
+## 11. Change History
 
 | Date | Change | Status |
 |---|---|---|
@@ -241,3 +320,6 @@ Press **F3** during gameplay to toggle the debug panel. Shows after each AI move
 | 2026-03-21 | Defense multiplier 1.5x | Kept |
 | 2026-03-21 | Debug panel (F3) | Kept |
 | 2026-03-21 | Undo button | Kept |
+| 2026-03-22 | Board 19x19 → 15x15 | Kept |
+| 2026-03-22 | Rapfi engine for Hard mode | Kept |
+| 2026-03-22 | Settings persistence (settings.cfg) | Kept |

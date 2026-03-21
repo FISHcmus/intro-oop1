@@ -125,6 +125,15 @@ void Game::updatePlaying() {
 
     // Check if AI finished thinking
     if (aiThinking.load() == false && aiResult.row >= 0) {
+        // Detect Rapfi fallback — warn user
+        if (aiDepth >= 6) {
+            auto* ai = dynamic_cast<AIPlayer*>(currentPlayer);
+            if (ai && ai->getLastDebug().reason != "rapfi_engine") {
+                std::snprintf(toastMessage, sizeof(toastMessage),
+                              "Rapfi unavailable - using minimax fallback");
+                toastTimer = 3.0f;
+            }
+        }
         applyMove(aiResult);
         aiResult = {-1, -1};
         return;

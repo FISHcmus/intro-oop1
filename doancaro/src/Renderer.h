@@ -114,6 +114,10 @@ private:
     Model pieceModelDark;   // PlayerO — dark walnut wood
     bool pieceModelsLoaded;
 
+    // Per-position unique textures (each piece has distinct wood grain)
+    Texture2D pieceTexLight[Board::SIZE][Board::SIZE];
+    Texture2D pieceTexDark[Board::SIZE][Board::SIZE];
+
     // Glossy Phong lighting shader for pieces
     Shader glossShader;
     bool glossShaderLoaded;

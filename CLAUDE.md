@@ -109,7 +109,9 @@ Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro
 ## Caro Project Assets
 - 3D models in `doancaro/assets/models/` (copied to build dir by CMake post-build)
 - Raw/original models in `doancaro/.raw-assets/` (gitignored, not bundled)
-- Board model: `table.glb` — Go board from Sketchfab, wood texture, 35 units wide, scaled to fit 19x19 grid
+- Board model: `table.glb` — Go board from Sketchfab, wood texture, 35 units wide, scaled to fit 15x15 grid
+- Rapfi engine: `doancaro/assets/rapfi/` — binary + NNUE weights + config.toml (bundled, ~12 MB)
+- Settings: `settings.cfg` in build dir — persists vsAI and aiDepth between restarts
 
 ## Code Style Rules
 
