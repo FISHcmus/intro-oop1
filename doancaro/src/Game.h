@@ -56,6 +56,17 @@ private:
     char toastMessage[64];
     float toastTimer;
 
+    // Debug panel
+    bool showDebugPanel;
+
+    // Move history for undo
+    struct MoveRecord {
+        Move move;
+        CellState mark;
+        Move prevLastMove;
+    };
+    std::vector<MoveRecord> moveHistory;
+
     // Async AI
     std::thread aiThread;
     std::atomic<bool> aiThinking;
@@ -74,6 +85,7 @@ private:
     void drawGameOver();
     void drawSaveLoadScreen();
     void drawToast();
+    void drawDebugPanel();
 
     // Helpers
     void startNewGame();
@@ -86,6 +98,7 @@ private:
     void autoSave();
     void buildSaveData(SaveData& data);
     void applyMove(Move move);
+    void undoLastMove();
 };
 
 #endif

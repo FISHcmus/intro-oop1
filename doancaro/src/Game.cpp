@@ -12,6 +12,7 @@ Game::Game()
       cursorRow(Board::SIZE / 2), cursorCol(Board::SIZE / 2),
       vsAI(true), aiDepth(4), playTime(0.0f),
       toastMessage{}, toastTimer(0.0f),
+      showDebugPanel(false),
       aiThinking(false), aiResult{-1, -1} {}
 
 Game::~Game() {
@@ -224,10 +225,18 @@ void Game::drawPlaying() {
         state = GameState::Settings;
     }
 
+    // Undo button
+    if (renderer.drawUndoButton()) {
+        undoLastMove();
+    }
+
     // Restart button
     if (renderer.drawRestartButton()) {
         startNewGame();
     }
+
+    // Debug panel
+    if (showDebugPanel) drawDebugPanel();
 
     // Toast notification
     drawToast();
@@ -268,6 +277,7 @@ void Game::startNewGame() {
 
     board.reset();
     winLine.clear();
+    moveHistory.clear();
     playTime = 0.0f;
     renderer.resetAnimations();
     currentPlayer = player1;
@@ -332,6 +342,11 @@ void Game::handleKeyboardInput() {
         return;
     }
 
+    // Debug panel toggle
+    if (IsKeyPressed(KEY_F3)) {
+        showDebugPanel = !showDebugPanel;
+    }
+
     // Save/Load shortcuts (Ctrl+S / Ctrl+L)
     if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
         if (IsKeyPressed(KEY_S)) {
@@ -382,6 +397,77 @@ void Game::drawToast() {
         auto a = static_cast<unsigned char>(alpha * 200);
         DrawRectangle(x - 10, y - 5, textWidth + 20, 30, {30, 30, 30, a});
         Fonts::draw(Fonts::bold, toastMessage, x, y, 18, {255, 215, 0, static_cast<unsigned char>(alpha * 255)});
+    }
+}
+
+void Game::drawDebugPanel() {
+    // Get debug info from AI player (if exists)
+    auto* ai = dynamic_cast<AIPlayer*>(player2);
+    if (!ai) ai = dynamic_cast<AIPlayer*>(player1);
+    if (!ai) return;
+
+    const auto& dbg = ai->getLastDebug();
+    if (dbg.topMoves.empty() && dbg.reason.empty()) return;
+
+    // Panel on the left side
+    int px = 10;
+    int py = 50;
+    int pw = 280;
+    int lineH = 18;
+    int numLines = 5 + static_cast<int>(dbg.topMoves.size());
+    int ph = 12 + numLines * lineH + 12;
+
+    // Background
+    DrawRectangleRounded({static_cast<float>(px), static_cast<float>(py),
+                          static_cast<float>(pw), static_cast<float>(ph)},
+                         0.08f, 4, {15, 15, 15, 210});
+    DrawRectangleRoundedLinesEx({static_cast<float>(px), static_cast<float>(py),
+                                  static_cast<float>(pw), static_cast<float>(ph)},
+                                0.08f, 4, 1.0f, {100, 200, 255, 80});
+
+    int tx = px + 10;
+    int ty = py + 10;
+    char buf[128];
+
+    // Header
+    Fonts::draw(Fonts::bold, "AI Debug [F3]", tx, ty, 15, {100, 200, 255, 255});
+    ty += lineH;
+
+    // Reason + depth + time
+    std::snprintf(buf, sizeof(buf), "Mode: %s", dbg.reason.c_str());
+    Fonts::draw(Fonts::body, buf, tx, ty, 13, {200, 200, 200, 255});
+    ty += lineH;
+
+    std::snprintf(buf, sizeof(buf), "Depth: %d  Candidates: %d  Time: %lldms",
+                  dbg.depthCompleted, dbg.totalCandidates, dbg.searchTimeMs);
+    Fonts::draw(Fonts::body, buf, tx, ty, 13, {200, 200, 200, 255});
+    ty += lineH;
+
+    // Chosen move
+    std::snprintf(buf, sizeof(buf), "Chosen: (%d, %d)", dbg.chosenMove.row, dbg.chosenMove.col);
+    Fonts::draw(Fonts::bold, buf, tx, ty, 13, {100, 255, 100, 255});
+    ty += lineH;
+
+    // Separator
+    DrawLineEx({static_cast<float>(tx), static_cast<float>(ty + 2)},
+               {static_cast<float>(tx + pw - 20), static_cast<float>(ty + 2)},
+               1.0f, {255, 255, 255, 30});
+    ty += lineH / 2;
+
+    // Top moves header
+    Fonts::draw(Fonts::bold, "Move       Pre    Search", tx, ty, 12, {180, 180, 180, 255});
+    ty += lineH;
+
+    // Top moves
+    for (size_t i = 0; i < dbg.topMoves.size(); i++) {
+        const auto& m = dbg.topMoves[i];
+        bool isChosen = (m.move.row == dbg.chosenMove.row && m.move.col == dbg.chosenMove.col);
+        Color rowColor = isChosen ? Color{100, 255, 100, 255} : Color{200, 200, 200, 220};
+
+        std::snprintf(buf, sizeof(buf), "(%2d,%2d)  %6d  %6d",
+                      m.move.row, m.move.col, m.preScore, m.searchScore);
+        Fonts::draw(Fonts::body, buf, tx, ty, 12, rowColor);
+        ty += lineH;
     }
 }
 
@@ -467,7 +553,9 @@ void Game::performLoad(int slot) {
 }
 
 void Game::applyMove(Move move) {
+    Move prevLast = board.getLastMove();
     if (board.placeMove(move.row, move.col, currentPlayer->getMark())) {
+        moveHistory.push_back({move, currentPlayer->getMark(), prevLast});
         currentPlayer->addMove();
         audioManager.playPlaceSound();
         autoSave();
@@ -484,6 +572,38 @@ void Game::applyMove(Move move) {
             switchTurn();
         }
     }
+}
+
+void Game::undoLastMove() {
+    if (moveHistory.empty()) return;
+    if (aiThinking.load()) return;  // don't undo while AI is thinking
+
+    // In PvAI, undo two moves (AI + player) to get back to player's turn
+    int undoCount = (vsAI && moveHistory.size() >= 2) ? 2 : 1;
+
+    for (int i = 0; i < undoCount && !moveHistory.empty(); i++) {
+        auto& rec = moveHistory.back();
+        board.undoMove(rec.move.row, rec.move.col, rec.prevLastMove);
+
+        // Decrement the move count for the player who made this move
+        if (rec.mark == player1->getMark()) {
+            player1->undoMove();
+        } else {
+            player2->undoMove();
+        }
+
+        moveHistory.pop_back();
+        switchTurn();
+    }
+
+    // Clear win state if we were in game over
+    winLine.clear();
+    if (state == GameState::GameOver) {
+        state = GameState::Playing;
+    }
+
+    // Reset renderer animation state for undone cells
+    renderer.resetAnimations();
 }
 
 void Game::autoSave() {

@@ -36,6 +36,7 @@ public:
     bool drawMenuButton();
     bool drawSettingsButton();
     bool drawRestartButton();
+    bool drawUndoButton();
 
     // Returns true if screen point is over a UI button (prevents board clicks)
     bool isPointOnUI(Vector2 point) const;
@@ -86,6 +87,7 @@ private:
     Rectangle btnMenu;
     Rectangle btnSettings;
     Rectangle btnRestart;
+    Rectangle btnUndo;
 
     // Cached hover from ray cast
     bool hoverValid;

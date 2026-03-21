@@ -56,14 +56,23 @@ Move AIPlayer::getMove(const Board& board) {
 
     // Check for immediate win (highest scored move)
     if (!scored.empty() && scored[0].first >= 200000) {
+        lastDebug = {};
+        lastDebug.chosenMove = scored[0].second;
+        lastDebug.reason = "immediate_win";
+        lastDebug.totalCandidates = static_cast<int>(scored.size());
+        lastDebug.depthCompleted = 0;
+        lastDebug.searchTimeMs = 0;
+        lastDebug.topMoves.push_back({scored[0].second, scored[0].first, 200000});
         return scored[0].second;
     }
 
     // Easy mode (depth 2): direct minimax, no time limit needed
     if (searchDepth <= 2) {
+        auto t0 = std::chrono::steady_clock::now();
         int initialScore = evaluate(searchBoard, aiMark, opponentMark);
         int bestScore = -1000000;
         Move bestMove = scored[0].second;
+        std::vector<DebugCandidate> allResults;
         for (const auto& pair : scored) {
             const Move& move = pair.second;
             int localBefore = computeLocalScore(searchBoard, move.row, move.col,
@@ -76,11 +85,25 @@ Move AIPlayer::getMove(const Board& board) {
             int score = minimax(searchBoard, searchDepth - 1, -1000000, 1000000,
                                 false, aiMark, opponentMark, newScore);
             searchBoard.undoMove(move.row, move.col, prevLast);
+            allResults.push_back({move, pair.first, score});
             if (score > bestScore) {
                 bestScore = score;
                 bestMove = move;
             }
         }
+        auto t1 = std::chrono::steady_clock::now();
+        lastDebug = {};
+        lastDebug.chosenMove = bestMove;
+        lastDebug.reason = "easy_mode";
+        lastDebug.depthCompleted = searchDepth;
+        lastDebug.totalCandidates = static_cast<int>(scored.size());
+        lastDebug.searchTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+        std::sort(allResults.begin(), allResults.end(),
+                  [](const DebugCandidate& a, const DebugCandidate& b) {
+                      return a.searchScore > b.searchScore;
+                  });
+        for (size_t i = 0; i < std::min(allResults.size(), static_cast<size_t>(5)); i++)
+            lastDebug.topMoves.push_back(allResults[i]);
         return bestMove;
     }
 
@@ -95,6 +118,8 @@ Move AIPlayer::iterativeDeepening(Board& searchBoard,
                                    int timeLimitMs) {
     auto startTime = std::chrono::steady_clock::now();
     Move bestMove = scored[0].second;
+    int completedDepth = 0;
+    std::vector<DebugCandidate> lastCompleteResults;
 
     for (int curDepth = 2; curDepth <= searchDepth; curDepth += 2) {
         transTable.clear();
@@ -102,6 +127,7 @@ Move AIPlayer::iterativeDeepening(Board& searchBoard,
         int bestScore = -1000000;
         Move depthBest = scored[0].second;
         bool timeUp = false;
+        std::vector<DebugCandidate> depthResults;
 
         for (const auto& pair : scored) {
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -119,15 +145,36 @@ Move AIPlayer::iterativeDeepening(Board& searchBoard,
                                 false, aiMark, opponentMark, initScore - lb + la);
             searchBoard.undoMove(move.row, move.col, prev);
 
+            depthResults.push_back({move, pair.first, score});
             if (score > bestScore) { bestScore = score; depthBest = move; }
         }
 
-        if (!timeUp) bestMove = depthBest;
+        if (!timeUp) {
+            bestMove = depthBest;
+            completedDepth = curDepth;
+            lastCompleteResults = depthResults;
+        }
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - startTime).count();
         if (elapsed >= timeLimitMs) break;
     }
+
+    auto endTime = std::chrono::steady_clock::now();
+    lastDebug = {};
+    lastDebug.chosenMove = bestMove;
+    lastDebug.reason = "iterative_deepening";
+    lastDebug.depthCompleted = completedDepth;
+    lastDebug.totalCandidates = static_cast<int>(scored.size());
+    lastDebug.searchTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        endTime - startTime).count();
+
+    std::sort(lastCompleteResults.begin(), lastCompleteResults.end(),
+              [](const DebugCandidate& a, const DebugCandidate& b) {
+                  return a.searchScore > b.searchScore;
+              });
+    for (size_t i = 0; i < std::min(lastCompleteResults.size(), static_cast<size_t>(5)); i++)
+        lastDebug.topMoves.push_back(lastCompleteResults[i]);
 
     return bestMove;
 }
@@ -277,7 +324,8 @@ int AIPlayer::evaluate(const Board& board, CellState aiMark,
                     int wc = lc + i * dc;
                     int aiIdx = encodeWindow(board, wr, wc, dr, dc, aiMark);
                     int opIdx = encodeWindow(board, wr, wc, dr, dc, opponentMark);
-                    score += patternScore[aiIdx] - patternScore[opIdx];
+                    // Weight defense higher: opponent threats are 1.2x as important
+                    score += patternScore[aiIdx] - (patternScore[opIdx] * 3 / 2);
                 }
             }
         }
@@ -296,6 +344,10 @@ int AIPlayer::computeLocalScore(const Board& board, int row, int col,
     static const int DC[] = {1, 0, 1, -1};
 
     // Only evaluate 5-cell windows that include (row, col)
+    // Defense multiplier: blocking opponent threats is worth more than building your own
+    static constexpr int DEF_MULT = 3;
+    static constexpr int DEF_DIV = 2;  // effective 1.5x weight on defense
+
     for (int dir = 0; dir < 4; dir++) {
         int dr = DR[dir];
         int dc = DC[dir];
@@ -314,7 +366,7 @@ int AIPlayer::computeLocalScore(const Board& board, int row, int col,
 
             int aiIdx = encodeWindow(board, wr, wc, dr, dc, aiMark);
             int opIdx = encodeWindow(board, wr, wc, dr, dc, opponentMark);
-            score += patternScore[aiIdx] - patternScore[opIdx];
+            score += patternScore[aiIdx] - (patternScore[opIdx] * DEF_MULT / DEF_DIV);
         }
     }
     return score;

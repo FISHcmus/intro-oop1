@@ -120,7 +120,7 @@ Renderer::Renderer()
       cameraTarget({}), defaultAngle(0), defaultPitch(0), defaultDistance(0),
       isDragging(false), dragStart({}),
       btnRotateLeft({}), btnRotateRight({}), btnZoomIn({}), btnZoomOut({}), btnReset({}),
-      btnSave({}), btnLoad({}), btnMenu({}), btnSettings({}), btnRestart({}),
+      btnSave({}), btnLoad({}), btnMenu({}), btnSettings({}), btnRestart({}), btnUndo({}),
       hoverValid(false), hoverRow(0), hoverCol(0),
       prevCells{}, pieceAnimStart{}, lastMove{-1, -1},
       winLineStart(0.0f), showingWinLine(false),
@@ -183,6 +183,7 @@ void Renderer::init(int width, int height) {
     btnSettings = {static_cast<float>(width) - BTN_PAD - 80, BTN_PAD, 80, BTN_SIZE};
     btnMenu = {static_cast<float>(width) - BTN_PAD - 80 - BTN_PAD - 60, BTN_PAD, 60, BTN_SIZE};
     btnRestart = {static_cast<float>(width) - BTN_PAD - 80 - BTN_PAD - 60 - BTN_PAD - 70, BTN_PAD, 70, BTN_SIZE};
+    btnUndo = {btnRestart.x - BTN_PAD - 60, BTN_PAD, 60, BTN_SIZE};
 
     // Generate procedural wood textures and piece models
     {
@@ -474,7 +475,8 @@ bool Renderer::isPointOnUI(Vector2 point) const {
         || CheckCollisionPointRec(point, btnLoad)
         || CheckCollisionPointRec(point, btnMenu)
         || CheckCollisionPointRec(point, btnSettings)
-        || CheckCollisionPointRec(point, btnRestart);
+        || CheckCollisionPointRec(point, btnRestart)
+        || CheckCollisionPointRec(point, btnUndo);
 }
 
 bool Renderer::drawButton(Rectangle rect, const char* label, int fontSize) {
@@ -522,6 +524,10 @@ bool Renderer::drawSettingsButton() {
 
 bool Renderer::drawRestartButton() {
     return drawButton(btnRestart, "Restart", 14);
+}
+
+bool Renderer::drawUndoButton() {
+    return drawButton(btnUndo, "Undo", 14);
 }
 
 void Renderer::drawBoard(const Board& board, int cursorRow, int cursorCol,

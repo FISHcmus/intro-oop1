@@ -22,6 +22,7 @@ public:
 
     void addWin() { wins++; }
     void addMove() { movesMade++; }
+    void undoMove() { if (movesMade > 0) movesMade--; }
     void resetStats();
 
 protected:

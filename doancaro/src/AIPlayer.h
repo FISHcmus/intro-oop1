@@ -3,6 +3,7 @@
 
 #include "Player.h"
 #include <cstdint>
+#include <string>
 #include <unordered_map>
 
 // Transposition table entry
@@ -20,6 +21,23 @@ public:
 
     void setSearchDepth(int depth) { searchDepth = depth; }
     int getSearchDepth() const { return searchDepth; }
+
+    // Debug info from last search
+    struct DebugCandidate {
+        Move move;
+        int preScore;    // scoreMove ordering score
+        int searchScore; // minimax result
+    };
+    struct DebugInfo {
+        std::vector<DebugCandidate> topMoves;  // top 5 by search score
+        Move chosenMove;
+        int depthCompleted;
+        int totalCandidates;
+        long long searchTimeMs;
+        std::string reason;  // "immediate_win", "iterative_deepening", "easy_mode"
+    };
+    DebugInfo lastDebug;
+    const DebugInfo& getLastDebug() const { return lastDebug; }
 
 private:
     int searchDepth;
