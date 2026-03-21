@@ -1,4 +1,5 @@
 #include "SaveLoadScreen.h"
+#include "Fonts.h"
 #include "raylib.h"
 #include <cstdio>
 #include <ctime>
@@ -101,12 +102,11 @@ void SaveLoadScreen::update() {
 
 void SaveLoadScreen::draw() {
     int screenW = GetScreenWidth();
-    int titleSize = 50;
 
     // Title
     const char* title = (mode == SlotScreenMode::Save) ? "SAVE GAME" : "LOAD GAME";
-    int titleWidth = MeasureText(title, titleSize);
-    DrawText(title, (screenW - titleWidth) / 2, 30, titleSize, WHITE);
+    int titleWidth = Fonts::measure(Fonts::title, title, 50);
+    Fonts::draw(Fonts::title, title, (screenW - titleWidth) / 2, 30, 50, WHITE);
 
     // Slot cards
     int cardWidth = 500;
@@ -126,13 +126,13 @@ void SaveLoadScreen::draw() {
     // Instructions
     int screenH = GetScreenHeight();
     if (mode == SlotScreenMode::Save) {
-        DrawText("[Enter] Save to slot  [ESC] Cancel",
-                 10, screenH - 30, 16, DARKGRAY);
+        Fonts::draw(Fonts::body, "[Enter] Save to slot  [ESC] Cancel",
+                    10, screenH - 30, 16, DARKGRAY);
     } else {
         const char* hint = (deleteConfirmSlot >= 0)
             ? "[Del] Press again to confirm delete  [ESC] Cancel"
             : "[Enter] Load  [Del] Delete  [ESC] Cancel";
-        DrawText(hint, 10, screenH - 30, 16, DARKGRAY);
+        Fonts::draw(Fonts::body, hint, 10, screenH - 30, 16, DARKGRAY);
     }
 }
 
@@ -158,19 +158,19 @@ void SaveLoadScreen::drawSlotCard(int slot, int x, int y, int width, int height,
         slotLabel = slotBuf;
     }
 
-    DrawText(slotLabel, x + 10, y + 10, 20, selected ? GOLD : LIGHTGRAY);
+    Fonts::draw(Fonts::bold, slotLabel, x + 10, y + 10, 20, selected ? GOLD : LIGHTGRAY);
 
     if (slotOccupied[slot]) {
         // Name
         const char* name = (slot == 0) ? "Autosave" : headers[slot].p1Name;
-        DrawText(name, x + 80, y + 10, 18, WHITE);
+        Fonts::draw(Fonts::bold, name, x + 80, y + 10, 18, WHITE);
 
         // Date
         time_t t = static_cast<time_t>(headers[slot].timestamp);
         struct tm* tm = localtime(&t);
         char dateBuf[64];
         std::strftime(dateBuf, sizeof(dateBuf), "%Y-%m-%d %H:%M", tm);
-        DrawText(dateBuf, x + 80, y + 32, 14, LIGHTGRAY);
+        Fonts::draw(Fonts::body, dateBuf, x + 80, y + 32, 14, LIGHTGRAY);
 
         // Info line
         char infoBuf[128];
@@ -188,13 +188,13 @@ void SaveLoadScreen::drawSlotCard(int slot, int x, int y, int width, int height,
         }
         std::snprintf(infoBuf, sizeof(infoBuf), "%d moves  |  %02d:%02d  |  %s%s",
                       headers[slot].moveCount, mins, secs, modeStr, diffStr);
-        DrawText(infoBuf, x + 80, y + 52, 14, DARKGRAY);
+        Fonts::draw(Fonts::body, infoBuf, x + 80, y + 52, 14, DARKGRAY);
 
         // Delete confirm text
         if (deleteConfirmSlot == slot) {
-            DrawText("Press Del again!", x + width - 140, y + 32, 14, RED);
+            Fonts::draw(Fonts::bold, "Press Del again!", x + width - 140, y + 32, 14, RED);
         }
     } else {
-        DrawText("-- Empty --", x + 80, y + 30, 18, DARKGRAY);
+        Fonts::draw(Fonts::body, "-- Empty --", x + 80, y + 30, 18, DARKGRAY);
     }
 }

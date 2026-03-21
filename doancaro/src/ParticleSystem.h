@@ -2,15 +2,19 @@
 #include <vector>
 #include "raylib.h"
 
+enum class ParticleShape { Cube, FlatRect, Spark };
+
 struct Particle {
     Vector3 position;
     Vector3 velocity;
     Color color;
     float size;
-    float lifetime;   // total lifetime
-    float age;         // current age
-    float rotation;    // visual spin
-    float rotSpeed;    // spin speed
+    float lifetime;
+    float age;
+    float rotation;
+    float rotSpeed;
+    ParticleShape shape;
+    float shimmerPhase;  // for sparkle twinkle offset
 };
 
 class ParticleSystem {

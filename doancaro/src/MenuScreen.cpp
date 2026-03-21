@@ -1,4 +1,5 @@
 #include "MenuScreen.h"
+#include "Fonts.h"
 #include "raylib.h"
 
 MenuScreen::MenuScreen() : selectedIndex(0), choice(MenuChoice::None),
@@ -29,7 +30,7 @@ void MenuScreen::update() {
     Vector2 mouse = GetMousePosition();
 
     for (int i = 0; i < ITEM_COUNT; i++) {
-        int textWidth = MeasureText(items[i], itemSize);
+        int textWidth = Fonts::measure(Fonts::bold, items[i], itemSize);
         int x = (screenW - textWidth) / 2;
         int y = startY + i * itemHeight;
         Rectangle itemRect = {
@@ -55,30 +56,29 @@ void MenuScreen::update() {
 }
 
 void MenuScreen::draw() {
-    int titleSize = 60;
-    int itemSize = 30;
+    int itemSize = 28;
     int screenW = GetScreenWidth();
     int screenH = GetScreenHeight();
 
     const char* title = "CARO GAME";
-    int titleWidth = MeasureText(title, titleSize);
-    DrawText(title, (screenW - titleWidth) / 2, screenH / 6, titleSize, WHITE);
+    int titleWidth = Fonts::measure(Fonts::title, title, 60);
+    Fonts::draw(Fonts::title, title, (screenW - titleWidth) / 2, screenH / 6, 60, WHITE);
 
     for (int i = 0; i < ITEM_COUNT; i++) {
-        int textWidth = MeasureText(items[i], itemSize);
+        int textWidth = Fonts::measure(Fonts::bold, items[i], itemSize);
         int x = (screenW - textWidth) / 2;
         int y = screenH / 3 + i * 50;
 
         Color color = (i == selectedIndex) ? GOLD : LIGHTGRAY;
-        DrawText(items[i], x, y, itemSize, color);
+        Fonts::draw(Fonts::bold, items[i], x, y, itemSize, color);
 
         if (i == selectedIndex) {
-            DrawText(">", x - 30, y, itemSize, GOLD);
+            Fonts::draw(Fonts::bold, ">", x - 30, y, itemSize, GOLD);
         }
     }
 
-    DrawText("W/S or Arrow Keys to navigate, Enter to select",
-             10, screenH - 30, 16, DARKGRAY);
+    Fonts::draw(Fonts::body, "W/S or Arrow Keys to navigate, Enter to select",
+                10, screenH - 30, 16, DARKGRAY);
 }
 
 void MenuScreen::reset() {

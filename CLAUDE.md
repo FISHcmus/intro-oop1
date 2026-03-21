@@ -42,11 +42,10 @@ Serena uses LSP backend (clangd). JetBrains backend not supported on CLion — s
 | Read a full code file (rare, avoid) | `mcp__jetbrains__get_file_text_by_path` | `Read` |
 | Search code for a pattern | `mcp__serena-oop1__search_for_pattern` or `mcp__jetbrains__search_in_files_by_text` | `Grep` |
 | Find files by name | `mcp__jetbrains__find_files_by_name_keyword` or `mcp__serena-oop1__find_file` | `Glob` |
-| Replace a function/method body | `mcp__serena-oop1__replace_symbol_body` | `Edit` |
+| Replace text in a code file | `mcp__jetbrains__replace_text_in_file` | `Edit` |
 | Add code after a symbol | `mcp__serena-oop1__insert_after_symbol` | `Edit` |
 | Add code before a symbol | `mcp__serena-oop1__insert_before_symbol` | `Edit` |
 | Rename a symbol project-wide | `mcp__serena-oop1__rename_symbol` or `mcp__jetbrains__rename_refactoring` | `Edit` with replace_all |
-| Small text replacement in file | `mcp__jetbrains__replace_text_in_file` | `Edit` |
 | Check for errors/warnings | `mcp__jetbrains__get_file_problems` | `Bash` g++ |
 | Find who references a symbol | `mcp__serena-oop1__find_referencing_symbols` | `Grep` |
 | Create a new code file | `mcp__jetbrains__create_new_file` | `Write` |
@@ -61,11 +60,12 @@ Serena uses LSP backend (clangd). JetBrains backend not supported on CLion — s
 4. `search_for_pattern` — regex search across codebase
 5. Fall back to full file read only when necessary
 
-**Editing code (symbolic, precise):**
-1. `find_symbol` to locate the symbol
-2. `replace_symbol_body` for whole-symbol replacement
-3. `insert_before_symbol` / `insert_after_symbol` for adding new code
+**Editing code (use JetBrains for all text replacement):**
+1. `find_symbol` to locate the symbol and understand the code
+2. `mcp__jetbrains__replace_text_in_file` for ALL code edits (replacements, rewrites, fixes)
+3. `insert_before_symbol` / `insert_after_symbol` ONLY for inserting new code blocks (not replacing)
 4. `rename_symbol` for renaming across codebase
+5. **DO NOT use `replace_symbol_body`** — it is unreliable. Always use JetBrains `replace_text_in_file` instead.
 
 **Project knowledge:** `write_memory`, `read_memory`, `list_memories`
 
@@ -82,7 +82,7 @@ Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro
 | Open file in editor | `open_file_in_editor` |
 | Auto-format code | `reformat_file` |
 | Safe rename refactoring | `rename_refactoring` |
-| Small text edit in file | `replace_text_in_file` |
+| Edit/replace code in file (primary editing tool) | `replace_text_in_file` |
 | Create new file | `create_new_file` |
 | Search by text/regex | `search_in_files_by_text`, `search_in_files_by_regex` |
 | Find files by name/glob | `find_files_by_name_keyword`, `find_files_by_glob` |
@@ -91,7 +91,7 @@ Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro
 ### Decision flowchart
 
 1. **Need to understand a code file?** → `get_symbols_overview` first, then `find_symbol` with `include_body=true`
-2. **Need to edit a function/class?** → `find_symbol` to read, then `replace_symbol_body` to rewrite
+2. **Need to edit a function/class?** → `find_symbol` to read, then `mcp__jetbrains__replace_text_in_file` to rewrite
 3. **Need to add new code?** → `insert_after_symbol` or `insert_before_symbol`
 4. **Need to rename?** → `rename_symbol` (Serena) or `rename_refactoring` (JetBrains)
 5. **Need to find usages?** → `find_referencing_symbols`

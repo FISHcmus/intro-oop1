@@ -1,4 +1,5 @@
 #include "Renderer.h"
+#include "Fonts.h"
 #include "raymath.h"
 #include "rlgl.h"
 #include <cmath>
@@ -487,10 +488,10 @@ bool Renderer::drawButton(Rectangle rect, const char* label, int fontSize) {
     DrawRectangleRec(rect, bg);
     DrawRectangleLinesEx(rect, 1.0f, border);
 
-    int tw = MeasureText(label, fontSize);
+    int tw = Fonts::measure(Fonts::bold, label, static_cast<float>(fontSize));
     auto tx = static_cast<int>(rect.x + (rect.width - static_cast<float>(tw)) / 2.0f);
     auto ty = static_cast<int>(rect.y + (rect.height - static_cast<float>(fontSize)) / 2.0f);
-    DrawText(label, tx, ty, fontSize, WHITE);
+    Fonts::draw(Fonts::bold, label, tx, ty, static_cast<float>(fontSize), WHITE);
 
     return hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }

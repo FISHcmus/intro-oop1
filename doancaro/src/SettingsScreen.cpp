@@ -1,4 +1,5 @@
 #include "SettingsScreen.h"
+#include "Fonts.h"
 #include "raylib.h"
 
 SettingsScreen::SettingsScreen()
@@ -86,15 +87,14 @@ void SettingsScreen::update() {
 }
 
 void SettingsScreen::draw() {
-    int titleSize = 50;
     int itemSize = 26;
     int screenW = GetScreenWidth();
     int screenH = GetScreenHeight();
 
     // Title
     const char* title = "SETTINGS";
-    int titleWidth = MeasureText(title, titleSize);
-    DrawText(title, (screenW - titleWidth) / 2, screenH / 6, titleSize, WHITE);
+    int titleWidth = Fonts::measure(Fonts::title, title, 50);
+    Fonts::draw(Fonts::title, title, (screenW - titleWidth) / 2, screenH / 6, 50, WHITE);
 
     // Items
     int startY = screenH / 3;
@@ -104,19 +104,19 @@ void SettingsScreen::draw() {
     {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "Game Mode: < %s >", getGameModeLabel());
-        int textWidth = MeasureText(buf, itemSize);
+        int textWidth = Fonts::measure(Fonts::bold, buf, itemSize);
         int x = (screenW - textWidth) / 2;
         int y = startY;
         Color color = (selectedIndex == 0) ? GOLD : LIGHTGRAY;
-        DrawText(buf, x, y, itemSize, color);
-        if (selectedIndex == 0) DrawText(">", x - 30, y, itemSize, GOLD);
+        Fonts::draw(Fonts::bold, buf, x, y, itemSize, color);
+        if (selectedIndex == 0) Fonts::draw(Fonts::bold, ">", x - 30, y, itemSize, GOLD);
     }
 
     // Item 1: AI Difficulty
     {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "AI Difficulty: < %s >", getDifficultyLabel());
-        int textWidth = MeasureText(buf, itemSize);
+        int textWidth = Fonts::measure(Fonts::bold, buf, itemSize);
         int x = (screenW - textWidth) / 2;
         int y = startY + itemHeight;
         Color color;
@@ -125,24 +125,24 @@ void SettingsScreen::draw() {
         } else {
             color = (selectedIndex == 1) ? GOLD : LIGHTGRAY;
         }
-        DrawText(buf, x, y, itemSize, color);
-        if (selectedIndex == 1 && settings.vsAI) DrawText(">", x - 30, y, itemSize, GOLD);
+        Fonts::draw(Fonts::bold, buf, x, y, itemSize, color);
+        if (selectedIndex == 1 && settings.vsAI) Fonts::draw(Fonts::bold, ">", x - 30, y, itemSize, GOLD);
     }
 
     // Item 2: Back
     {
         const char* label = "Back";
-        int textWidth = MeasureText(label, itemSize);
+        int textWidth = Fonts::measure(Fonts::bold, label, itemSize);
         int x = (screenW - textWidth) / 2;
         int y = startY + 2 * itemHeight;
         Color color = (selectedIndex == 2) ? GOLD : LIGHTGRAY;
-        DrawText(label, x, y, itemSize, color);
-        if (selectedIndex == 2) DrawText(">", x - 30, y, itemSize, GOLD);
+        Fonts::draw(Fonts::bold, label, x, y, itemSize, color);
+        if (selectedIndex == 2) Fonts::draw(Fonts::bold, ">", x - 30, y, itemSize, GOLD);
     }
 
     // Instructions
-    DrawText("Left/Right to change, Enter to select, ESC to go back",
-             10, screenH - 30, 16, DARKGRAY);
+    Fonts::draw(Fonts::body, "Left/Right to change, Enter to select, ESC to go back",
+                10, screenH - 30, 16, DARKGRAY);
 }
 
 void SettingsScreen::reset() {

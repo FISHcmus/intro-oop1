@@ -1,4 +1,5 @@
 #include "Game.h"
+#include "Fonts.h"
 #include <ctime>
 #include <cstring>
 
@@ -25,6 +26,7 @@ void Game::run() {
     SetExitKey(0);  // Disable ESC auto-close; we handle ESC ourselves
 
     renderer.init(SCREEN_WIDTH, SCREEN_HEIGHT);
+    Fonts::init();
     audioManager.init();
 
     while (!WindowShouldClose()) {
@@ -55,6 +57,7 @@ void Game::run() {
     }
 
     audioManager.shutdown();
+    Fonts::cleanup();
     renderer.shutdown();
     CloseWindow();
 }
@@ -180,13 +183,20 @@ void Game::drawPlaying() {
     // Camera control buttons (2D overlay)
     renderer.drawCameraControls();
 
-    // AI thinking indicator
+    // AI thinking indicator — below HUD panel
     if (aiThinking.load()) {
-        float pulse = (sinf(static_cast<float>(GetTime()) * 4.0f) + 1.0f) * 0.5f;
-        auto alpha = static_cast<unsigned char>(150 + pulse * 105);
-        const char* text = "AI is thinking...";
-        int w = MeasureText(text, 24);
-        DrawText(text, (GetScreenWidth() - w) / 2, GetScreenHeight() / 2 - 50, 24, {255, 215, 0, alpha});
+        float pulse = (sinf(static_cast<float>(GetTime()) * 3.0f) + 1.0f) * 0.5f;
+        auto alpha = static_cast<unsigned char>(140 + pulse * 115);
+
+        int panelX = GetScreenWidth() - 210;
+        int indicatorY = 248;
+
+        // Animated dots: 1-3 dots cycling
+        int dotCount = static_cast<int>(GetTime() * 2.0) % 3 + 1;
+        char text[32];
+        std::snprintf(text, sizeof(text), "AI thinking%.*s", dotCount, "...");
+
+        Fonts::draw(Fonts::body, text, panelX + 12, indicatorY, 14, {255, 255, 255, alpha});
     }
 
     // Save/Load buttons
@@ -365,13 +375,13 @@ void Game::drawSaveLoadScreen() {
 void Game::drawToast() {
     if (toastTimer > 0.0f) {
         int screenW = GetScreenWidth();
-        int textWidth = MeasureText(toastMessage, 18);
+        int textWidth = Fonts::measure(Fonts::bold, toastMessage, 18);
         int x = screenW - textWidth - 20;
         int y = 20;
         float alpha = (toastTimer < 0.5f) ? toastTimer * 2.0f : 1.0f;
         auto a = static_cast<unsigned char>(alpha * 200);
         DrawRectangle(x - 10, y - 5, textWidth + 20, 30, {30, 30, 30, a});
-        DrawText(toastMessage, x, y, 18, {255, 215, 0, static_cast<unsigned char>(alpha * 255)});
+        Fonts::draw(Fonts::bold, toastMessage, x, y, 18, {255, 215, 0, static_cast<unsigned char>(alpha * 255)});
     }
 }
 

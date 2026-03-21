@@ -63,6 +63,7 @@ set(SOURCES
     src/AudioManager.cpp
     src/FileManager.cpp
     src/ParticleSystem.cpp
+    src/Fonts.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
