@@ -76,27 +76,22 @@ bool RapfiEngine::start() {
 void RapfiEngine::stop() {
     if (!running) return;
 
+    // Send END and give Rapfi a moment to read it before closing pipes
     writeLine("END");
+    usleep(50000); // 50ms for Rapfi to read END
 
     if (pipeToChild >= 0) { close(pipeToChild); pipeToChild = -1; }
     if (pipeFromChild >= 0) { close(pipeFromChild); pipeFromChild = -1; }
 
     if (childPid > 0) {
         int status;
+        // Try SIGTERM immediately — pondering Rapfi won't exit on pipe close alone
+        kill(childPid, SIGTERM);
+        usleep(200000); // 200ms
         pid_t result = waitpid(childPid, &status, WNOHANG);
         if (result == 0) {
-            // Still running, give it a moment
-            usleep(100000); // 100ms
-            result = waitpid(childPid, &status, WNOHANG);
-            if (result == 0) {
-                kill(childPid, SIGTERM);
-                usleep(500000); // 500ms
-                result = waitpid(childPid, &status, WNOHANG);
-                if (result == 0) {
-                    kill(childPid, SIGKILL);
-                    waitpid(childPid, &status, 0);
-                }
-            }
+            kill(childPid, SIGKILL);
+            waitpid(childPid, &status, 0);
         }
         childPid = -1;
     }

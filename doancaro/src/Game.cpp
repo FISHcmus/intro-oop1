@@ -59,6 +59,13 @@ void Game::run() {
         EndDrawing();
     }
 
+    // Stop AI engine before shutdown to prevent orphaned processes
+    if (aiThread.joinable()) aiThread.join();
+    auto* ai = dynamic_cast<AIPlayer*>(player2);
+    if (ai) ai->resetEngine();
+    delete player1; player1 = nullptr;
+    delete player2; player2 = nullptr;
+
     audioManager.shutdown();
     Fonts::cleanup();
     renderer.shutdown();
