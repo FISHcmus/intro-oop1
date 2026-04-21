@@ -47,11 +47,198 @@ getMove()
 
 ## 1. Difficulty Levels
 
-| Difficulty | searchDepth | Time Limit | Method |
-|---|---|---|---|
-| Easy | 2 | None | Direct minimax, all candidates |
-| Medium | 4 | 1000ms | Iterative deepening (depth 2→4) |
-| Hard (Rapfi) | 6 | 10s max/move | Rapfi NNUE subprocess (fallback: minimax depth 6, 3000ms) |
+Player picks one of three labels on the Settings screen; `aiDepth` (2 / 4 / 6) is stored in `settings.cfg` and passed as `AIPlayer(searchDepth = aiDepth)` at construction (`Game.cpp:293`). The branching happens at the top of `getMove()`:
+
+```
+AIPlayer::getMove(board)  ─── AIPlayer.cpp:30
+  if searchDepth >= 6 && !rapfiFailed   → getRapfiMove()      [Hard]
+  ... scoreMove + sort every candidate ...
+  if immediate_win (top ≥ 200,000)      → return it           [all levels]
+  if searchDepth <= 2                   → fixed-depth block   [Easy]
+  else                                  → iterativeDeepening()[Medium / Hard-fallback]
+```
+
+### Summary
+
+| Difficulty | `searchDepth` | Primary engine | Primary budget | Fallback |
+|---|---|---|---|---|
+| Easy        | 2 | Minimax α-β, fixed depth         | none (exhaustive 2-ply)                        | — |
+| Medium      | 4 | Iterative deepening minimax α-β  | `TIME_LIMIT_MEDIUM_MS = 1000 ms`               | — |
+| Hard (Rapfi)| 6 | Rapfi NNUE subprocess            | `timeoutMs = 10 000 ms` + 2 000 ms pipe slack  | Iterative deepening minimax depth 6, `TIME_LIMIT_HARD_MS = 3000 ms` (only if Rapfi dies; latches via `rapfiFailed`) |
+
+### 1.0 Shared scaffolding (all three levels run this before branching)
+
+```
+candidates = board.getCandidateMoves(radius = 2)   ← only empty cells within 2 of any occupied cell
+if candidates.empty()      → return center (SIZE/2, SIZE/2)
+if candidates.size() == 1  → return the only option
+
+for each candidate m:
+    score = scoreMove(m, aiMark, opponentMark)     ← pattern-table heuristic (see §2, §3)
+sort candidates desc by score
+
+if top score ≥ 200 000:                            ← "immediate_win" short-circuit
+    play it, skip search entirely
+```
+
+Pattern table, move-ordering score, and candidate generation are detailed in §2, §3, §6. Sections 1.1–1.3 focus on what happens *after* this sort.
+
+---
+
+### 1.1 Easy — `searchDepth = 2`
+
+**Mechanic:** straight 2-ply minimax α-β with no iterative deepening and no time limit. The AI plays its move (ply 1) and evaluates every single opponent reply (ply 2), then picks the move whose worst-case reply is best.
+
+```
+  getMove() — AIPlayer.cpp:80–118
+  ───────────────────────────────────────────
+  initScore = evaluate(searchBoard, aiMark, opponentMark)   ← full-board pattern sum, once
+  bestScore = −∞
+
+  for each (preScore, move) in sorted candidates:
+      localBefore = computeLocalScore(move)
+      placeMove(move, aiMark)
+      localAfter  = computeLocalScore(move)
+      newScore    = initScore − localBefore + localAfter    ← incremental eval
+      score       = minimax(depth = 1, α = −∞, β = +∞,
+                            maximizing = false,
+                            boardScore = newScore)
+      undoMove
+      if score > bestScore: bestScore = score; bestMove = move
+
+  debug.reason = "easy_mode"
+  return bestMove
+```
+
+| Knob | Value | Source |
+|---|---|---|
+| `searchDepth` | 2 | `SettingsScreen.cpp:155` (label `"Easy"`) |
+| Time budget | none | — |
+| Transposition table | cleared per turn at `AIPlayer.cpp:38`, reused inside the turn | — |
+| Candidate search radius | 2 | `Board.cpp:135` |
+
+**Feel:** sees only one counter-move deep. Blocks direct fours, misses any fork where the opponent needs two setup moves to win. Beatable with a standard double-three trap.
+
+**Code pointers:** `AIPlayer.cpp:30–44` (setup), `:80–118` (Easy block).
+
+---
+
+### 1.2 Medium — `searchDepth = 4`
+
+**Mechanic:** iterative deepening minimax α-β with a 1 000 ms budget. Tries depth 2 first, then depth 4; only accepts a depth's result if the scan of that depth finished *fully*. If depth 4 times out mid-iteration, the move from the completed depth 2 is returned.
+
+```
+  iterativeDeepening() — AIPlayer.cpp:125–190
+  ───────────────────────────────────────────
+  t0 = now
+  for curDepth in [2, 4]:                        ← stride 2
+      transTable.clear()                         ← TT is per-depth
+      initScore = evaluate(searchBoard)
+      bestScore = −∞
+      depthBest = scored[0].second
+      timeUp    = false
+
+      for each (preScore, move) in scored:
+          if now − t0 ≥ 1000 ms:
+              timeUp = true; break
+          localBefore = computeLocalScore(move)
+          placeMove(move, aiMark)
+          localAfter  = computeLocalScore(move)
+          score = minimax(curDepth − 1, α = −∞, β = +∞, max = false,
+                          boardScore = initScore − localBefore + localAfter)
+          undoMove
+          if score > bestScore: bestScore = score; depthBest = move
+
+      if not timeUp:                             ← commit only complete depths
+          bestMove       = depthBest
+          completedDepth = curDepth
+      if now − t0 ≥ 1000 ms: break
+
+  debug.reason = "iterative_deepening"
+```
+
+`minimax()` itself does move-ordered α-β (`AIPlayer.cpp:220–272`), probes the transposition table (`:203–215`), and stores results with `flag ∈ {0 = exact, 1 = lower bound, 2 = upper bound}` (`:274–285`).
+
+| Knob | Value | Source |
+|---|---|---|
+| `searchDepth` | 4 | `SettingsScreen.cpp:156` |
+| Time budget | 1 000 ms | `AIPlayer.h:59` (`TIME_LIMIT_MEDIUM_MS`) |
+| Depth schedule | 2 → 4 | `AIPlayer.cpp:134` |
+| TT | cleared between depths, reused within a depth | `:135`, `:285` |
+| Incremental eval | `boardScore − localBefore + localAfter` | `:154` |
+
+**Feel:** catches open threes, blocks open fours, sees your depth-2 threat sequences. Still falls to forks that need depth 6+ to resolve (e.g., a buried VCF win).
+
+**Code pointers:** `AIPlayer.cpp:120–190` (ID driver), `:192–288` (minimax + TT).
+
+---
+
+### 1.3 Hard — `searchDepth = 6` → Rapfi subprocess
+
+**Mechanic:** delegates the whole decision to **Rapfi**, the GomoCup 2024 champion NNUE engine, via the Gomocup stdin/stdout protocol. Rapfi runs as a forked child process, `chdir()`'d to `assets/rapfi/` so it picks up `config.toml` and the `mix9svqstandard_bs15.bin.lz4` weights. On any failure (process crash, timeout, invalid move, pipe error), `rapfiFailed` latches `true` for the rest of the session and the AI silently degrades to a depth-6 iterative deepening minimax with a 3 s budget.
+
+```
+  getMove() — AIPlayer.cpp:32–36
+  ──────────────────────────────
+  if searchDepth ≥ 6 && !rapfiFailed:
+      m = getRapfiMove(board)
+      if m.row ≥ 0: return m             ← success
+      ... otherwise fall through to scoreMove + iterativeDeepening ...
+
+  getRapfiMove() — AIPlayer.cpp:667–729
+  ─────────────────────────────────────
+  if !rapfiEngine:
+      rapfiEngine = new RapfiEngine("assets/rapfi", timeoutMs = 10000)
+      if !rapfiEngine->start():          ← fork + execl("./rapfi") + handshake
+          rapfiFailed = true; return {-1,-1}
+      boardSynced = false; lastSentMoveCount = 0
+
+  if moveCount == 0:               → BEGIN              ← engine plays first
+  elif !boardSynced || mismatch:   → BOARD … DONE       ← full resync (after undo / load)
+  else:                            → TURN col,row        ← incremental (note col,row, not row,col)
+
+  parse "x,y" → Move{row = y, col = x}
+  if target cell not empty:  rapfiFailed = true; destroy engine; return {-1,-1}
+  debug.reason = "rapfi_engine"
+```
+
+Rapfi lifecycle (`RapfiEngine.cpp`):
+
+```
+start():  pipe() + fork()
+          child : dup2 stdin/stdout, chdir(binaryDir), execl("./rapfi")
+          parent: initialize() sends  START 15
+                                      INFO rule 1
+                                      INFO timeout_turn 10000
+                                      INFO timeout_match 0
+                                      INFO PONDERING 1
+readMove(): poll()-based line reader, skips MESSAGE / DEBUG / ERROR lines
+stop():   write "END", 50 ms grace, close pipes, SIGTERM, 200 ms, SIGKILL, waitpid
+          (prevents orphan processes — commit 6d211fd)
+```
+
+| Knob | Value | Source |
+|---|---|---|
+| `searchDepth` gate | ≥ 6 | `AIPlayer.cpp:32` |
+| Engine-side per-move budget | 10 000 ms (`timeout_turn`) | `RapfiEngine.cpp` init, `assets/rapfi/config.toml` |
+| Parent-side pipe timeout | `timeoutMs + 2 000 ms = 12 000 ms` | `RapfiEngine.cpp:213`, `:230`, `:259` |
+| Rule | `INFO rule 1` (standard — exactly 5 wins, overlines don't count) | — |
+| Pondering | `INFO PONDERING 1` (think during opponent's turn) | — |
+| Weights | `mix9svqstandard_bs15.bin.lz4` (Mixnet small, 15×15 standard) | `assets/rapfi/` |
+| TT size | 128 MB | `config.toml` → `default_tt_size_kb = 131072` |
+| Threads | all cores | `default_thread_num = 0` |
+| Fallback algorithm | iterative deepening minimax to depth 6 | `AIPlayer.cpp:120–122` |
+| Fallback budget | 3 000 ms | `AIPlayer.h:60` (`TIME_LIMIT_HARD_MS`) |
+
+**Feel:** tournament-strength. First move of a game adds ~1 s for weight loading. Rapfi's own time manager typically returns in 1–3 s on obvious positions and stretches to ~7.5 s (75 % of 10 s via `advanced_stop_ratio`) only when the evaluation is volatile. Most human players don't win without a handicap.
+
+**Failure modes handled:**
+- Rapfi binary missing → `start()` fails → `rapfiFailed = true` → next move uses minimax.
+- Rapfi hangs → parent pipe timeout fires → fallback, engine destroyed.
+- User loads a save or undoes → `resetEngine()` flips `boardSynced = false` without killing the process → next `getMove()` issues `BOARD … DONE` to resync.
+- Rapfi returns an occupied cell (protocol violation) → engine destroyed, fallback.
+
+**Code pointers:** `AIPlayer.cpp:32–36` (gate), `:667–729` (wrapper), `:731–734` (`resetEngine`); `RapfiEngine.cpp` for the subprocess and protocol; `assets/rapfi/config.toml` for engine tuning.
 
 ---
 
