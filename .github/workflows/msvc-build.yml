@@ -56,6 +56,14 @@ jobs:
         shell: pwsh
         run: cmake --build CaroGame_src\vs2022 --config Release -- /m
 
+      - name: Stage runnable binary + assets into bin/
+        shell: pwsh
+        run: |
+          $bin = "CaroGame_src\bin"
+          New-Item -ItemType Directory -Path $bin -Force | Out-Null
+          Copy-Item "CaroGame_src\vs2022\Release\CaroGame.exe" "$bin\"
+          Copy-Item -Recurse "CaroGame_src\assets" "$bin\assets"
+
       - name: Clean non-portable CMake artifacts, keep .sln + .vcxproj
         shell: pwsh
         run: |

@@ -9,23 +9,43 @@
 
 ## What is in this bundle
 
-Everything required to build the game from scratch, fully offline. No downloads, no Internet, no extra packages to install.
+Everything required to build the game from scratch, fully offline. No downloads, no Internet, no extra packages to install. A prebuilt Windows x64 binary is also included.
 
 ```
 CaroGame_src/
 ├── CMakeLists.txt      ← build script
 ├── README.md
 ├── demo.png
+├── bin/                ← ready-to-run Windows x64 build
+│   ├── CaroGame.exe
+│   └── assets/
+├── vs2022/             ← pre-generated Visual Studio 2022 solution
+│   └── CaroGame.sln
 ├── src/                ← game source (C++14)
 ├── assets/             ← models, pieces, textures, fonts
 └── raylib-5.5/         ← raylib library source (bundled)
 ```
 
+## Quickest path — just play it
+
+1. Extract the ZIP.
+2. Double-click `bin/CaroGame.exe`.
+
+That's it. The binary is self-contained (static raylib) — no DLL or installer needed. Windows 10/11 x64.
+
 ## Build on Windows 11 + Visual Studio 2022
 
 Requirements: Visual Studio 2022 with **"Desktop development with C++"** workload (includes CMake).
 
-### Option A — Open folder in Visual Studio 2022 (easiest)
+### Option A — Open the pre-generated solution (recommended)
+
+1. Extract the ZIP.
+2. Double-click `vs2022/CaroGame.sln`.
+3. Set configuration to **Release**, platform to **x64**.
+4. **Build** → **Build Solution** (Ctrl+Shift+B).
+5. **Debug** → **Start Without Debugging** (Ctrl+F5).
+
+### Option B — Open folder in Visual Studio 2022
 
 1. Extract the ZIP.
 2. Open Visual Studio 2022 → **Open** → **Folder** → select this extracted folder.
@@ -34,7 +54,7 @@ Requirements: Visual Studio 2022 with **"Desktop development with C++"** workloa
 5. **Build** → **Build All** (Ctrl+Shift+B).
 6. **Debug** → **Start Without Debugging** (Ctrl+F5).
 
-### Option B — Command line (Developer Command Prompt for VS 2022)
+### Option C — Command line (Developer Command Prompt for VS 2022)
 
 ```cmd
 cd path\to\CaroGame_src
@@ -46,7 +66,7 @@ cd Release
 CaroGame.exe
 ```
 
-### Option C — Any platform with CMake + C++14 compiler
+### Option D — Any platform with CMake + C++14 compiler
 
 ```bash
 mkdir build && cd build
