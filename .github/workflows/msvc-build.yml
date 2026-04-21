@@ -114,10 +114,10 @@ jobs:
       - name: Portability gate — fail if any absolute path survives
         shell: pwsh
         run: |
-          $leaks = Select-String -Path "CaroGame_src\vs2022\*.sln", `
-                                       "CaroGame_src\vs2022\**\*.vcxproj", `
-                                       "CaroGame_src\vs2022\**\*.vcxproj.filters" `
-            -Pattern '(?i)[A-Z]:\\|[A-Z]:/' -AllMatches -ErrorAction SilentlyContinue
+          # Match Windows drive paths only. Exclude URL schemes like http://, xmlns="..."
+          # by requiring a backslash (MSBuild-native separator in .vcxproj).
+          $files = Get-ChildItem -Path "CaroGame_src\vs2022" -Recurse -File -Include *.sln,*.vcxproj,*.vcxproj.filters
+          $leaks = $files | Select-String -Pattern '(?i)\b[A-Z]:\\' -AllMatches -ErrorAction SilentlyContinue
           if ($leaks) {
             Write-Host "=== ABSOLUTE PATH LEAKS — build non-portable ===" -ForegroundColor Red
             $leaks | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
