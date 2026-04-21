@@ -1,0 +1,48 @@
+cmake_minimum_required(VERSION 3.16)
+project(CaroGame LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# MSVC: use UTF-8 source encoding (Vietnamese identifiers / strings)
+if(MSVC)
+    add_compile_options(/utf-8 /W3)
+    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+else()
+    add_compile_options(-Wall -Wextra -pipe)
+endif()
+
+# --- raylib: build from bundled source (fully offline) ---
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_GAMES    OFF CACHE BOOL "" FORCE)
+add_subdirectory(raylib-5.5)
+
+# --- Game sources ---
+set(SOURCES
+    src/main.cpp
+    src/Game.cpp
+    src/Board.cpp
+    src/Player.cpp
+    src/AIPlayer.cpp
+    src/Renderer.cpp
+    src/MenuScreen.cpp
+    src/GameScreen.cpp
+    src/SettingsScreen.cpp
+    src/SaveLoadScreen.cpp
+    src/AudioManager.cpp
+    src/FileManager.cpp
+    src/ParticleSystem.cpp
+    src/Fonts.cpp
+)
+
+add_executable(${PROJECT_NAME} ${SOURCES})
+target_include_directories(${PROJECT_NAME} PRIVATE src)
+target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
+
+# Copy assets next to the executable after build
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets
+    COMMENT "Copying assets to build directory"
+)

@@ -1,9 +1,10 @@
-name: Build Caro Demo (Windows)
+name: Build Caro submission bundle (Windows VS 2022)
 
 on:
   push:
     paths:
       - 'doancaro/**'
+      - 'ci-assets/**'
       - '.github/workflows/msvc-build.yml'
   workflow_dispatch:
 
@@ -13,35 +14,89 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache CMake FetchContent (raylib + Catch2)
-        uses: actions/cache@v4
-        with:
-          path: doancaro/build/_deps
-          key: fetchcontent-${{ runner.os }}-${{ hashFiles('doancaro/CMakeLists.txt') }}
-
-      - name: Generate VS solution and build
+      - name: Stage submission bundle
+        shell: pwsh
         run: |
-          cd doancaro
-          cmake -B build -G "Visual Studio 17 2022" -A x64
-          cmake --build build --config Release
+          $stage = "CaroGame_src"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
-      - name: Run unit tests
-        run: doancaro\build\Release\CaroTests.exe
+          # Our source + assets (drop unused subdirs)
+          Copy-Item -Recurse doancaro\src "$stage\"
+          Copy-Item -Recurse doancaro\assets "$stage\"
+          Remove-Item -Recurse -Force "$stage\assets\rapfi"  -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "$stage\assets\music"  -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "$stage\assets\sounds" -ErrorAction SilentlyContinue
+          Get-ChildItem -Path "$stage\assets" -Recurse -Filter ".gitkeep" | Remove-Item -Force
 
-      - name: Prepare demo bundle
+          Copy-Item doancaro\demo.png "$stage\"
+
+          # Portable CMakeLists + README
+          Copy-Item ci-assets\CMakeLists.bundle.txt "$stage\CMakeLists.txt"
+          Copy-Item ci-assets\README.bundle.md      "$stage\README.md"
+
+          # Bundle raylib 5.5 source (offline build)
+          Invoke-WebRequest -Uri "https://github.com/raysan5/raylib/archive/refs/tags/5.5.tar.gz" -OutFile raylib.tar.gz
+          tar -xzf raylib.tar.gz -C $stage
+          # Strip raylib extras not needed to build
+          Remove-Item -Recurse -Force "$stage\raylib-5.5\examples"      -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "$stage\raylib-5.5\projects"      -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "$stage\raylib-5.5\parser"        -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "$stage\raylib-5.5\logo"          -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "$stage\raylib-5.5\.github"       -ErrorAction SilentlyContinue
+
+      - name: Generate VS 2022 solution (portable)
+        shell: pwsh
         run: |
-          mkdir bundle
-          copy doancaro\build\Release\CaroGame.exe bundle\
-          xcopy doancaro\src bundle\src\ /E
-          copy doancaro\CMakeLists.txt bundle\
-          copy doancaro\README.md bundle\
-          copy doancaro\build\CaroGame.sln bundle\
-          copy doancaro\build\CaroGame.vcxproj bundle\
-          copy doancaro\build\CaroGame.vcxproj.filters bundle\
-        shell: cmd
+          cmake -S CaroGame_src -B CaroGame_src\vs2022 `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_SUPPRESS_REGENERATION=TRUE `
+            -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
 
-      - name: Upload demo bundle
+      - name: Build .exe (smoke test — proves the .sln compiles)
+        shell: pwsh
+        run: cmake --build CaroGame_src\vs2022 --config Release -- /m
+
+      - name: Clean non-portable CMake artifacts, keep .sln + .vcxproj
+        shell: pwsh
+        run: |
+          $vs = "CaroGame_src\vs2022"
+
+          # Remove build outputs — teacher rebuilds
+          Remove-Item -Recurse -Force "$vs\Release"     -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "$vs\x64"         -ErrorAction SilentlyContinue
+          Get-ChildItem -Path $vs -Recurse -Directory -Filter "Release" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -Path $vs -Recurse -Directory -Filter "Debug"   | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -Path $vs -Recurse -Directory -Filter "x64"     | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+          # Strip CMake-generated cache files (contain absolute runner paths)
+          Get-ChildItem -Path $vs -Recurse -Directory -Filter "CMakeFiles" | Remove-Item -Recurse -Force
+          Get-ChildItem -Path $vs -Recurse -File      -Filter "CMakeCache.txt"      | Remove-Item -Force
+          Get-ChildItem -Path $vs -Recurse -File      -Filter "cmake_install.cmake" | Remove-Item -Force
+
+      - name: Scan .sln/.vcxproj for absolute path leaks
+        shell: pwsh
+        run: |
+          $leaks = Select-String -Path "CaroGame_src\vs2022\*.sln","CaroGame_src\vs2022\*.vcxproj","CaroGame_src\vs2022\*.vcxproj.filters" `
+            -Pattern '[A-Z]:\\' -AllMatches -ErrorAction SilentlyContinue
+          if ($leaks) {
+            Write-Host "=== ABSOLUTE PATH LEAKS FOUND ===" -ForegroundColor Yellow
+            $leaks | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
+            Write-Host "=== (workflow still uploads for inspection) ===" -ForegroundColor Yellow
+          } else {
+            Write-Host "No absolute paths found. Bundle is portable." -ForegroundColor Green
+          }
+
+      - name: Upload portable bundle
         uses: actions/upload-artifact@v4
         with:
-          name: CaroGame-Demo
-          path: bundle/
+          name: CaroGame_src
+          path: CaroGame_src/
+
+      - name: Upload .sln/.vcxproj only (for quick inspection)
+        uses: actions/upload-artifact@v4
+        with:
+          name: vs-project-files
+          path: |
+            CaroGame_src/vs2022/*.sln
+            CaroGame_src/vs2022/**/*.vcxproj
+            CaroGame_src/vs2022/**/*.vcxproj.filters

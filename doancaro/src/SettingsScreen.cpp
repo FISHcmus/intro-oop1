@@ -1,6 +1,7 @@
 #include "SettingsScreen.h"
 #include "Fonts.h"
 #include "raylib.h"
+#include <cstdio>
 
 SettingsScreen::SettingsScreen()
     : settings{true, 3}, selectedIndex(0), done(false) {}
