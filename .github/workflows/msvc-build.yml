@@ -62,8 +62,6 @@ jobs:
           $vs = "CaroGame_src\vs2022"
 
           # Remove build outputs — teacher rebuilds
-          Remove-Item -Recurse -Force "$vs\Release"     -ErrorAction SilentlyContinue
-          Remove-Item -Recurse -Force "$vs\x64"         -ErrorAction SilentlyContinue
           Get-ChildItem -Path $vs -Recurse -Directory -Filter "Release" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
           Get-ChildItem -Path $vs -Recurse -Directory -Filter "Debug"   | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
           Get-ChildItem -Path $vs -Recurse -Directory -Filter "x64"     | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
@@ -72,19 +70,60 @@ jobs:
           Get-ChildItem -Path $vs -Recurse -Directory -Filter "CMakeFiles" | Remove-Item -Recurse -Force
           Get-ChildItem -Path $vs -Recurse -File      -Filter "CMakeCache.txt"      | Remove-Item -Force
           Get-ChildItem -Path $vs -Recurse -File      -Filter "cmake_install.cmake" | Remove-Item -Force
+          Get-ChildItem -Path $vs -Recurse -File      -Filter "CPackConfig.cmake"    | Remove-Item -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -Path $vs -Recurse -File      -Filter "CPackSourceConfig.cmake" | Remove-Item -Force -ErrorAction SilentlyContinue
 
-      - name: Scan .sln/.vcxproj for absolute path leaks
+          # Drop CMake-housekeeping vcxproj projects (ALL_BUILD, ZERO_CHECK, INSTALL, PACKAGE)
+          # Teacher only needs CaroGame + raylib targets.
+          $housekeeping = @("ALL_BUILD", "ZERO_CHECK", "INSTALL", "PACKAGE")
+          foreach ($name in $housekeeping) {
+              Get-ChildItem -Path $vs -Recurse -File -Filter "$name.vcxproj*" | Remove-Item -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Rewrite absolute paths to $(SolutionDir) macros — makes bundle portable
         shell: pwsh
         run: |
-          $leaks = Select-String -Path "CaroGame_src\vs2022\*.sln","CaroGame_src\vs2022\*.vcxproj","CaroGame_src\vs2022\*.vcxproj.filters" `
-            -Pattern '[A-Z]:\\' -AllMatches -ErrorAction SilentlyContinue
-          if ($leaks) {
-            Write-Host "=== ABSOLUTE PATH LEAKS FOUND ===" -ForegroundColor Yellow
-            $leaks | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
-            Write-Host "=== (workflow still uploads for inspection) ===" -ForegroundColor Yellow
-          } else {
-            Write-Host "No absolute paths found. Bundle is portable." -ForegroundColor Green
+          $vs = "CaroGame_src\vs2022"
+          $workspace = (Resolve-Path "CaroGame_src").Path              # D:\a\...\CaroGame_src
+          $workspaceBs = $workspace.TrimEnd('\') + '\'
+          $workspaceFs = ($workspace -replace '\\','/').TrimEnd('/') + '/'
+          $vsBs = (Resolve-Path $vs).Path.TrimEnd('\') + '\'
+          $vsFs = ($vsBs -replace '\\','/')
+
+          Write-Host "Rewriting paths in $vs ..."
+          Write-Host "  '$vsBs'        → '`$(SolutionDir)'"
+          Write-Host "  '$workspaceBs' → '`$(SolutionDir)..\\'"
+
+          $files = Get-ChildItem -Path $vs -Recurse -File -Include *.sln,*.vcxproj,*.vcxproj.filters
+          foreach ($f in $files) {
+              $content = Get-Content $f.FullName -Raw
+
+              # Order matters: longest prefix first (vs\ is inside workspace\)
+              $content = $content.Replace($vsBs,        '$(SolutionDir)')
+              $content = $content.Replace($vsFs,        '$(SolutionDir)')
+              $content = $content.Replace($workspaceBs, '$(SolutionDir)..\')
+              $content = $content.Replace($workspaceFs, '$(SolutionDir)../')
+
+              # Free the hardcoded CMake path so teacher's PATH resolves it
+              $content = $content.Replace('"C:\Program Files\CMake\bin\cmake.exe"', 'cmake.exe')
+              $content = $content.Replace('C:\Program Files\CMake\bin\cmake.exe',    'cmake.exe')
+
+              Set-Content -Path $f.FullName -Value $content -NoNewline -Encoding UTF8
           }
+
+      - name: Portability gate — fail if any absolute path survives
+        shell: pwsh
+        run: |
+          $leaks = Select-String -Path "CaroGame_src\vs2022\*.sln", `
+                                       "CaroGame_src\vs2022\**\*.vcxproj", `
+                                       "CaroGame_src\vs2022\**\*.vcxproj.filters" `
+            -Pattern '(?i)[A-Z]:\\|[A-Z]:/' -AllMatches -ErrorAction SilentlyContinue
+          if ($leaks) {
+            Write-Host "=== ABSOLUTE PATH LEAKS — build non-portable ===" -ForegroundColor Red
+            $leaks | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
+            exit 1
+          }
+          Write-Host "`u{2713} No absolute paths. Bundle is portable." -ForegroundColor Green
 
       - name: Upload portable bundle
         uses: actions/upload-artifact@v4
