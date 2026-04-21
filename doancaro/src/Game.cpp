@@ -658,8 +658,8 @@ void Game::loadSettings() {
         if (end && end != buf) {
             long depth = strtol(end, &end, 10);
             vsAI = (ai != 0);
-            if (depth == 2) {
-                aiDepth = 2;
+            if (depth == 2 || depth == 3 || depth == 4) {
+                aiDepth = static_cast<int>(depth);
             } else {
                 aiDepth = 4;  // legacy 6/8 or any other value normalizes to Hard
             }

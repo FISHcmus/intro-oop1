@@ -39,12 +39,11 @@ Then open `CaroGame.sln` and build (Release, x64).
 
 - 15x15 board with 3D Go-stone pieces and unique wood grain per piece
 - Orbital camera (rotate, zoom, reset)
-- Three AI difficulty levels:
-  - **Easy** — Minimax depth 2
-  - **Medium** — Minimax depth 4, iterative deepening (1s time limit)
-  - **Hard (Rapfi)** — [Rapfi](https://github.com/dhbloo/rapfi) NNUE engine (GomoCup 2024 champion), 10s max/move
+- Three AI difficulty levels (all minimax α-β, same evaluation function):
+  - **Easy** — depth 2, pure minimax
+  - **Normal** — depth 3, pure minimax
+  - **Hard** — depth 4 + transposition table + opening book
 - Cinematic piece drop animations with squash/stretch and shadows
 - Save/Load game (3 slots + autosave)
 - Undo support
 - Settings persist between sessions
-- Fallback to minimax if Rapfi engine unavailable

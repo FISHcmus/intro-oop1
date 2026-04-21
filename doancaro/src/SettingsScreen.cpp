@@ -5,6 +5,20 @@
 SettingsScreen::SettingsScreen()
     : settings{true, 4}, selectedIndex(0), done(false) {}
 
+namespace {
+// Cycle difficulty 2 -> 3 -> 4 -> 2 (forward) or 2 -> 4 -> 3 -> 2 (backward).
+int cycleDifficulty(int current, int direction) {
+    if (direction > 0) {
+        if (current == 2) return 3;
+        if (current == 3) return 4;
+        return 2;  // from 4 (or any legacy value)
+    }
+    if (current == 2) return 4;
+    if (current == 4) return 3;
+    return 2;  // from 3 (or any legacy value)
+}
+}  // namespace
+
 void SettingsScreen::update() {
     // Keyboard navigation
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
@@ -19,8 +33,8 @@ void SettingsScreen::update() {
             case 0:  // Toggle game mode
                 settings.vsAI = !settings.vsAI;
                 break;
-            case 1:  // Cycle AI difficulty
-                settings.aiDepth = (settings.aiDepth == 2) ? 4 : 2;
+            case 1:  // Cycle AI difficulty forward
+                settings.aiDepth = cycleDifficulty(settings.aiDepth, +1);
                 break;
             case 2:  // Back
                 done = true;
@@ -34,7 +48,7 @@ void SettingsScreen::update() {
                 settings.vsAI = !settings.vsAI;
                 break;
             case 1:
-                settings.aiDepth = (settings.aiDepth == 2) ? 4 : 2;
+                settings.aiDepth = cycleDifficulty(settings.aiDepth, -1);
                 break;
             default:
                 break;
@@ -69,7 +83,7 @@ void SettingsScreen::update() {
                         settings.vsAI = !settings.vsAI;
                         break;
                     case 1:
-                        settings.aiDepth = (settings.aiDepth == 2) ? 4 : 2;
+                        settings.aiDepth = cycleDifficulty(settings.aiDepth, +1);
                         break;
                     case 2:
                         done = true;
@@ -145,7 +159,12 @@ void SettingsScreen::reset() {
 }
 
 const char* SettingsScreen::getDifficultyLabel() const {
-    return (settings.aiDepth == 2) ? "Easy" : "Hard";
+    switch (settings.aiDepth) {
+        case 2: return "Easy";
+        case 3: return "Normal";
+        case 4: return "Hard";
+        default: return "Hard";
+    }
 }
 
 const char* SettingsScreen::getGameModeLabel() const {

@@ -29,6 +29,19 @@ int AIPlayer::scoreMove(Board& board, int row, int col, CellState moveMark,
 Move AIPlayer::getMove(const Board& board) {
     transTable.clear();
     lastDebug = {};  // reset early so minimax increments survive until end
+
+    // Opening book probe: Hard-mode privilege only (Easy/Normal run pure minimax).
+    // Hand-curated positions for moves 0-6; bypasses scoreMove / minimax on hit.
+    if (searchDepth >= 4 && board.getMoveCount() <= 6) {
+        auto hit = openingBook.query(board.getHash());
+        if (hit.found) {
+            lastDebug.chosenMove = hit.move;
+            lastDebug.reason = "opening_book";
+            lastDebug.depthCompleted = 0;
+            return hit.move;
+        }
+    }
+
     auto candidates = board.getCandidateMoves();
     if (candidates.empty()) {
         return {Board::SIZE / 2, Board::SIZE / 2};
@@ -130,27 +143,32 @@ int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
     if (board.isFull()) return 0;
     if (depth <= 0) return boardScore;
 
+    // TT is a Hard-mode privilege: Easy (d=2) and Normal (d=3) run pure minimax.
+    const bool useTT = (searchDepth >= 4);
+
     // Transposition table probe
-    uint64_t hash = board.getHash();
+    uint64_t hash = useTT ? board.getHash() : 0;
     Move ttBestMove{-1, -1};
-    lastDebug.ttProbes++;
-    auto it = transTable.find(hash);
-    if (it != transTable.end()) {
-        lastDebug.ttHits++;
-        const TTEntry& entry = it->second;
-        ttBestMove = entry.bestMove;
-        if (entry.depth >= depth) {
-            if (entry.flag == TTFlag::Exact) {
-                lastDebug.ttCutoffs++;
-                return entry.score;
-            }
-            if (entry.flag == TTFlag::LowerBound && entry.score > alpha)
-                alpha = entry.score;
-            if (entry.flag == TTFlag::UpperBound && entry.score < beta)
-                beta = entry.score;
-            if (alpha >= beta) {
-                lastDebug.ttCutoffs++;
-                return entry.score;
+    if (useTT) {
+        lastDebug.ttProbes++;
+        auto it = transTable.find(hash);
+        if (it != transTable.end()) {
+            lastDebug.ttHits++;
+            const TTEntry& entry = it->second;
+            ttBestMove = entry.bestMove;
+            if (entry.depth >= depth) {
+                if (entry.flag == TTFlag::Exact) {
+                    lastDebug.ttCutoffs++;
+                    return entry.score;
+                }
+                if (entry.flag == TTFlag::LowerBound && entry.score > alpha)
+                    alpha = entry.score;
+                if (entry.flag == TTFlag::UpperBound && entry.score < beta)
+                    beta = entry.score;
+                if (alpha >= beta) {
+                    lastDebug.ttCutoffs++;
+                    return entry.score;
+                }
             }
         }
     }
@@ -233,20 +251,22 @@ int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
         }
     }
 
-    // Store in transposition table
-    TTEntry newEntry{};
-    newEntry.depth = depth;
-    newEntry.score = bestEval;
-    newEntry.bestMove = bestMoveHere;
-    if (bestEval <= origAlpha) {
-        newEntry.flag = TTFlag::UpperBound;  // failed low
-    } else if (bestEval >= beta) {
-        newEntry.flag = TTFlag::LowerBound;  // failed high
-    } else {
-        newEntry.flag = TTFlag::Exact;
+    // Store in transposition table (Hard-mode only)
+    if (useTT) {
+        TTEntry newEntry{};
+        newEntry.depth = depth;
+        newEntry.score = bestEval;
+        newEntry.bestMove = bestMoveHere;
+        if (bestEval <= origAlpha) {
+            newEntry.flag = TTFlag::UpperBound;  // failed low
+        } else if (bestEval >= beta) {
+            newEntry.flag = TTFlag::LowerBound;  // failed high
+        } else {
+            newEntry.flag = TTFlag::Exact;
+        }
+        transTable[hash] = newEntry;
+        lastDebug.ttStores++;
     }
-    transTable[hash] = newEntry;
-    lastDebug.ttStores++;
 
     return bestEval;
 }

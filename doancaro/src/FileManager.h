@@ -17,7 +17,7 @@ struct SaveHeader {
     float    playTime;
     int      moveCount;
     int      gameMode;        // 0=PvP, 1=PvAI
-    int      aiDepth;         // 2=Easy, 4=Hard
+    int      aiDepth;         // 2=Easy, 3=Normal, 4=Hard
     int      currentTurn;     // 1=player1, 2=player2
     int      p1Wins;
     int      p2Wins;

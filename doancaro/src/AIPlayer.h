@@ -1,6 +1,7 @@
 #ifndef AIPLAYER_H
 #define AIPLAYER_H
 
+#include "OpeningBook.h"
 #include "Player.h"
 #include <cstdint>
 #include <string>
@@ -53,6 +54,7 @@ public:
 private:
     int searchDepth;
     std::unordered_map<uint64_t, TTEntry> transTable;
+    OpeningBook openingBook;
 
     static constexpr int MAX_THREAT_DEPTH = 20;
 

@@ -1,250 +1,186 @@
 # Caro Game AI Algorithm — Implementation Reference
 
-Last updated: 2026-03-22
+Last updated: 2026-04-21
 
 ## Overview
 
-The AI has **two engines** depending on difficulty:
+A single minimax engine with three difficulty tiers. All tiers share the same
+pattern-table evaluation and move-ordering heuristic; they differ in search
+depth and in whether two optional features (transposition table, opening
+book) are enabled.
 
-- **Easy/Medium**: Minimax with alpha-beta pruning, pattern table evaluation, transposition table, iterative deepening
-- **Hard**: **Rapfi** (GomoCup 2024 champion) — NNUE-based engine running as a subprocess via Gomocup protocol
+| Difficulty | `searchDepth` | Transposition table | Opening book |
+|---|---|---|---|
+| Easy   | 2 | off | off |
+| Normal | 3 | off | off |
+| Hard   | 4 | on  | on  |
 
-### Minimax Engine (Easy/Medium)
-- Pattern table evaluation (5-cell sliding window)
-- Incremental board scoring (avoid full re-evaluation)
-- Transposition table (Zobrist hashing)
-- Iterative deepening with time limits
-- Move ordering heuristic
-- Defense-weighted evaluation (1.5x multiplier)
-- Threat classification system (used for move ordering, not search)
-
-### Rapfi Engine (Hard)
-- **NNUE** (Efficiently Updatable Neural Network) evaluation — Mixnet architecture with pattern codebook distillation
-- Alpha-beta search with iterative deepening
-- 428,000 nodes/sec on CPU (Mixnet Small)
-- Standard rule: exactly 5 in a row wins (overlines don't count)
-- Subprocess via Gomocup/Piskvork protocol over stdin/stdout pipes
-- Falls back to minimax depth-6 if Rapfi binary is unavailable
-
----
+TT and opening book are deliberately gated off for Easy / Normal so the three
+tiers are distinguishable — not just three depth knobs on the same pipeline.
+Hard is the only tier that plays canonical opening moves and benefits from
+move-to-front reordering across the search tree.
 
 ## Architecture
 
 ```
-getMove()
-  ├── scoreMove() × N candidates  →  move ordering
-  ├── Immediate win check (score ≥ 200000)
-  ├── Easy mode (depth ≤ 2): direct minimax
-  └── Medium/Hard: iterativeDeepening()
-        └── minimax() with alpha-beta
-              ├── Terminal check (winner/full/depth=0)
-              ├── Transposition table probe
-              ├── scoreMove() × candidates  →  ordering at each node
-              └── Recursive search with incremental scoring
+AIPlayer::getMove(board)
+  │
+  ├── clear TT, reset debug
+  ├── if Hard && moveCount ≤ 6: probe OpeningBook
+  │       hit → return book move   (reason = "opening_book")
+  │
+  ├── candidates = board.getCandidateMoves(radius=2)
+  ├── score + sort candidates (scoreMove heuristic)
+  ├── if top score ≥ 200 000: return it   (reason = "immediate_win")
+  │
+  └── minimax α-β at effectiveDepth (opening taper applies)
+         │
+         ├── (Hard only) TT probe → early return on cutoff
+         ├── generate + sort candidates
+         ├── (Hard only) hoist TT best-move to front of sorted list
+         ├── recurse on each candidate
+         └── (Hard only) store {depth, score, flag, bestMove} in TT
 ```
 
 ---
 
 ## 1. Difficulty Levels
 
-Player picks one of three labels on the Settings screen; `aiDepth` (2 / 4 / 6) is stored in `settings.cfg` and passed as `AIPlayer(searchDepth = aiDepth)` at construction (`Game.cpp:293`). The branching happens at the top of `getMove()`:
+Player picks Easy / Normal / Hard on the Settings screen.
+`aiDepth ∈ {2, 3, 4}` is persisted to `settings.cfg` and passed to
+`AIPlayer(searchDepth = aiDepth)` at construction (`Game.cpp`). A single
+gate in `AIPlayer.cpp` decides whether TT and opening book are in play:
+
+```cpp
+const bool useTT   = (searchDepth >= 4);   // inside minimax()
+const bool useBook = (searchDepth >= 4);   // inside getMove()
+```
+
+### 1.0 Shared scaffolding (all tiers run this after the book probe)
 
 ```
-AIPlayer::getMove(board)  ─── AIPlayer.cpp:30
-  if searchDepth >= 6 && !rapfiFailed   → getRapfiMove()      [Hard]
-  ... scoreMove + sort every candidate ...
-  if immediate_win (top ≥ 200,000)      → return it           [all levels]
-  if searchDepth <= 2                   → fixed-depth block   [Easy]
-  else                                  → iterativeDeepening()[Medium / Hard-fallback]
-```
-
-### Summary
-
-| Difficulty | `searchDepth` | Primary engine | Primary budget | Fallback |
-|---|---|---|---|---|
-| Easy        | 2 | Minimax α-β, fixed depth         | none (exhaustive 2-ply)                        | — |
-| Medium      | 4 | Iterative deepening minimax α-β  | `TIME_LIMIT_MEDIUM_MS = 1000 ms`               | — |
-| Hard (Rapfi)| 6 | Rapfi NNUE subprocess            | `timeoutMs = 10 000 ms` + 2 000 ms pipe slack  | Iterative deepening minimax depth 6, `TIME_LIMIT_HARD_MS = 3000 ms` (only if Rapfi dies; latches via `rapfiFailed`) |
-
-### 1.0 Shared scaffolding (all three levels run this before branching)
-
-```
-candidates = board.getCandidateMoves(radius = 2)   ← only empty cells within 2 of any occupied cell
+candidates = board.getCandidateMoves(radius = 2)
 if candidates.empty()      → return center (SIZE/2, SIZE/2)
 if candidates.size() == 1  → return the only option
 
 for each candidate m:
-    score = scoreMove(m, aiMark, opponentMark)     ← pattern-table heuristic (see §2, §3)
+    score = scoreMove(m, aiMark, opponentMark)   ← see §2, §3
 sort candidates desc by score
 
-if top score ≥ 200 000:                            ← "immediate_win" short-circuit
-    play it, skip search entirely
+if top score ≥ 200 000:
+    reason = "immediate_win"
+    return scored[0]
 ```
 
-Pattern table, move-ordering score, and candidate generation are detailed in §2, §3, §6. Sections 1.1–1.3 focus on what happens *after* this sort.
+### 1.0a Opening taper (all tiers)
 
----
+To avoid wasting search budget on positions with no tactics yet:
+
+```
+if moveCount ≤ 3: effectiveDepth = min(searchDepth, 2)
+else if moveCount ≤ 9: effectiveDepth = min(searchDepth, 4)
+else: effectiveDepth = searchDepth
+```
+
+- **Easy** (d=2): unaffected.
+- **Normal** (d=3): drops to d=2 for the first ~2 moves, then its own d=3.
+- **Hard** (d=4): drops to d=2 for the first ~2 moves, d=4 thereafter.
+
+When `effectiveDepth < searchDepth`, the debug reason is `"opening_shallow"`
+instead of `"minimax"`.
 
 ### 1.1 Easy — `searchDepth = 2`
 
-**Mechanic:** straight 2-ply minimax α-β with no iterative deepening and no time limit. The AI plays its move (ply 1) and evaluates every single opponent reply (ply 2), then picks the move whose worst-case reply is best.
-
-```
-  getMove() — AIPlayer.cpp:80–118
-  ───────────────────────────────────────────
-  initScore = evaluate(searchBoard, aiMark, opponentMark)   ← full-board pattern sum, once
-  bestScore = −∞
-
-  for each (preScore, move) in sorted candidates:
-      localBefore = computeLocalScore(move)
-      placeMove(move, aiMark)
-      localAfter  = computeLocalScore(move)
-      newScore    = initScore − localBefore + localAfter    ← incremental eval
-      score       = minimax(depth = 1, α = −∞, β = +∞,
-                            maximizing = false,
-                            boardScore = newScore)
-      undoMove
-      if score > bestScore: bestScore = score; bestMove = move
-
-  debug.reason = "easy_mode"
-  return bestMove
-```
+Straight 2-ply minimax α-β. The AI plays its move and evaluates every
+single opponent reply, picking the move whose worst-case reply is best.
+No TT, no move-to-front hoisting, no opening book.
 
 | Knob | Value | Source |
 |---|---|---|
-| `searchDepth` | 2 | `SettingsScreen.cpp:155` (label `"Easy"`) |
+| `searchDepth` | 2 | `SettingsScreen.cpp` (label `"Easy"`) |
 | Time budget | none | — |
-| Transposition table | cleared per turn at `AIPlayer.cpp:38`, reused inside the turn | — |
-| Candidate search radius | 2 | `Board.cpp:135` |
+| Transposition table | disabled | gate `searchDepth >= 4` |
+| Opening book | disabled | gate `searchDepth >= 4` |
+| Candidate radius | 2 | `Board.cpp` |
 
-**Feel:** sees only one counter-move deep. Blocks direct fours, misses any fork where the opponent needs two setup moves to win. Beatable with a standard double-three trap.
+**Feel:** sees exactly one counter-move. Blocks direct fours, misses any
+fork where the opponent needs two setup moves to win. Beatable with a
+standard double-three trap.
 
-**Code pointers:** `AIPlayer.cpp:30–44` (setup), `:80–118` (Easy block).
+### 1.2 Normal — `searchDepth = 3`
 
----
-
-### 1.2 Medium — `searchDepth = 4`
-
-**Mechanic:** iterative deepening minimax α-β with a 1 000 ms budget. Tries depth 2 first, then depth 4; only accepts a depth's result if the scan of that depth finished *fully*. If depth 4 times out mid-iteration, the move from the completed depth 2 is returned.
-
-```
-  iterativeDeepening() — AIPlayer.cpp:125–190
-  ───────────────────────────────────────────
-  t0 = now
-  for curDepth in [2, 4]:                        ← stride 2
-      transTable.clear()                         ← TT is per-depth
-      initScore = evaluate(searchBoard)
-      bestScore = −∞
-      depthBest = scored[0].second
-      timeUp    = false
-
-      for each (preScore, move) in scored:
-          if now − t0 ≥ 1000 ms:
-              timeUp = true; break
-          localBefore = computeLocalScore(move)
-          placeMove(move, aiMark)
-          localAfter  = computeLocalScore(move)
-          score = minimax(curDepth − 1, α = −∞, β = +∞, max = false,
-                          boardScore = initScore − localBefore + localAfter)
-          undoMove
-          if score > bestScore: bestScore = score; depthBest = move
-
-      if not timeUp:                             ← commit only complete depths
-          bestMove       = depthBest
-          completedDepth = curDepth
-      if now − t0 ≥ 1000 ms: break
-
-  debug.reason = "iterative_deepening"
-```
-
-`minimax()` itself does move-ordered α-β (`AIPlayer.cpp:220–272`), probes the transposition table (`:203–215`), and stores results with `flag ∈ {0 = exact, 1 = lower bound, 2 = upper bound}` (`:274–285`).
+3-ply minimax α-β, still without TT or opening book. The extra ply vs. Easy
+means the AI sees the opponent's follow-up *after the AI's response*, not
+just the immediate reply — it can reason one move beyond its own.
 
 | Knob | Value | Source |
 |---|---|---|
-| `searchDepth` | 4 | `SettingsScreen.cpp:156` |
-| Time budget | 1 000 ms | `AIPlayer.h:59` (`TIME_LIMIT_MEDIUM_MS`) |
-| Depth schedule | 2 → 4 | `AIPlayer.cpp:134` |
-| TT | cleared between depths, reused within a depth | `:135`, `:285` |
-| Incremental eval | `boardScore − localBefore + localAfter` | `:154` |
+| `searchDepth` | 3 | `SettingsScreen.cpp` (label `"Normal"`) |
+| Transposition table | disabled | gate `searchDepth >= 4` |
+| Opening book | disabled | gate `searchDepth >= 4` |
 
-**Feel:** catches open threes, blocks open fours, sees your depth-2 threat sequences. Still falls to forks that need depth 6+ to resolve (e.g., a buried VCF win).
+**Feel:** catches most open-three / closed-four motifs that Easy misses,
+but is still vulnerable to multi-move tactical setups and sees no opening
+theory. Search cost is roughly `N × (Easy cost)` where N is the average
+branching factor (~30-40 candidates), so moves take noticeably longer
+than Easy but nowhere near Hard.
 
-**Code pointers:** `AIPlayer.cpp:120–190` (ID driver), `:192–288` (minimax + TT).
+### 1.3 Hard — `searchDepth = 4` + TT + opening book
 
----
+4-ply minimax α-β with two performance features enabled:
 
-### 1.3 Hard — `searchDepth = 6` → Rapfi subprocess
+1. **Transposition table** (`std::unordered_map<uint64_t, TTEntry>` in
+   `AIPlayer`): each visited position is stored keyed by Zobrist hash with
+   `{depth, score, flag ∈ {Exact, LowerBound, UpperBound}, bestMove}`. A
+   probed entry can either:
+   - return immediately (exact score, or bound-tightening that makes
+     α ≥ β → cutoff), or
+   - hoist its stored `bestMove` to the front of the sorted candidate list
+     so α-β prunes harder on the re-search.
 
-**Mechanic:** delegates the whole decision to **Rapfi**, the GomoCup 2024 champion NNUE engine, via the Gomocup stdin/stdout protocol. Rapfi runs as a forked child process, `chdir()`'d to `assets/rapfi/` so it picks up `config.toml` and the `mix9svqstandard_bs15.bin.lz4` weights. On any failure (process crash, timeout, invalid move, pipe error), `rapfiFailed` latches `true` for the rest of the session and the AI silently degrades to a depth-6 iterative deepening minimax with a 3 s budget.
+   Cleared at the start of every `getMove()` call (TT is per-turn).
 
-```
-  getMove() — AIPlayer.cpp:32–36
-  ──────────────────────────────
-  if searchDepth ≥ 6 && !rapfiFailed:
-      m = getRapfiMove(board)
-      if m.row ≥ 0: return m             ← success
-      ... otherwise fall through to scoreMove + iterativeDeepening ...
+2. **Opening book** (`OpeningBook.cpp`): hand-curated table keyed by
+   Zobrist hash. 6 base entries × D4 symmetry expansion = 22 stored
+   hashes covering all single-stone near-center positions plus the empty
+   board. Probed *before* candidate generation — a hit short-circuits
+   the entire search.
 
-  getRapfiMove() — AIPlayer.cpp:667–729
-  ─────────────────────────────────────
-  if !rapfiEngine:
-      rapfiEngine = new RapfiEngine("assets/rapfi", timeoutMs = 10000)
-      if !rapfiEngine->start():          ← fork + execl("./rapfi") + handshake
-          rapfiFailed = true; return {-1,-1}
-      boardSynced = false; lastSentMoveCount = 0
+   Current Tier 1 base entries:
 
-  if moveCount == 0:               → BEGIN              ← engine plays first
-  elif !boardSynced || mismatch:   → BOARD … DONE       ← full resync (after undo / load)
-  else:                            → TURN col,row        ← incremental (note col,row, not row,col)
+   | Stones | Book move | Meaning |
+   |---|---|---|
+   | `[]` | (7,7) | Empty board → center |
+   | `[(7,7, X)]` | (6,6) | Opponent took center → one-step diagonal |
+   | `[(7,6, X)]` | (7,7) | Ortho-adjacent → take center |
+   | `[(6,6, X)]` | (7,7) | Diag-adjacent → take center |
+   | `[(7,5, X)]` | (7,7) | 2-step ortho → take center |
+   | `[(6,5, X)]` | (7,7) | Knight move → take center |
 
-  parse "x,y" → Move{row = y, col = x}
-  if target cell not empty:  rapfiFailed = true; destroy engine; return {-1,-1}
-  debug.reason = "rapfi_engine"
-```
-
-Rapfi lifecycle (`RapfiEngine.cpp`):
-
-```
-start():  pipe() + fork()
-          child : dup2 stdin/stdout, chdir(binaryDir), execl("./rapfi")
-          parent: initialize() sends  START 15
-                                      INFO rule 1
-                                      INFO timeout_turn 10000
-                                      INFO timeout_match 0
-                                      INFO PONDERING 1
-readMove(): poll()-based line reader, skips MESSAGE / DEBUG / ERROR lines
-stop():   write "END", 50 ms grace, close pipes, SIGTERM, 200 ms, SIGKILL, waitpid
-          (prevents orphan processes — commit 6d211fd)
-```
+   **Tier 1 covers only the AI's first move** (whether AI opens, or AI
+   replies to the human's opening). Once two stones are on the board, book
+   lookups always miss and minimax takes over.
 
 | Knob | Value | Source |
 |---|---|---|
-| `searchDepth` gate | ≥ 6 | `AIPlayer.cpp:32` |
-| Engine-side per-move budget | 10 000 ms (`timeout_turn`) | `RapfiEngine.cpp` init, `assets/rapfi/config.toml` |
-| Parent-side pipe timeout | `timeoutMs + 2 000 ms = 12 000 ms` | `RapfiEngine.cpp:213`, `:230`, `:259` |
-| Rule | `INFO rule 1` (standard — exactly 5 wins, overlines don't count) | — |
-| Pondering | `INFO PONDERING 1` (think during opponent's turn) | — |
-| Weights | `mix9svqstandard_bs15.bin.lz4` (Mixnet small, 15×15 standard) | `assets/rapfi/` |
-| TT size | 128 MB | `config.toml` → `default_tt_size_kb = 131072` |
-| Threads | all cores | `default_thread_num = 0` |
-| Fallback algorithm | iterative deepening minimax to depth 6 | `AIPlayer.cpp:120–122` |
-| Fallback budget | 3 000 ms | `AIPlayer.h:60` (`TIME_LIMIT_HARD_MS`) |
+| `searchDepth` | 4 | `SettingsScreen.cpp` (label `"Hard"`) |
+| TT | enabled | gate `searchDepth >= 4` |
+| Opening book | enabled, probed when `moveCount ≤ 6` | `AIPlayer.cpp` getMove |
+| Book base entries | 6 | `OpeningBook.cpp` |
+| Book hashes after D4 expansion | 22 | verified at construction |
+| Book symmetry group | D4 (4 rotations × 2 reflections) | `transformRC` |
 
-**Feel:** tournament-strength. First move of a game adds ~1 s for weight loading. Rapfi's own time manager typically returns in 1–3 s on obvious positions and stretches to ~7.5 s (75 % of 10 s via `advanced_stop_ratio`) only when the evaluation is volatile. Most human players don't win without a handicap.
-
-**Failure modes handled:**
-- Rapfi binary missing → `start()` fails → `rapfiFailed = true` → next move uses minimax.
-- Rapfi hangs → parent pipe timeout fires → fallback, engine destroyed.
-- User loads a save or undoes → `resetEngine()` flips `boardSynced = false` without killing the process → next `getMove()` issues `BOARD … DONE` to resync.
-- Rapfi returns an occupied cell (protocol violation) → engine destroyed, fallback.
-
-**Code pointers:** `AIPlayer.cpp:32–36` (gate), `:667–729` (wrapper), `:731–734` (`resetEngine`); `RapfiEngine.cpp` for the subprocess and protocol; `assets/rapfi/config.toml` for engine tuning.
+**Feel:** solid midgame tactics once past the opening; plays canonical
+opening moves for the AI's first move. Still bounded by our coarse
+pattern-table evaluation — deeper search than d=4 amplifies eval noise
+faster than it resolves tactics, which is why we stop here (see §10).
 
 ---
 
 ## 2. Pattern Table (`initPatternTable`)
 
-A static lookup table with **243 entries** (3^5), pre-computed once. Each entry scores a 5-cell window from one player's perspective.
+A static lookup table with **243 entries** (3^5), pre-computed once.
+Each entry scores a 5-cell window from one player's perspective.
 
 ### Encoding
 
@@ -270,7 +206,9 @@ Index = `c0 + c1×3 + c2×9 + c3×27 + c4×81`
 | 1 self | 10 | Single piece |
 | Any opponent in window | 0 | Window blocked, no value |
 
-**Key design choice:** If ANY opponent piece exists in the window, the score is 0. This means a window can only score for one side — you score it twice (once as AI, once as opponent) and subtract.
+**Key design choice:** If ANY opponent piece exists in the window, the
+score is 0. This means a window can only score for one side — you score
+it twice (once as AI, once as opponent) and subtract.
 
 ---
 
@@ -278,31 +216,45 @@ Index = `c0 + c1×3 + c2×9 + c3×27 + c4×81`
 
 ### `evaluate()` — Full Board Evaluation
 
-Scans **every** 5-cell window on the board across 4 directions (horizontal, vertical, diagonal, anti-diagonal). Avoids duplicate scanning by only starting lines from perpendicular edges.
+Scans **every** 5-cell window on the board across 4 directions
+(horizontal, vertical, diagonal, anti-diagonal). Avoids duplicate
+scanning by only starting lines from perpendicular edges.
 
 ```
 score = Σ (patternScore[aiWindow] - patternScore[opWindow] × 3/2)
 ```
 
-**Defense multiplier: 1.5x** — Opponent threats are weighted 50% heavier than AI opportunities. This makes the AI prioritize blocking over attacking when scores are otherwise equal.
+**Defense multiplier: 1.5x** — Opponent threats are weighted 50% heavier
+than AI opportunities. This makes the AI prioritize blocking over
+attacking when scores are otherwise equal.
 
-Example: An opponent's open three (`_OOO_`) scores 1500 × 1.5 = **2250** on the defense side, clearly outweighing the AI's own open three at **1500**.
+Example: An opponent's open three (`_OOO_`) scores 1500 × 1.5 = **2250**
+on the defense side, clearly outweighing the AI's own open three at
+**1500**.
 
 ### `computeLocalScore()` — Local Evaluation Around a Cell
 
-Same formula as `evaluate()`, but only scans the **20 windows that include a specific cell** (5 positions × 4 directions). Used for incremental score updates in minimax.
+Same formula as `evaluate()`, but only scans the **20 windows that
+include a specific cell** (5 positions × 4 directions). Used for
+incremental score updates in minimax.
 
 Same 1.5x defense multiplier applied.
 
 ### `scoreMove()` — Move Ordering Heuristic
 
-Quick evaluation for sorting candidates (searched in order of this score):
+Quick evaluation for sorting candidates (searched in order of this
+score):
 
 1. Place the move temporarily
-2. Check for instant win → return 200,000 (AI win) or 150,000 (opponent win via this square)
-3. Otherwise, return `abs(computeLocalScore())` — the absolute value ensures both offensive AND defensive moves sort high
+2. Check for instant win → return 200,000 (AI win) or 150,000 (opponent
+   win via this square)
+3. Otherwise, return `abs(computeLocalScore())` — the absolute value
+   ensures both offensive AND defensive moves sort high
 
-**Note:** The `abs()` is intentional for move ordering only. It ensures that a move blocking a big opponent threat (negative local score) is searched before a neutral move. The actual minimax evaluation preserves the sign.
+**Note:** The `abs()` is intentional for move ordering only. It ensures
+that a move blocking a big opponent threat (negative local score) is
+searched before a neutral move. The actual minimax evaluation preserves
+the sign.
 
 ---
 
@@ -310,56 +262,138 @@ Quick evaluation for sorting candidates (searched in order of this score):
 
 ### Incremental Scoring
 
-Instead of calling `evaluate()` at every leaf node (O(board_size²) per call), minimax maintains a running `boardScore`:
+Instead of calling `evaluate()` at every leaf node (O(board_size²) per
+call), minimax maintains a running `boardScore`:
 
 ```
 newScore = boardScore - localBefore + localAfter
 ```
 
-Where `localBefore` is the local score at the move's cell before placing, and `localAfter` is after placing. This makes leaf evaluation O(1).
+Where `localBefore` is the local score at the move's cell before placing,
+and `localAfter` is after placing. This makes leaf evaluation O(1).
 
-### Transposition Table
+### Transposition Table (Hard only)
 
-Uses **Zobrist hashing** — each (row, col, mark) triple has a random 64-bit key. Board hash = XOR of all placed pieces' keys. Stored entries have:
-- `depth` — search depth when stored
-- `score` — evaluation result
-- `flag` — 0=exact, 1=lower bound (failed high), 2=upper bound (failed low)
+Enabled only when `searchDepth >= 4`. Uses **Zobrist hashing** — each
+(row, col, mark) triple has a random 64-bit key computed at
+`Board::initZobrist()`. Board hash = XOR of all placed pieces' keys,
+updated incrementally in `placeMove` / `undoMove`.
 
-Probe logic: only use stored result if `entry.depth >= current_depth`. Handles exact scores and bound tightening.
+Stored entries:
 
-Table is cleared between iterative deepening depths.
+```cpp
+struct TTEntry {
+    int depth;        // search depth when stored
+    int score;        // evaluation result
+    TTFlag flag;      // Exact | LowerBound | UpperBound
+    Move bestMove;    // {-1,-1} sentinel = not stored; used for move ordering
+};
+```
+
+Probe logic inside `minimax()`:
+
+```
+if useTT:
+    it = transTable.find(hash)
+    if it != end:
+        ttBestMove = it->bestMove    ← used later for hoist
+        if it->depth ≥ current depth:
+            if flag == Exact: return it->score              (cutoff)
+            if flag == LowerBound: α = max(α, it->score)
+            if flag == UpperBound: β = min(β, it->score)
+            if α ≥ β: return it->score                      (cutoff)
+```
+
+After the candidate list is sorted by `scoreMove`, if the TT gave us a
+`bestMove`, we linear-scan the sorted list and swap it to index 0. This
+is robust against hash collisions and changed candidate sets — if the
+move isn't in the current candidate list, the swap is a no-op.
+
+Cleared at the start of every `getMove()` call (TT is per-turn, not
+persistent across moves — the opponent's move usually invalidates most
+prior entries anyway).
+
+Easy and Normal bypass every TT operation — no probe, no store, no
+counter increment. The `ttProbes / ttHits / ttStores / ttHoists /
+ttCutoffs / ttFinalSize` fields in the debug panel stay at 0 for those
+tiers, which is correct.
 
 ### Terminal Conditions
 
 ```
-if winner == aiMark:     return +100000 + depth  (prefer faster wins)
-if winner == opponentMark: return -100000 - depth  (prefer slower losses)
-if board full:           return 0
-if depth == 0:           return boardScore
+if winner == aiMark:       return +100000 + depth   (prefer faster wins)
+if winner == opponentMark: return -100000 - depth   (prefer slower losses)
+if board full:             return 0
+if depth == 0:             return boardScore        (leaf: incremental score)
 ```
 
 ---
 
-## 5. Iterative Deepening
+## 5. Candidate Generation (`Board::getCandidateMoves`)
 
-Searches depth 2, then 4, then 6 (for hard mode), stopping when time runs out.
+Returns all empty cells within **radius 2** (Chebyshev distance) of any
+existing piece. On an empty board, returns the center cell. This limits
+branching factor to ~30-50 moves in typical positions.
 
-- Only accepts results from **fully completed** depth iterations
-- If depth 4 completes but depth 6 runs out of time, uses depth 4 result
-- Transposition table cleared between depths (could be improved)
-- Time checked before each candidate move evaluation
+Radius 2 is a deliberate choice: radius 1 would miss "gap-of-1" shape
+plays (e.g., `X _ X _ X`) that are legitimate tactical moves; radius 3
+inflates the branching factor without producing meaningfully better moves
+at our evaluation strength.
 
 ---
 
-## 6. Candidate Generation (`Board::getCandidateMoves`)
+## 6. Opening Book (`OpeningBook.cpp`)
 
-Returns all empty cells within **radius 2** of any existing piece. On an empty board, returns the center cell. This limits branching factor to ~30-50 moves in typical positions.
+Hard-mode only. A hand-curated table of Zobrist-hash → Move entries
+representing canonical opening theory. See §1.3 for the Tier 1 base
+entries and the D4 symmetry expansion.
+
+### Symmetry expansion
+
+Each base entry (a list of stones + a book move) is replicated under all
+8 D4 transforms of the 15×15 grid:
+
+```
+0: identity                     (r, c) → (r, c)
+1: rotate 90°                   (r, c) → (c, 14-r)
+2: rotate 180°                  (r, c) → (14-r, 14-c)
+3: rotate 270°                  (r, c) → (14-c, r)
+4: flip horizontal              (r, c) → (r, 14-c)
+5: flip vertical                (r, c) → (14-r, c)
+6: flip main diagonal           (r, c) → (c, r)
+7: flip anti-diagonal           (r, c) → (14-c, 14-r)
+```
+
+For each transform we build a fresh `Board`, play the transformed stones
+on it, and map `board.getHash() → transformedBookMove`. Positions with
+intrinsic symmetry (e.g., a single stone at the exact center) collapse
+multiple transforms onto the same hash; the final map value is whichever
+transform we wrote last, but since all transformed moves are equivalent
+under the board's own symmetry, any of them is a valid response.
+
+### Query
+
+`query(uint64_t hash) → Lookup{bool found; Move move}` — simple
+`unordered_map::find`. No std::optional (C++14 constraint), just a POD
+struct with a `found` flag.
+
+### What Tier 1 does not cover
+
+- Any position with 2+ stones on the board. The book misses once the AI
+  has made its first response and the opponent plays again.
+- Any position outside the near-center cluster at move 1 (e.g., opponent
+  plays 5 cells out from center). Rare in practice; minimax handles it.
+
+Extending to **Tier 2** would add ~10 three-stone entries transcribed
+from Wikipedia's Renju opening page (Kouyoku, Keigetsu, Suigetsu, etc.)
+with canonical move-4 replies. Not implemented.
 
 ---
 
 ## 7. Threat Classification System
 
-Not used in the main search, but available for future use and move ordering.
+Not used in the main search, but available for future use and move
+ordering.
 
 ### `classifyThreat(board, row, col, mark)`
 
@@ -372,141 +406,116 @@ After placing `mark` at (row,col), checks all 4 directions:
 
 ### `findThreats(board, mark)`
 
-Tries every candidate move, classifies each, returns moves with level ≥ 2 sorted by level descending.
+Tries every candidate move, classifies each, returns moves with level ≥ 2
+sorted by level descending.
 
 ### `findDefenses(board, row, col, attackMark)`
 
-After attacker places at (row,col), finds all cells that block the four-in-a-row (the open endpoints). Deduplicated.
+After attacker places at (row,col), finds all cells that block the
+four-in-a-row (the open endpoints). Deduplicated.
 
 ### `findThreatWin(board, attackMark, defendMark, depth)`
 
-Recursive threat search — finds forced wins through continuous fours. Searches up to `MAX_THREAT_DEPTH = 20`. Currently not called from `getMove()` — exists as infrastructure.
+Recursive threat search — finds forced wins through continuous fours.
+Searches up to `MAX_THREAT_DEPTH = 20`. Currently not called from
+`getMove()` — exists as infrastructure for a future VCF/VCT pass.
 
 ---
 
-## 8. Rapfi Engine Integration
+## 8. Debug System
 
-### Architecture
+Press **F3** during gameplay to toggle the debug panel. Shows after each
+AI move.
 
-```
-AIPlayer::getMove()
-  ├── searchDepth >= 6 && !rapfiFailed?
-  │   └── getRapfiMove()
-  │       ├── Lazy init: create RapfiEngine, fork/exec rapfi subprocess
-  │       ├── boardSynced? → TURN x,y (incremental)
-  │       ├── !boardSynced? → BOARD ... DONE (full resync)
-  │       ├── moveCount == 0? → BEGIN (engine plays first)
-  │       └── Failure? → rapfiFailed = true, fall through to minimax
-  └── Minimax (fallback or Easy/Medium)
-```
-
-### Subprocess Management (`RapfiEngine` class)
-
-- **Lifecycle**: `fork()` + `dup2()` + `execl("./rapfi")`. Child process `chdir()`s to `assets/rapfi/` so Rapfi finds `config.toml` and weight files.
-- **I/O**: Pipes with `poll()`-based timeout reads. Skips `MESSAGE`/`DEBUG`/`ERROR` lines from Rapfi output.
-- **Coordinate conversion**: Gomocup uses `(x,y)` = `(col,row)`. Game uses `(row,col)`.
-- **Board resync**: After undo or save load, `resetEngine()` sets `boardSynced=false`. Next `getMove()` sends full board state via `BOARD` command.
-- **Fallback**: Any failure (process crash, pipe error, timeout, invalid move) sets `rapfiFailed=true` and falls through to minimax.
-
-### Gomocup Protocol Commands Used
-
-| Command | When | Format |
-|---|---|---|
-| `START 15` | Engine init | Initializes empty 15x15 board |
-| `INFO rule 1` | After START | Standard rule (exactly 5 wins) |
-| `INFO timeout_turn 10000` | After START | 10s max per move |
-| `INFO timeout_match 0` | After START | No match budget (turn-only mode) |
-| `INFO PONDERING 1` | After START | Think during opponent's turn |
-| `BEGIN` | AI plays first | Engine returns its first move |
-| `TURN x,y` | Opponent moved | Engine returns its response |
-| `BOARD ... DONE` | Resync | Send full board, engine responds |
-| `END` | Game over | Terminate engine process |
-
-### Rapfi Config (`assets/rapfi/config.toml`)
-
-| Setting | Value | Purpose |
-|---|---|---|
-| `default_thread_num` | 0 | Use all CPU cores |
-| `default_tt_size_kb` | 131072 | 128 MB transposition table |
-| `message_mode` | none | No debug output (faster pipe I/O) |
-| `advanced_stop_ratio` | 0.75 | GomocalC interactive setting — exits early on obvious moves |
-| `type` (evaluator) | mix9svq | NNUE Mixnet architecture |
-| Weight file | `mix9svqstandard_bs15.bin.lz4` | Standard rule, 15x15 board |
-
-### Time Management
-
-Rapfi uses smart time allocation in "turn only" mode (`timeout_match 0`):
-- **Obvious positions** (stable best move, no eval drops): 1-3 seconds
-- **Complex positions** (best move changing, eval dropping): up to ~7.5s (75% of 10s)
-- **Forced moves** (only one non-losing option): <1 second
-- **Mate found**: stops after 24 more iterations, typically <1s
-- **Pondering**: thinks during human's turn, building TT for faster subsequent search
-
----
-
-## 9. Debug System
-
-Press **F3** during gameplay to toggle the debug panel. Shows after each AI move:
-
-| Field | Description |
+| Field | Values |
 |---|---|
-| Mode | `iterative_deepening`, `easy_mode`, or `immediate_win` |
-| Depth | Deepest fully completed search depth |
-| Candidates | Total candidate moves considered |
-| Time | Search time in milliseconds |
-| Top 5 | Best 5 moves ranked by minimax score, with pre-score (ordering) and search score (minimax) |
-| Chosen | Highlighted in green |
+| Mode | `opening_book`, `immediate_win`, `opening_shallow`, `minimax` |
+| Depth | effective search depth that was actually used (0 on book / win short-circuit) |
+| Candidates | total candidate moves considered at the root |
+| Time | wall-clock search time in ms |
+| Nodes | nodes visited inside `minimax()` |
+| TT | `hits/probes (%)`, colored **orange** when `ttHits == 0` (indicates Easy/Normal or a TT miss on Hard) |
+| Cutoffs / Hoists / Stored | TT instrumentation (Hard only) |
+| Chosen | AI's move, highlighted green |
+| Top 5 | Best 5 moves ranked by minimax score, with pre-score (scoreMove) and search score |
 
-### How to Use for Debugging
+### Reading the panel
 
-1. Play against AI, notice a bad move
-2. Press **Undo** to take back the move
-3. Press **F3** to enable debug panel
-4. Let the AI replay — check the scores
-5. If the "obvious block" has a lower search score → evaluation problem
-6. If it's not in the top 5 → candidate generation or move ordering problem
-7. If depth is low → time limit hit too early
+- `Mode: opening_book` + everything else 0 is normal and correct — the AI
+  short-circuited the whole search from a known position.
+- `Mode: minimax` with `TT: 0/N (0.0%)` in orange means you're probably on
+  Normal or Easy (TT gated off). That is *not* a warning on those tiers.
+- `Mode: minimax` on Hard with `TT: 0/N (0.0%)` **is** a regression —
+  the gate code got bypassed or the map is being cleared mid-search.
 
----
+### How to diagnose a bad move
 
-## 10. Known Weaknesses
-
-### Easy/Medium (Minimax)
-
-1. **No forced-win detection**: Minimax with depth 4-6 can't see wins/threats beyond ~6 plies. A proper VCF/VCT implementation would fix this but previous attempt was buggy.
-
-2. **Defense multiplier is a band-aid**: The 1.5x defense weight helps but doesn't solve fundamental horizon problems. The AI can still miss threats beyond its search depth.
-
-3. **No candidate pruning**: All ~30-50 candidates are searched at every node. Pruning to 12-15 would allow 2-3 plies deeper search in the same time budget.
-
-4. **Transposition table cleared between depths**: Keeping it across depths (with proper depth checks) would speed up iterative deepening.
-
-5. **Move ordering at internal nodes is expensive**: `scoreMove()` calls `computeLocalScore()` which does 20 window lookups. A cheaper ordering (e.g., killer moves, history heuristic) would help.
-
-### Hard (Rapfi)
-
-1. **GPL v3 binary**: Rapfi is GPL — bundling as subprocess is commonly accepted but legally gray. CC0 weights are fine.
-
-2. **~12 MB added to game size**: Binary (1.8 MB) + weights (9.9 MB) + classical model (23 KB).
-
-3. **First move startup**: Weight loading takes ~1s on first move of a game. Subsequent moves are faster due to pondering.
+1. Play against AI, notice a bad move.
+2. Press **Undo** to take back the move.
+3. Press **F3** to enable the debug panel.
+4. Let the AI replay — check the top 5 list.
+5. If the "obvious block" is there with a lower search score → evaluation
+   problem (pattern table or defense multiplier).
+6. If it's not in the top 5 at all → candidate generation or move
+   ordering problem.
+7. If depth is lower than expected → opening taper is capping it (check
+   `moveCount`).
 
 ---
 
-## 11. Change History
+## 9. Known Weaknesses
+
+1. **Horizon at depth 4.** On Hard the AI still can't see forced-win
+   sequences longer than ~4 plies. A proper VCF/VCT pass using the
+   threat-classification infrastructure in §7 would fix this. Not
+   implemented because the previous attempt (reverted 2026-03-21)
+   returned wrong moves.
+
+2. **Defense multiplier is a heuristic, not a solution.** The 1.5x
+   defense weight helps Hard prioritize blocks, but it doesn't remove
+   horizon errors — the AI can still miss threats beyond its search
+   depth.
+
+3. **No candidate pruning.** All ~30-50 candidates are searched at every
+   node on Hard. Pruning to the top 12-15 per node would allow 2-3 plies
+   deeper search in the same time budget. A previous attempt was
+   reverted alongside VCF/VCT.
+
+4. **TT is per-turn.** Clearing at the start of each `getMove()` avoids
+   stale entries but discards work the opponent's move may not have
+   invalidated. Keeping the TT across turns with proper depth/staleness
+   checks would help.
+
+5. **Move ordering at internal nodes is expensive.** `scoreMove()` calls
+   `computeLocalScore()` which does 20 window lookups. Killer-move and
+   history-heuristic ordering would be much cheaper.
+
+6. **Opening book is tiny (Tier 1).** 6 base entries / 22 hashes only
+   covers the AI's first move. The AI falls out of book as soon as two
+   stones are on the board. Tier 2 (Renju openings) not implemented.
+
+---
+
+## 10. Change History
 
 | Date | Change | Status |
 |---|---|---|
 | Initial | Basic minimax + alpha-beta | Kept |
-| Later | Pattern table evaluation (replaced evaluateDirection) | Kept |
-| Later | Iterative deepening + time limits | Kept |
-| Later | Transposition table (Zobrist) | Kept |
-| Later | Incremental scoring (computeLocalScore) | Kept |
-| 2026-03-21 | VCF/VCT threat search | **Reverted** — returned wrong moves |
-| 2026-03-21 | Candidate pruning (max 15) | **Reverted** — alongside VCF/VCT |
+| Later | Pattern table evaluation (243 entries) | Kept |
+| Later | Iterative deepening + time limits | Reverted (02d1ed1) |
+| Later | Transposition table (Zobrist) | Kept, Hard-only |
+| Later | Incremental scoring (`computeLocalScore`) | Kept |
+| 2026-03-21 | VCF/VCT threat search | Reverted — returned wrong moves |
+| 2026-03-21 | Candidate pruning (max 15) | Reverted alongside VCF/VCT |
 | 2026-03-21 | Defense multiplier 1.5x | Kept |
 | 2026-03-21 | Debug panel (F3) | Kept |
-| 2026-03-21 | Undo button | Kept |
 | 2026-03-22 | Board 19x19 → 15x15 | Kept |
-| 2026-03-22 | Rapfi engine for Hard mode | Kept |
-| 2026-03-22 | Settings persistence (settings.cfg) | Kept |
+| 2026-03-22 | Rapfi engine for Hard mode | Removed (02d1ed1) |
+| 2026-03-22 | Settings persistence (`settings.cfg`) | Kept |
+| 2026-04-21 | Drop Rapfi, cap depth 4, 2-tier (Easy/Hard) | Superseded (below) |
+| 2026-04-21 | TT `bestMove` field + move-to-front hoist | Kept |
+| 2026-04-21 | TTFlag enum (Exact/LowerBound/UpperBound) | Kept |
+| 2026-04-21 | Debug panel TT instrumentation | Kept |
+| 2026-04-21 | Opening book Tier 1 (6 entries × D4 = 22 hashes) | Kept |
+| 2026-04-21 | 3-tier difficulty (Easy d=2 / Normal d=3 / Hard d=4) | Kept — current |
+| 2026-04-21 | TT + opening book gated Hard-only (`searchDepth >= 4`) | Kept — current |
