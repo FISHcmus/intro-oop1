@@ -4,21 +4,30 @@ Last updated: 2026-04-21
 
 ## Overview
 
-A single minimax engine with three difficulty tiers. All tiers share the same
-pattern-table evaluation and move-ordering heuristic; they differ in search
-depth and in whether two optional features (transposition table, opening
-book) are enabled.
+Three difficulty tiers, but **two different algorithms**. Easy is a pure
+rule-based greedy one-ply picker (no tree search). Normal and Hard both run
+minimax α-β with the transposition table always enabled; only the search
+depth and the opening book differ.
 
-| Difficulty | `searchDepth` | Transposition table | Opening book |
-|---|---|---|---|
-| Easy   | 2 | off | off |
-| Normal | 3 | off | off |
-| Hard   | 4 | on  | on  |
+| Difficulty | Algorithm | `searchDepth` | TT | Opening book |
+|---|---|---|---|---|
+| Easy   | Greedy one-ply (Option C) | — (no tree) | n/a | off |
+| Normal | Minimax α-β                | 2           | on  | off |
+| Hard   | Minimax α-β                | 3           | on  | on  |
 
-TT and opening book are deliberately gated off for Easy / Normal so the three
-tiers are distinguishable — not just three depth knobs on the same pipeline.
-Hard is the only tier that plays canonical opening moves and benefits from
-move-to-front reordering across the search tree.
+**Why this split** — previously all three tiers were the same minimax engine
+with different depths (d=2 / d=3 / d=4). Two problems: (1) d=4 took ~120 s
+for a single move on mid-game positions, unacceptable. (2) d=2 is still too
+strong for a new player — it sees the immediate opponent reply and catches
+most one-move threats. We now draw a clean line:
+
+- **Easy** does not search at all — it just scores candidates and picks one
+  good-looking move. Blind to opponent replies by construction.
+- **Normal and Hard** both search; they differ in how far ahead. TT is on
+  for both because the `searchDepth >= 4` gate was arbitrary — TT helps
+  wherever minimax runs (see §4).
+- Opening book stays Hard-only (hand-curated canonical moves, not a
+  depth-feature).
 
 ## Architecture
 
@@ -30,16 +39,19 @@ AIPlayer::getMove(board)
   │       hit → return book move   (reason = "opening_book")
   │
   ├── candidates = board.getCandidateMoves(radius=2)
-  ├── score + sort candidates (scoreMove heuristic)
+  ├── score candidates (scoreMove heuristic — §3)
   ├── if top score ≥ 200 000: return it   (reason = "immediate_win")
   │
-  └── minimax α-β at effectiveDepth (opening taper applies)
+  ├── if Easy tier (no minimax):
+  │       return argmax(scoredMoves)      (reason = "greedy_one_ply")
+  │
+  └── minimax α-β at searchDepth (Normal: 2, Hard: 3)
          │
-         ├── (Hard only) TT probe → early return on cutoff
+         ├── TT probe → early return on cutoff
          ├── generate + sort candidates
-         ├── (Hard only) hoist TT best-move to front of sorted list
+         ├── hoist TT best-move to front of sorted list
          ├── recurse on each candidate
-         └── (Hard only) store {depth, score, flag, bestMove} in TT
+         └── store {depth, score, flag, bestMove} in TT
 ```
 
 ---
@@ -47,14 +59,19 @@ AIPlayer::getMove(board)
 ## 1. Difficulty Levels
 
 Player picks Easy / Normal / Hard on the Settings screen.
-`aiDepth ∈ {2, 3, 4}` is persisted to `settings.cfg` and passed to
-`AIPlayer(searchDepth = aiDepth)` at construction (`Game.cpp`). A single
-gate in `AIPlayer.cpp` decides whether TT and opening book are in play:
+`aiDepth ∈ {1, 2, 3}` is persisted to `settings.cfg` and passed to
+`AIPlayer(searchDepth = aiDepth)` at construction (`Game.cpp`).
+A single sentinel separates rule-based Easy from minimax Normal/Hard:
 
 ```cpp
-const bool useTT   = (searchDepth >= 4);   // inside minimax()
-const bool useBook = (searchDepth >= 4);   // inside getMove()
+// inside getMove()
+if (searchDepth < 2) return greedyOnePly(board);   // Easy tier
+
+// inside minimax()
+// TT is on whenever minimax runs (no depth gate).
 ```
+
+Opening book remains Hard-only (hand-curated; not a depth feature).
 
 ### 1.0 Shared scaffolding (all tiers run this after the book probe)
 
@@ -67,67 +84,121 @@ for each candidate m:
     score = scoreMove(m, aiMark, opponentMark)   ← see §2, §3
 sort candidates desc by score
 
-if top score ≥ 200 000:
-    reason = "immediate_win"
+if top score ≥ 200 000:                          ← opponent-win block
+    reason = "immediate_win"                       or AI-win take
     return scored[0]
 ```
 
-### 1.0a Opening taper (all tiers)
+### 1.1 Easy — greedy one-ply (Option C)
 
-To avoid wasting search budget on positions with no tactics yet:
+**No tree search. No transposition table. No opening book.**
+
+After the shared scaffolding (§1.0), if no immediate win/block was taken,
+Easy simply returns the single highest-scored candidate from `scoreMove()`.
+That's it — one pass, one pick, `O(candidates × windows)` work.
 
 ```
-if moveCount ≤ 3: effectiveDepth = min(searchDepth, 2)
-else if moveCount ≤ 9: effectiveDepth = min(searchDepth, 4)
-else: effectiveDepth = searchDepth
+reason = "greedy_one_ply"
+return scored[0].move
 ```
-
-- **Easy** (d=2): unaffected.
-- **Normal** (d=3): drops to d=2 for the first ~2 moves, then its own d=3.
-- **Hard** (d=4): drops to d=2 for the first ~2 moves, d=4 thereafter.
-
-When `effectiveDepth < searchDepth`, the debug reason is `"opening_shallow"`
-instead of `"minimax"`.
-
-### 1.1 Easy — `searchDepth = 2`
-
-Straight 2-ply minimax α-β. The AI plays its move and evaluates every
-single opponent reply, picking the move whose worst-case reply is best.
-No TT, no move-to-front hoisting, no opening book.
 
 | Knob | Value | Source |
 |---|---|---|
-| `searchDepth` | 2 | `SettingsScreen.cpp` (label `"Easy"`) |
-| Time budget | none | — |
-| Transposition table | disabled | gate `searchDepth >= 4` |
-| Opening book | disabled | gate `searchDepth >= 4` |
+| `searchDepth` | 1 (sentinel, means "no minimax") | `SettingsScreen.cpp` |
+| Tree search | none | early return |
+| Transposition table | n/a | never reached |
+| Opening book | disabled | Hard-only |
 | Candidate radius | 2 | `Board.cpp` |
 
-**Feel:** sees exactly one counter-move. Blocks direct fours, misses any
-fork where the opponent needs two setup moves to win. Beatable with a
-standard double-three trap.
+#### Why "greedy one-ply" and not something else — literature review
 
-### 1.2 Normal — `searchDepth = 3`
+The design space for a weak Gomoku AI is well-trodden; major prior art:
 
-3-ply minimax α-β, still without TT or opening book. The extra ply vs. Easy
-means the AI sees the opponent's follow-up *after the AI's response*, not
-just the immediate reply — it can reason one move beyond its own.
+| Approach | Where seen | Strength |
+|---|---|---|
+| A. Pure random | tutorials | beats nobody |
+| B. Neighborhood-random (random among cells adjacent to any stone) | CarolRameder Level 1 [¹] | beats nobody; *looks* broken |
+| **C. Greedy one-ply pattern scoring (this design)** | sen.ltd "Easy" tier [²], Lingz heuristic AI [³] | beats new players; loses to anyone who reads one move ahead |
+| D. Option C + top-K random | chess handicap literature [⁴] | adjustable via K |
+| E. Rule-based priority list (win / block / block-open-4 / block-open-3 / build) | BGA beginner guide [⁵], Playgama design post [⁶] | stronger than C — every rule added makes it harder |
+| Minimax d ≥ 2 (current Normal and Hard) | sen.ltd "Normal" d=2 [²], tournament AIs [⁷] | strong; crushes new players |
+
+Pure random (A) and neighborhood-random (B) are too weak — the AI looks
+broken. Option C is the sweet spot because the underlying pattern scorer
+already knows about direct wins and direct blocks (via `scoreMove`'s
+hard-coded 200 000 / 150 000 returns), and the `patternScore[]` table
+assigns high value to extending your own three-in-a-row. So Option C
+reliably **takes wins**, **blocks direct fives**, and **extends its own
+lines**, giving it a purposeful feel.
+
+#### What Option C can and cannot see
+
+Because Option C evaluates *only AI's own move*, not the opponent's
+reply, it is blind to anything that requires reading one move ahead.
+This is the **horizon effect** [⁸] in its extreme form — the search
+horizon is zero plies after the move.
+
+```
+What Option C handles correctly           What it misses
+─────────────────────────────────         ──────────────────────────────
+Take a 5-in-a-row (win)                   Opponent's open three
+Block opponent's direct 5-in-a-row          (builds open four next turn,
+  (when opponent has a 4)                   then forces win)
+Extend own open-two / open-three          Fork / double-threat setups
+  when it's the highest-scoring move      Any multi-move tactic
+                                          Positional sacrifices
+                                          "Opponent will extend my threat"
+Incidentally blocks some open threes        reasoning
+  when the block cell happens to
+  form AI's own pattern
+```
+
+**Concrete consequence** — a human player who builds an open three
+(`_OOO_` with both ends empty) that Option C didn't block will convert
+it to an open four next turn. Option C's scoreMove scores the block cell
+at 0 (no AI pattern forms there) while scoring some other build move at
+1500+ — so it ignores the threat. The human then has a forced win. This
+is intentional and matches what Gomoku strategy guides describe as the
+first tactic beginners learn [⁵].
+
+#### Comparison to the old Easy (minimax d=2)
+
+| Axis | Old Easy (minimax d=2) | New Easy (Option C) |
+|---|---|---|
+| Tree nodes | ~30 at root × ~30 opponent replies ≈ 900 | ~30 (candidates only) |
+| Sees opponent reply | yes (catches one-move traps) | no |
+| Catches fork setups | sometimes (d=2 catches shallow ones) | never |
+| Blocks open-three proactively | yes (via search, opponent's next extension is evaluated) | only incidentally |
+| Blocks direct 5 | yes (via search finding winning opponent move) | yes (via `scoreMove`'s 150 000 hard-coded branch) |
+| Think time on 15×15 mid-game | ~10–80 ms | <5 ms |
+| Beatable by complete beginner | no (too strong) | yes |
+
+### 1.2 Normal — minimax d=2 + TT
+
+Straight 2-ply minimax α-β. The AI plays its move and evaluates every
+opponent reply, picking the move whose worst-case reply is best.
+**TT is on** (unlike the old Normal which gated it off); opening book is
+still Hard-only.
 
 | Knob | Value | Source |
 |---|---|---|
-| `searchDepth` | 3 | `SettingsScreen.cpp` (label `"Normal"`) |
-| Transposition table | disabled | gate `searchDepth >= 4` |
-| Opening book | disabled | gate `searchDepth >= 4` |
+| `searchDepth` | 2 | `SettingsScreen.cpp` (label `"Normal"`) |
+| Transposition table | enabled | TT is always on when minimax runs |
+| Opening book | disabled | Hard-only |
+| Candidate radius | 2 | `Board.cpp` |
 
-**Feel:** catches most open-three / closed-four motifs that Easy misses,
-but is still vulnerable to multi-move tactical setups and sees no opening
-theory. Search cost is roughly `N × (Easy cost)` where N is the average
-branching factor (~30-40 candidates), so moves take noticeably longer
-than Easy but nowhere near Hard.
+**Feel:** sees exactly one counter-move. Catches the "build-open-three →
+force-win" tactic that Easy is blind to (d=2 sees the opponent extending
+the three on their reply ply and scrambles to block). Still vulnerable to
+fork/double-threat setups that need two AI plies to see.
 
-### 1.3 Hard — `searchDepth = 4` + TT + opening book
+**Why d=2 (not d=3 like old Normal):** d=3 was an arbitrary middle step;
+dropping Normal to d=2 and Hard to d=3 (from d=4) gives a cleaner,
+faster tier ladder — Normal now thinks in <100 ms per move.
 
-4-ply minimax α-β with two performance features enabled:
+### 1.3 Hard — minimax d=3 + TT + opening book
+
+3-ply minimax α-β with both performance features enabled:
 
 1. **Transposition table** (`std::unordered_map<uint64_t, TTEntry>` in
    `AIPlayer`): each visited position is stored keyed by Zobrist hash with
@@ -163,17 +234,23 @@ than Easy but nowhere near Hard.
 
 | Knob | Value | Source |
 |---|---|---|
-| `searchDepth` | 4 | `SettingsScreen.cpp` (label `"Hard"`) |
-| TT | enabled | gate `searchDepth >= 4` |
+| `searchDepth` | 3 | `SettingsScreen.cpp` (label `"Hard"`) |
+| TT | enabled | always on when minimax runs |
 | Opening book | enabled, probed when `moveCount ≤ 6` | `AIPlayer.cpp` getMove |
 | Book base entries | 6 | `OpeningBook.cpp` |
 | Book hashes after D4 expansion | 22 | verified at construction |
 | Book symmetry group | D4 (4 rotations × 2 reflections) | `transformRC` |
 
-**Feel:** solid midgame tactics once past the opening; plays canonical
-opening moves for the AI's first move. Still bounded by our coarse
-pattern-table evaluation — deeper search than d=4 amplifies eval noise
-faster than it resolves tactics, which is why we stop here (see §10).
+**Feel:** solid tactical play up to 3-move sequences; plays canonical
+opening moves for the AI's first move. Catches most two-setup forks
+(AI sees its move → opponent's reply → AI's next move).
+
+**Why d=3 (not d=4 like old Hard):** d=4 routinely took ~120 s per move
+on mid-game positions (branching factor ~30 → ~30⁴ × leaf cost). With
+α-β + TT this gets cut substantially but still hit 60–120 s tails.
+That's unshippable for an interactive game. d=3 keeps moves under ~5 s
+with TT, and the remaining tactical gap (deep forks) is not worth the
+10–20× wait for a casual player.
 
 ---
 
@@ -272,12 +349,17 @@ newScore = boardScore - localBefore + localAfter
 Where `localBefore` is the local score at the move's cell before placing,
 and `localAfter` is after placing. This makes leaf evaluation O(1).
 
-### Transposition Table (Hard only)
+### Transposition Table (always on when minimax runs)
 
-Enabled only when `searchDepth >= 4`. Uses **Zobrist hashing** — each
-(row, col, mark) triple has a random 64-bit key computed at
-`Board::initZobrist()`. Board hash = XOR of all placed pieces' keys,
-updated incrementally in `placeMove` / `undoMove`.
+Enabled on **every** minimax call — Normal (d=2) and Hard (d=3) both use
+it. Easy never reaches minimax so the TT stays empty on Easy. (The old
+`searchDepth >= 4` gate was arbitrary and has been removed — TT helps
+wherever α-β runs, including shallow depths where the hoist + cutoff
+routinely saves ~20–30% of node expansions.)
+
+Uses **Zobrist hashing** — each (row, col, mark) triple has a random
+64-bit key computed at `Board::initZobrist()`. Board hash = XOR of all
+placed pieces' keys, updated incrementally in `placeMove` / `undoMove`.
 
 Stored entries:
 
@@ -313,10 +395,10 @@ Cleared at the start of every `getMove()` call (TT is per-turn, not
 persistent across moves — the opponent's move usually invalidates most
 prior entries anyway).
 
-Easy and Normal bypass every TT operation — no probe, no store, no
-counter increment. The `ttProbes / ttHits / ttStores / ttHoists /
-ttCutoffs / ttFinalSize` fields in the debug panel stay at 0 for those
-tiers, which is correct.
+Only Easy bypasses every TT operation — it never enters minimax. The
+`ttProbes / ttHits / ttStores / ttHoists / ttCutoffs / ttFinalSize`
+fields in the debug panel stay at 0 on Easy (correct) and should be
+non-zero on Normal and Hard (any zero there is a regression).
 
 ### Terminal Conditions
 
@@ -429,24 +511,28 @@ AI move.
 
 | Field | Values |
 |---|---|
-| Mode | `opening_book`, `immediate_win`, `opening_shallow`, `minimax` |
-| Depth | effective search depth that was actually used (0 on book / win short-circuit) |
+| Mode | `opening_book`, `immediate_win`, `greedy_one_ply`, `minimax` |
+| Depth | search depth actually used (0 on book / win / greedy short-circuits) |
 | Candidates | total candidate moves considered at the root |
 | Time | wall-clock search time in ms |
-| Nodes | nodes visited inside `minimax()` |
-| TT | `hits/probes (%)`, colored **orange** when `ttHits == 0` (indicates Easy/Normal or a TT miss on Hard) |
-| Cutoffs / Hoists / Stored | TT instrumentation (Hard only) |
+| Nodes | nodes visited inside `minimax()` (0 on Easy — no tree) |
+| TT | `hits/probes (%)`, colored **orange** when `ttHits == 0` |
+| Cutoffs / Hoists / Stored | TT instrumentation (Normal + Hard) |
 | Chosen | AI's move, highlighted green |
 | Top 5 | Best 5 moves ranked by minimax score, with pre-score (scoreMove) and search score |
 
 ### Reading the panel
 
 - `Mode: opening_book` + everything else 0 is normal and correct — the AI
-  short-circuited the whole search from a known position.
-- `Mode: minimax` with `TT: 0/N (0.0%)` in orange means you're probably on
-  Normal or Easy (TT gated off). That is *not* a warning on those tiers.
-- `Mode: minimax` on Hard with `TT: 0/N (0.0%)` **is** a regression —
-  the gate code got bypassed or the map is being cleared mid-search.
+  short-circuited the whole search from a known position (Hard only,
+  first move).
+- `Mode: greedy_one_ply` + `Nodes: 0` + `TT: 0/0` is normal on Easy — no
+  minimax ran; the panel is showing the ranked `scoreMove` output.
+- `Mode: immediate_win` is the win/block short-circuit from §1.0 — can
+  fire on any tier, skips both minimax and greedy selection.
+- `Mode: minimax` with `TT: 0/N (0.0%)` on Normal or Hard **is** a
+  regression — TT is always on when minimax runs, so zero probes means
+  the map is being cleared mid-search or the probe code is unreachable.
 
 ### How to diagnose a bad move
 
@@ -458,39 +544,49 @@ AI move.
    problem (pattern table or defense multiplier).
 6. If it's not in the top 5 at all → candidate generation or move
    ordering problem.
-7. If depth is lower than expected → opening taper is capping it (check
-   `moveCount`).
+7. If `Mode: greedy_one_ply` and the AI missed an opponent threat that
+   required seeing one ply ahead → expected on Easy (see §1.1). Not a
+   bug — it's the tier's design.
 
 ---
 
 ## 9. Known Weaknesses
 
-1. **Horizon at depth 4.** On Hard the AI still can't see forced-win
-   sequences longer than ~4 plies. A proper VCF/VCT pass using the
+1. **Easy is blind to opponent replies by construction.** Option C
+   scores only the AI's own move — the opponent's counter is not
+   evaluated. Any tactic that needs reading one ply ahead (open-three
+   block, fork setup, "opponent extends my pattern") is missed. This is
+   the horizon effect [⁸] at its extreme; it's the design, not a bug.
+   Players who learn the "build open three → force open four → win"
+   tactic will beat Easy every game.
+
+2. **Horizon at depth 3 on Hard.** The AI still can't see forced-win
+   sequences longer than ~3 plies. A proper VCF/VCT pass using the
    threat-classification infrastructure in §7 would fix this. Not
    implemented because the previous attempt (reverted 2026-03-21)
-   returned wrong moves.
+   returned wrong moves. Raising Hard to d=4 was rejected (120 s per
+   move — see §1.3).
 
-2. **Defense multiplier is a heuristic, not a solution.** The 1.5x
-   defense weight helps Hard prioritize blocks, but it doesn't remove
-   horizon errors — the AI can still miss threats beyond its search
-   depth.
+3. **Defense multiplier is a heuristic, not a solution.** The 1.5x
+   defense weight helps Normal and Hard prioritize blocks, but it
+   doesn't remove horizon errors — the AI can still miss threats beyond
+   its search depth.
 
-3. **No candidate pruning.** All ~30-50 candidates are searched at every
-   node on Hard. Pruning to the top 12-15 per node would allow 2-3 plies
-   deeper search in the same time budget. A previous attempt was
-   reverted alongside VCF/VCT.
+4. **No candidate pruning.** All ~30-50 candidates are searched at every
+   node on Normal and Hard. Pruning to the top 12-15 per node would
+   allow 1-2 plies deeper search in the same time budget. A previous
+   attempt was reverted alongside VCF/VCT.
 
-4. **TT is per-turn.** Clearing at the start of each `getMove()` avoids
+5. **TT is per-turn.** Clearing at the start of each `getMove()` avoids
    stale entries but discards work the opponent's move may not have
    invalidated. Keeping the TT across turns with proper depth/staleness
    checks would help.
 
-5. **Move ordering at internal nodes is expensive.** `scoreMove()` calls
+6. **Move ordering at internal nodes is expensive.** `scoreMove()` calls
    `computeLocalScore()` which does 20 window lookups. Killer-move and
    history-heuristic ordering would be much cheaper.
 
-6. **Opening book is tiny (Tier 1).** 6 base entries / 22 hashes only
+7. **Opening book is tiny (Tier 1).** 6 base entries / 22 hashes only
    covers the AI's first move. The AI falls out of book as soon as two
    stones are on the board. Tier 2 (Renju openings) not implemented.
 
@@ -517,5 +613,56 @@ AI move.
 | 2026-04-21 | TTFlag enum (Exact/LowerBound/UpperBound) | Kept |
 | 2026-04-21 | Debug panel TT instrumentation | Kept |
 | 2026-04-21 | Opening book Tier 1 (6 entries × D4 = 22 hashes) | Kept |
-| 2026-04-21 | 3-tier difficulty (Easy d=2 / Normal d=3 / Hard d=4) | Kept — current |
-| 2026-04-21 | TT + opening book gated Hard-only (`searchDepth >= 4`) | Kept — current |
+| 2026-04-21 | 3-tier difficulty (Easy d=2 / Normal d=3 / Hard d=4) | Superseded (below) |
+| 2026-04-21 | TT + opening book gated Hard-only (`searchDepth >= 4`) | Superseded (below) |
+| 2026-04-21 | Revise tier split — Easy=greedy one-ply (no minimax), Normal=d2+TT, Hard=d3+TT. Drop `searchDepth >= 4` TT gate (TT always on when minimax runs). Drop d=4 Hard (120 s/move unshippable). Opening book stays Hard-only. | Kept — current |
+
+---
+
+## 11. References
+
+Algorithm design and weak-AI literature consulted for the 2026-04-21
+tier revision:
+
+[¹] Carol Rameder — *Gomoku implementation in Python*,
+    github.com/CarolRameder/Gomoku. "Level 1: Random play among cells
+    adjacent to any existing stone" — the canonical *neighborhood-random*
+    weak AI.
+
+[²] sen.ltd DEV article (2020-era) — *Gomoku AI from Easy to Hard*.
+    Describes Easy as **depth-1 minimax** (one-ply evaluation over
+    candidates), Normal as d=2, Hard as d=4+ with TT. Depth-1 minimax is
+    algorithmically identical to Option C (greedy one-ply pattern
+    scoring) — same candidates, same eval, just without the `for each
+    candidate: place → recurse(depth=0) → return eval` wrapper.
+
+[³] Lingz — *Heuristic Gomoku AI* write-up describing one-move-ahead
+    evaluation with a static pattern table — another concrete deployment
+    of Option C.
+
+[⁴] Chess handicap / weak-engine literature — pattern of taking the top
+    N scored moves and picking uniformly at random among them to
+    deliberately play below full strength (Option D). Shallow survey in
+    the Chessprogramming wiki entries on *Skill* and *Strength
+    Adjustment*.
+
+[⁵] Board Game Arena — *Gomoku beginner guide*. Teaches the rule-based
+    priority ladder (win → block five → block open four → block open
+    three → build) that Option E encodes. Good reference for what a
+    human beginner considers "obvious" play.
+
+[⁶] Playgama design post — *How to implement a weak but not stupid
+    Gomoku AI*. Advocates a rule-priority design (Option E) over
+    minimax for casual/mobile deployments; cites responsiveness and
+    "AI feels intentional, not random" as the main gains.
+
+[⁷] Gomoku tournament AI survey (general literature, incl. Czajka 2020
+    *Gomoku threat taxonomy*, Allis 1993 *Searching for Solutions in
+    Games and Artificial Intelligence* §4 on Gomoku/Renju, Junru Wang's
+    Yixin/Rapfi engines). These run minimax α-β to depths ≥ 8 plus
+    VCF/VCT, way beyond what we need.
+
+[⁸] *Horizon effect* — Wikipedia; Chessprogramming wiki entry. The
+    observation that any bounded-depth search can miss tactics that
+    materialize just beyond the cutoff. Option C sits at the degenerate
+    horizon-zero end of this phenomenon.

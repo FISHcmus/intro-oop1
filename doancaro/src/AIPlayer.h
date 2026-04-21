@@ -18,7 +18,7 @@ struct TTEntry {
 
 class AIPlayer : public Player {
 public:
-    AIPlayer(const std::string& name, CellState mark, int searchDepth = 4);
+    AIPlayer(const std::string& name, CellState mark, int searchDepth = 3);
     ~AIPlayer() override;
 
     Move getMove(const Board& board) override;
@@ -38,7 +38,7 @@ public:
         int depthCompleted;
         int totalCandidates;
         long long searchTimeMs;
-        std::string reason;  // "immediate_win", "minimax", "opening_shallow", "opening_book"
+        std::string reason;  // "immediate_win", "greedy_one_ply", "minimax", "opening_book"
         // Transposition-table instrumentation (reset per getMove)
         long long nodesSearched;
         long long ttProbes;

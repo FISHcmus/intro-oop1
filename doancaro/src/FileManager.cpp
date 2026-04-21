@@ -99,6 +99,16 @@ LoadResult FileManager::loadSlot(int slot, SaveData& data) {
 
     if (storedCRC != computedCRC) return LoadResult::Corrupt;
 
+    // v2 used aiDepth {2=Easy, 3=Normal, 4=Hard}; v3 uses {1,2,3}.
+    // Remap after checksum validation (CRC is over original bytes).
+    if (data.header.version < SAVE_VERSION) {
+        if (data.header.aiDepth >= 2 && data.header.aiDepth <= 4)
+            data.header.aiDepth -= 1;
+        else
+            data.header.aiDepth = 3;
+        data.header.version = SAVE_VERSION;
+    }
+
     // Semantic validation
     if (data.header.currentTurn < 1 || data.header.currentTurn > 2) return LoadResult::Corrupt;
     for (auto& row : data.cells) {

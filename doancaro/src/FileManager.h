@@ -6,7 +6,7 @@
 #include <string>
 
 static const uint32_t SAVE_MAGIC = 0x4341524F;  // "CARO"
-static const uint16_t SAVE_VERSION = 2;
+static const uint16_t SAVE_VERSION = 3;  // v3: aiDepth encoding 1/2/3 (was 2/3/4 in v2)
 static const int MAX_SLOTS = 4;  // 0=autosave, 1-3=manual
 
 struct SaveHeader {
@@ -17,7 +17,7 @@ struct SaveHeader {
     float    playTime;
     int      moveCount;
     int      gameMode;        // 0=PvP, 1=PvAI
-    int      aiDepth;         // 2=Easy, 3=Normal, 4=Hard
+    int      aiDepth;         // 1=Easy (greedy one-ply), 2=Normal (d=2), 3=Hard (d=3)
     int      currentTurn;     // 1=player1, 2=player2
     int      p1Wins;
     int      p2Wins;

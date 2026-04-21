@@ -3,7 +3,7 @@
 
 struct GameSettings {
     bool vsAI;
-    int aiDepth;  // 2=Easy, 3=Normal, 4=Hard
+    int aiDepth;  // 1=Easy (greedy one-ply, no minimax), 2=Normal (d=2), 3=Hard (d=3)
 };
 
 class SettingsScreen {

@@ -3,19 +3,20 @@
 #include "raylib.h"
 
 SettingsScreen::SettingsScreen()
-    : settings{true, 4}, selectedIndex(0), done(false) {}
+    : settings{true, 3}, selectedIndex(0), done(false) {}
 
 namespace {
-// Cycle difficulty 2 -> 3 -> 4 -> 2 (forward) or 2 -> 4 -> 3 -> 2 (backward).
+// Cycle difficulty 1 -> 2 -> 3 -> 1 (forward) or 1 -> 3 -> 2 -> 1 (backward).
+// 1=Easy (greedy), 2=Normal (minimax d=2), 3=Hard (minimax d=3).
 int cycleDifficulty(int current, int direction) {
     if (direction > 0) {
+        if (current == 1) return 2;
         if (current == 2) return 3;
-        if (current == 3) return 4;
-        return 2;  // from 4 (or any legacy value)
+        return 1;  // from 3 (or any legacy value)
     }
-    if (current == 2) return 4;
-    if (current == 4) return 3;
-    return 2;  // from 3 (or any legacy value)
+    if (current == 1) return 3;
+    if (current == 3) return 2;
+    return 1;  // from 2 (or any legacy value)
 }
 }  // namespace
 
@@ -160,10 +161,10 @@ void SettingsScreen::reset() {
 
 const char* SettingsScreen::getDifficultyLabel() const {
     switch (settings.aiDepth) {
-        case 2: return "Easy";
-        case 3: return "Normal";
-        case 4: return "Hard";
-        default: return "Hard";
+        case 1: return "Easy";
+        case 2: return "Normal";
+        case 3: return "Hard";
+        default: return "?";
     }
 }
 

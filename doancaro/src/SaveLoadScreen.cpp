@@ -180,9 +180,9 @@ void SaveLoadScreen::drawSlotCard(int slot, int x, int y, int width, int height,
         const char* diffStr = "";
         if (headers[slot].gameMode == 1) {
             switch (headers[slot].aiDepth) {
-                case 2: diffStr = " Easy"; break;
-                case 4: diffStr = " Medium"; break;
-                case 6: diffStr = " Hard"; break;
+                case 1: diffStr = " Easy"; break;
+                case 2: diffStr = " Normal"; break;
+                case 3: diffStr = " Hard"; break;
                 default: diffStr = ""; break;
             }
         }

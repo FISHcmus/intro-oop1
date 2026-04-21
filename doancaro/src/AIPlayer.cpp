@@ -1,6 +1,7 @@
 #include "AIPlayer.h"
 #include <algorithm>
 #include <chrono>
+#include <climits>
 
 AIPlayer::AIPlayer(const std::string& name, CellState mark, int searchDepth)
     : Player(name, mark), searchDepth(searchDepth) {}
@@ -30,9 +31,9 @@ Move AIPlayer::getMove(const Board& board) {
     transTable.clear();
     lastDebug = {};  // reset early so minimax increments survive until end
 
-    // Opening book probe: Hard-mode privilege only (Easy/Normal run pure minimax).
+    // Opening book probe: Hard only (Easy=greedy, Normal=minimax both skip it).
     // Hand-curated positions for moves 0-6; bypasses scoreMove / minimax on hit.
-    if (searchDepth >= 4 && board.getMoveCount() <= 6) {
+    if (searchDepth >= 3 && board.getMoveCount() <= 6) {
         auto hit = openingBook.query(board.getHash());
         if (hit.found) {
             lastDebug.chosenMove = hit.move;
@@ -79,17 +80,22 @@ Move AIPlayer::getMove(const Board& board) {
         return scored[0].second;
     }
 
-    // Opening taper: early board has no tactics, full depth wastes time.
-    //   moveCount <= 3   → cap depth at 2  (AI's moves 1–2)
-    //   moveCount <= 9   → cap depth at 4  (AI's moves 3–5)
-    //   else             → configured depth (Hard = 4)
-    int mc = board.getMoveCount();
-    int effectiveDepth = searchDepth;
-    if (mc <= 3)      effectiveDepth = std::min(effectiveDepth, 2);
-    else if (mc <= 9) effectiveDepth = std::min(effectiveDepth, 4);
-    bool openingShallow = (effectiveDepth < searchDepth);
+    // Easy tier — greedy one-ply (Option C): return the highest-scored
+    // candidate from the scoreMove ranking. No tree search, no TT, no
+    // opening book. searchDepth<2 is the sentinel from SettingsScreen.
+    if (searchDepth < 2) {
+        lastDebug.chosenMove = scored[0].second;
+        lastDebug.reason = "greedy_one_ply";
+        lastDebug.depthCompleted = 0;
+        lastDebug.totalCandidates = static_cast<int>(scored.size());
+        for (size_t i = 0; i < std::min(scored.size(), static_cast<size_t>(5)); i++)
+            lastDebug.topMoves.push_back(
+                {scored[i].second, scored[i].first, INT_MIN});
+        return scored[0].second;
+    }
 
-    // Single-depth search at effectiveDepth (no iterative deepening).
+    // Single-depth search at configured searchDepth (no iterative deepening,
+    // no opening taper — Hard=3 is already cheap enough early game).
     auto t0 = std::chrono::steady_clock::now();
     int initialScore = evaluate(searchBoard, aiMark, opponentMark);
     int bestScore = -1000000;
@@ -105,7 +111,7 @@ Move AIPlayer::getMove(const Board& board) {
         int localAfter = computeLocalScore(searchBoard, move.row, move.col,
                                            aiMark, opponentMark);
         int newScore = initialScore - localBefore + localAfter;
-        int score = minimax(searchBoard, effectiveDepth - 1, -1000000, 1000000,
+        int score = minimax(searchBoard, searchDepth - 1, -1000000, 1000000,
                             false, aiMark, opponentMark, newScore);
         searchBoard.undoMove(move.row, move.col, prevLast);
         allResults.push_back({move, pair.first, score});
@@ -117,8 +123,8 @@ Move AIPlayer::getMove(const Board& board) {
 
     auto t1 = std::chrono::steady_clock::now();
     lastDebug.chosenMove = bestMove;
-    lastDebug.reason = openingShallow ? "opening_shallow" : "minimax";
-    lastDebug.depthCompleted = effectiveDepth;
+    lastDebug.reason = "minimax";
+    lastDebug.depthCompleted = searchDepth;
     lastDebug.totalCandidates = static_cast<int>(scored.size());
     lastDebug.searchTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
     lastDebug.ttFinalSize = static_cast<int>(transTable.size());
@@ -143,32 +149,26 @@ int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
     if (board.isFull()) return 0;
     if (depth <= 0) return boardScore;
 
-    // TT is a Hard-mode privilege: Easy (d=2) and Normal (d=3) run pure minimax.
-    const bool useTT = (searchDepth >= 4);
-
-    // Transposition table probe
-    uint64_t hash = useTT ? board.getHash() : 0;
+    uint64_t hash = board.getHash();
     Move ttBestMove{-1, -1};
-    if (useTT) {
-        lastDebug.ttProbes++;
-        auto it = transTable.find(hash);
-        if (it != transTable.end()) {
-            lastDebug.ttHits++;
-            const TTEntry& entry = it->second;
-            ttBestMove = entry.bestMove;
-            if (entry.depth >= depth) {
-                if (entry.flag == TTFlag::Exact) {
-                    lastDebug.ttCutoffs++;
-                    return entry.score;
-                }
-                if (entry.flag == TTFlag::LowerBound && entry.score > alpha)
-                    alpha = entry.score;
-                if (entry.flag == TTFlag::UpperBound && entry.score < beta)
-                    beta = entry.score;
-                if (alpha >= beta) {
-                    lastDebug.ttCutoffs++;
-                    return entry.score;
-                }
+    lastDebug.ttProbes++;
+    auto it = transTable.find(hash);
+    if (it != transTable.end()) {
+        lastDebug.ttHits++;
+        const TTEntry& entry = it->second;
+        ttBestMove = entry.bestMove;
+        if (entry.depth >= depth) {
+            if (entry.flag == TTFlag::Exact) {
+                lastDebug.ttCutoffs++;
+                return entry.score;
+            }
+            if (entry.flag == TTFlag::LowerBound && entry.score > alpha)
+                alpha = entry.score;
+            if (entry.flag == TTFlag::UpperBound && entry.score < beta)
+                beta = entry.score;
+            if (alpha >= beta) {
+                lastDebug.ttCutoffs++;
+                return entry.score;
             }
         }
     }
@@ -251,22 +251,19 @@ int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
         }
     }
 
-    // Store in transposition table (Hard-mode only)
-    if (useTT) {
-        TTEntry newEntry{};
-        newEntry.depth = depth;
-        newEntry.score = bestEval;
-        newEntry.bestMove = bestMoveHere;
-        if (bestEval <= origAlpha) {
-            newEntry.flag = TTFlag::UpperBound;  // failed low
-        } else if (bestEval >= beta) {
-            newEntry.flag = TTFlag::LowerBound;  // failed high
-        } else {
-            newEntry.flag = TTFlag::Exact;
-        }
-        transTable[hash] = newEntry;
-        lastDebug.ttStores++;
+    TTEntry newEntry{};
+    newEntry.depth = depth;
+    newEntry.score = bestEval;
+    newEntry.bestMove = bestMoveHere;
+    if (bestEval <= origAlpha) {
+        newEntry.flag = TTFlag::UpperBound;  // failed low
+    } else if (bestEval >= beta) {
+        newEntry.flag = TTFlag::LowerBound;  // failed high
+    } else {
+        newEntry.flag = TTFlag::Exact;
     }
+    transTable[hash] = newEntry;
+    lastDebug.ttStores++;
 
     return bestEval;
 }

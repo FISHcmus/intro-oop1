@@ -1,5 +1,6 @@
 #include "Game.h"
 #include "Fonts.h"
+#include <climits>
 #include <ctime>
 #include <cstring>
 
@@ -10,7 +11,7 @@ Game::Game()
     : state(GameState::Menu), settingsReturnState(GameState::Menu),
       player1(nullptr), player2(nullptr), currentPlayer(nullptr),
       cursorRow(Board::SIZE / 2), cursorCol(Board::SIZE / 2),
-      vsAI(true), aiDepth(4), playTime(0.0f),
+      vsAI(true), aiDepth(3), playTime(0.0f),
       toastMessage{}, toastTimer(0.0f),
       showDebugPanel(false),
       aiThinking(false), aiResult{-1, -1} {
@@ -489,8 +490,13 @@ void Game::drawDebugPanel() {
         bool isChosen = (m.move.row == dbg.chosenMove.row && m.move.col == dbg.chosenMove.col);
         Color rowColor = isChosen ? Color{100, 255, 100, 255} : Color{200, 200, 200, 220};
 
-        std::snprintf(buf, sizeof(buf), "(%2d,%2d)  %6d  %6d",
-                      m.move.row, m.move.col, m.preScore, m.searchScore);
+        if (m.searchScore == INT_MIN) {
+            std::snprintf(buf, sizeof(buf), "(%2d,%2d)  %6d      --",
+                          m.move.row, m.move.col, m.preScore);
+        } else {
+            std::snprintf(buf, sizeof(buf), "(%2d,%2d)  %6d  %6d",
+                          m.move.row, m.move.col, m.preScore, m.searchScore);
+        }
         Fonts::draw(Fonts::body, buf, tx, ty, 12, rowColor);
         ty += lineH;
     }
@@ -658,10 +664,10 @@ void Game::loadSettings() {
         if (end && end != buf) {
             long depth = strtol(end, &end, 10);
             vsAI = (ai != 0);
-            if (depth == 2 || depth == 3 || depth == 4) {
+            if (depth == 1 || depth == 2 || depth == 3) {
                 aiDepth = static_cast<int>(depth);
             } else {
-                aiDepth = 4;  // legacy 6/8 or any other value normalizes to Hard
+                aiDepth = 3;  // legacy 2/3/4/6/8 or any other value → Hard default
             }
         }
     }
