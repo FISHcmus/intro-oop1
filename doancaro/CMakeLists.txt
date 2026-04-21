@@ -55,7 +55,6 @@ set(SOURCES
     src/Board.cpp
     src/Player.cpp
     src/AIPlayer.cpp
-    src/OpeningBook.cpp
     src/Renderer.cpp
     src/MenuScreen.cpp
     src/GameScreen.cpp
@@ -104,12 +103,11 @@ if (BUILD_TESTS)
         src/Board.cpp
         src/Player.cpp
         src/AIPlayer.cpp
-        src/OpeningBook.cpp
     )
     add_library(GameLogic STATIC ${GAME_LOGIC_SOURCES})
     target_include_directories(GameLogic PUBLIC src)
 
-    add_executable(CaroTests tests/test_board.cpp tests/test_ai.cpp tests/test_opening_book.cpp)
+    add_executable(CaroTests tests/test_board.cpp tests/test_ai.cpp)
     target_link_libraries(CaroTests PRIVATE GameLogic Catch2::Catch2WithMain)
 
     # PCH for test files

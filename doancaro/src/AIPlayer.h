@@ -1,7 +1,6 @@
 #ifndef AIPLAYER_H
 #define AIPLAYER_H
 
-#include "OpeningBook.h"
 #include "Player.h"
 #include <cstdint>
 #include <string>
@@ -38,7 +37,7 @@ public:
         int depthCompleted;
         int totalCandidates;
         long long searchTimeMs;
-        std::string reason;  // "immediate_win", "greedy_one_ply", "minimax", "opening_book"
+        std::string reason;  // "immediate_win", "greedy_one_ply", "minimax"
         // Transposition-table instrumentation (reset per getMove)
         long long nodesSearched;
         long long ttProbes;
@@ -54,7 +53,6 @@ public:
 private:
     int searchDepth;
     std::unordered_map<uint64_t, TTEntry> transTable;
-    OpeningBook openingBook;
 
     static constexpr int MAX_THREAT_DEPTH = 20;
 

@@ -31,19 +31,6 @@ Move AIPlayer::getMove(const Board& board) {
     transTable.clear();
     lastDebug = {};  // reset early so minimax increments survive until end
 
-    // Opening book probe: all tiers. Hand-curated positions for moves 0-1
-    // (empty board + D4-symmetric replies to opponent's first stone).
-    // Bypasses scoreMove / minimax on hit.
-    if (board.getMoveCount() <= 6) {
-        auto hit = openingBook.query(board.getHash());
-        if (hit.found) {
-            lastDebug.chosenMove = hit.move;
-            lastDebug.reason = "opening_book";
-            lastDebug.depthCompleted = 0;
-            return hit.move;
-        }
-    }
-
     auto candidates = board.getCandidateMoves();
     if (candidates.empty()) {
         return {Board::SIZE / 2, Board::SIZE / 2};
