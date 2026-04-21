@@ -55,7 +55,6 @@ set(SOURCES
     src/Board.cpp
     src/Player.cpp
     src/AIPlayer.cpp
-    src/RapfiEngine.cpp
     src/Renderer.cpp
     src/MenuScreen.cpp
     src/GameScreen.cpp
@@ -84,7 +83,7 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE
 # Copy assets to build directory
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets
+    ${CMAKE_CURRENT_SOURCE_DIR}/assets $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets
     COMMENT "Copying assets to build directory"
 )
 
@@ -104,7 +103,6 @@ if (BUILD_TESTS)
         src/Board.cpp
         src/Player.cpp
         src/AIPlayer.cpp
-        src/RapfiEngine.cpp
     )
     add_library(GameLogic STATIC ${GAME_LOGIC_SOURCES})
     target_include_directories(GameLogic PUBLIC src)

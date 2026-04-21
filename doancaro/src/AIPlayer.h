@@ -3,17 +3,16 @@
 
 #include "Player.h"
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <unordered_map>
 
-class RapfiEngine;
+enum class TTFlag : uint8_t { Exact, LowerBound, UpperBound };
 
-// Transposition table entry
 struct TTEntry {
     int depth;
     int score;
-    int flag;  // 0 = exact, 1 = lower bound, 2 = upper bound
+    TTFlag flag;
+    Move bestMove;  // {-1,-1} = not stored; used for move ordering
 };
 
 class AIPlayer : public Player {
@@ -38,26 +37,24 @@ public:
         int depthCompleted;
         int totalCandidates;
         long long searchTimeMs;
-        std::string reason;  // "immediate_win", "iterative_deepening", "easy_mode"
+        std::string reason;  // "immediate_win", "minimax", "opening_shallow", "opening_book"
+        // Transposition-table instrumentation (reset per getMove)
+        long long nodesSearched;
+        long long ttProbes;
+        long long ttHits;          // find returned a non-end iterator
+        long long ttCutoffs;       // hit had sufficient depth + flag/bound for early return
+        long long ttStores;
+        long long ttHoists;        // prior-best move actually swapped to front of scored
+        int ttFinalSize;
     };
     DebugInfo lastDebug;
     const DebugInfo& getLastDebug() const { return lastDebug; }
 
-    void resetEngine();
-
 private:
     int searchDepth;
-    std::unique_ptr<RapfiEngine> rapfiEngine;
-    bool rapfiFailed = false;
-    bool boardSynced = false;
-    int lastSentMoveCount = 0;
-
-    Move getRapfiMove(const Board& board);
     std::unordered_map<uint64_t, TTEntry> transTable;
 
     static constexpr int MAX_THREAT_DEPTH = 20;
-    static constexpr int TIME_LIMIT_MEDIUM_MS = 1000;
-    static constexpr int TIME_LIMIT_HARD_MS = 3000;
 
     // Pattern table: 3^5 = 243 entries, indexed by 5-cell window encoding
     // Cell encoding: 0=empty, 1=self, 2=opponent
@@ -70,17 +67,13 @@ private:
     int minimax(Board& board, int depth, int alpha, int beta,
                 bool maximizing, CellState aiMark, CellState opponentMark,
                 int boardScore);
-    Move iterativeDeepening(Board& searchBoard,
-                            const std::vector<std::pair<int, Move>>& scored,
-                            CellState aiMark, CellState opponentMark,
-                            int timeLimitMs);
     static int scoreMove(Board& board, int row, int col, CellState moveMark,
                          CellState aiMark, CellState opponentMark);
     static int evaluate(const Board& board, CellState aiMark, CellState opponentMark);
     static int computeLocalScore(const Board& board, int row, int col,
                                  CellState aiMark, CellState opponentMark);
 
-    // Threat-space search
+    // Threat-space search (currently unwired — kept for possible reuse)
     Move findThreatWin(Board& board, CellState attackMark, CellState defendMark, int depth);
     static int classifyThreat(const Board& board, int row, int col, CellState mark);
     static std::vector<Move> findThreats(Board& board, CellState mark);

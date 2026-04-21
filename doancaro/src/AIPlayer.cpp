@@ -1,5 +1,4 @@
 #include "AIPlayer.h"
-#include "RapfiEngine.h"
 #include <algorithm>
 #include <chrono>
 
@@ -28,14 +27,8 @@ int AIPlayer::scoreMove(Board& board, int row, int col, CellState moveMark,
 }
 
 Move AIPlayer::getMove(const Board& board) {
-    // Hard mode: delegate to Rapfi engine
-    if (searchDepth >= 6 && !rapfiFailed) {
-        Move m = getRapfiMove(board);
-        if (m.row >= 0) return m;
-        // Rapfi failed — fall through to minimax
-    }
-
     transTable.clear();
+    lastDebug = {};  // reset early so minimax increments survive until end
     auto candidates = board.getCandidateMoves();
     if (candidates.empty()) {
         return {Board::SIZE / 2, Board::SIZE / 2};
@@ -66,132 +59,70 @@ Move AIPlayer::getMove(const Board& board) {
 
     // Check for immediate win (highest scored move)
     if (!scored.empty() && scored[0].first >= 200000) {
-        lastDebug = {};
         lastDebug.chosenMove = scored[0].second;
         lastDebug.reason = "immediate_win";
         lastDebug.totalCandidates = static_cast<int>(scored.size());
-        lastDebug.depthCompleted = 0;
-        lastDebug.searchTimeMs = 0;
         lastDebug.topMoves.push_back({scored[0].second, scored[0].first, 200000});
         return scored[0].second;
     }
 
-    // Easy mode (depth 2): direct minimax, no time limit needed
-    if (searchDepth <= 2) {
-        auto t0 = std::chrono::steady_clock::now();
-        int initialScore = evaluate(searchBoard, aiMark, opponentMark);
-        int bestScore = -1000000;
-        Move bestMove = scored[0].second;
-        std::vector<DebugCandidate> allResults;
-        for (const auto& pair : scored) {
-            const Move& move = pair.second;
-            int localBefore = computeLocalScore(searchBoard, move.row, move.col,
-                                                aiMark, opponentMark);
-            Move prevLast = searchBoard.getLastMove();
-            searchBoard.placeMove(move.row, move.col, aiMark);
-            int localAfter = computeLocalScore(searchBoard, move.row, move.col,
-                                               aiMark, opponentMark);
-            int newScore = initialScore - localBefore + localAfter;
-            int score = minimax(searchBoard, searchDepth - 1, -1000000, 1000000,
-                                false, aiMark, opponentMark, newScore);
-            searchBoard.undoMove(move.row, move.col, prevLast);
-            allResults.push_back({move, pair.first, score});
-            if (score > bestScore) {
-                bestScore = score;
-                bestMove = move;
-            }
-        }
-        auto t1 = std::chrono::steady_clock::now();
-        lastDebug = {};
-        lastDebug.chosenMove = bestMove;
-        lastDebug.reason = "easy_mode";
-        lastDebug.depthCompleted = searchDepth;
-        lastDebug.totalCandidates = static_cast<int>(scored.size());
-        lastDebug.searchTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-        std::sort(allResults.begin(), allResults.end(),
-                  [](const DebugCandidate& a, const DebugCandidate& b) {
-                      return a.searchScore > b.searchScore;
-                  });
-        for (size_t i = 0; i < std::min(allResults.size(), static_cast<size_t>(5)); i++)
-            lastDebug.topMoves.push_back(allResults[i]);
-        return bestMove;
-    }
+    // Opening taper: early board has no tactics, full depth wastes time.
+    //   moveCount <= 3   → cap depth at 2  (AI's moves 1–2)
+    //   moveCount <= 9   → cap depth at 4  (AI's moves 3–5)
+    //   else             → configured depth (Hard = 4)
+    int mc = board.getMoveCount();
+    int effectiveDepth = searchDepth;
+    if (mc <= 3)      effectiveDepth = std::min(effectiveDepth, 2);
+    else if (mc <= 9) effectiveDepth = std::min(effectiveDepth, 4);
+    bool openingShallow = (effectiveDepth < searchDepth);
 
-    // Medium/Hard: iterative deepening with time limit
-    int timeLimitMs = (searchDepth >= 6) ? TIME_LIMIT_HARD_MS : TIME_LIMIT_MEDIUM_MS;
-    return iterativeDeepening(searchBoard, scored, aiMark, opponentMark, timeLimitMs);
-}
-
-Move AIPlayer::iterativeDeepening(Board& searchBoard,
-                                   const std::vector<std::pair<int, Move>>& scored,
-                                   CellState aiMark, CellState opponentMark,
-                                   int timeLimitMs) {
-    auto startTime = std::chrono::steady_clock::now();
+    // Single-depth search at effectiveDepth (no iterative deepening).
+    auto t0 = std::chrono::steady_clock::now();
+    int initialScore = evaluate(searchBoard, aiMark, opponentMark);
+    int bestScore = -1000000;
     Move bestMove = scored[0].second;
-    int completedDepth = 0;
-    std::vector<DebugCandidate> lastCompleteResults;
+    std::vector<DebugCandidate> allResults;
 
-    for (int curDepth = 2; curDepth <= searchDepth; curDepth += 2) {
-        transTable.clear();
-        int initScore = evaluate(searchBoard, aiMark, opponentMark);
-        int bestScore = -1000000;
-        Move depthBest = scored[0].second;
-        bool timeUp = false;
-        std::vector<DebugCandidate> depthResults;
-
-        for (const auto& pair : scored) {
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - startTime).count();
-            if (elapsed >= timeLimitMs) { timeUp = true; break; }
-
-            const Move& move = pair.second;
-            int lb = computeLocalScore(searchBoard, move.row, move.col,
-                                       aiMark, opponentMark);
-            Move prev = searchBoard.getLastMove();
-            searchBoard.placeMove(move.row, move.col, aiMark);
-            int la = computeLocalScore(searchBoard, move.row, move.col,
-                                       aiMark, opponentMark);
-            int score = minimax(searchBoard, curDepth - 1, -1000000, 1000000,
-                                false, aiMark, opponentMark, initScore - lb + la);
-            searchBoard.undoMove(move.row, move.col, prev);
-
-            depthResults.push_back({move, pair.first, score});
-            if (score > bestScore) { bestScore = score; depthBest = move; }
+    for (const auto& pair : scored) {
+        const Move& move = pair.second;
+        int localBefore = computeLocalScore(searchBoard, move.row, move.col,
+                                            aiMark, opponentMark);
+        Move prevLast = searchBoard.getLastMove();
+        searchBoard.placeMove(move.row, move.col, aiMark);
+        int localAfter = computeLocalScore(searchBoard, move.row, move.col,
+                                           aiMark, opponentMark);
+        int newScore = initialScore - localBefore + localAfter;
+        int score = minimax(searchBoard, effectiveDepth - 1, -1000000, 1000000,
+                            false, aiMark, opponentMark, newScore);
+        searchBoard.undoMove(move.row, move.col, prevLast);
+        allResults.push_back({move, pair.first, score});
+        if (score > bestScore) {
+            bestScore = score;
+            bestMove = move;
         }
-
-        if (!timeUp) {
-            bestMove = depthBest;
-            completedDepth = curDepth;
-            lastCompleteResults = depthResults;
-        }
-
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - startTime).count();
-        if (elapsed >= timeLimitMs) break;
     }
 
-    auto endTime = std::chrono::steady_clock::now();
-    lastDebug = {};
+    auto t1 = std::chrono::steady_clock::now();
     lastDebug.chosenMove = bestMove;
-    lastDebug.reason = "iterative_deepening";
-    lastDebug.depthCompleted = completedDepth;
+    lastDebug.reason = openingShallow ? "opening_shallow" : "minimax";
+    lastDebug.depthCompleted = effectiveDepth;
     lastDebug.totalCandidates = static_cast<int>(scored.size());
-    lastDebug.searchTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-        endTime - startTime).count();
-
-    std::sort(lastCompleteResults.begin(), lastCompleteResults.end(),
+    lastDebug.searchTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+    lastDebug.ttFinalSize = static_cast<int>(transTable.size());
+    std::sort(allResults.begin(), allResults.end(),
               [](const DebugCandidate& a, const DebugCandidate& b) {
                   return a.searchScore > b.searchScore;
               });
-    for (size_t i = 0; i < std::min(lastCompleteResults.size(), static_cast<size_t>(5)); i++)
-        lastDebug.topMoves.push_back(lastCompleteResults[i]);
-
+    for (size_t i = 0; i < std::min(allResults.size(), static_cast<size_t>(5)); i++)
+        lastDebug.topMoves.push_back(allResults[i]);
     return bestMove;
 }
 
 int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
                       bool maximizing, CellState aiMark, CellState opponentMark,
                       int boardScore) {
+    lastDebug.nodesSearched++;
+
     // Lightweight winner check (no vector allocation)
     CellState winner = board.hasWinner();
     if (winner == aiMark) return 100000 + depth;
@@ -201,16 +132,26 @@ int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
 
     // Transposition table probe
     uint64_t hash = board.getHash();
+    Move ttBestMove{-1, -1};
+    lastDebug.ttProbes++;
     auto it = transTable.find(hash);
     if (it != transTable.end()) {
+        lastDebug.ttHits++;
         const TTEntry& entry = it->second;
+        ttBestMove = entry.bestMove;
         if (entry.depth >= depth) {
-            if (entry.flag == 0) return entry.score;        // exact
-            if (entry.flag == 1 && entry.score > alpha)     // lower bound
+            if (entry.flag == TTFlag::Exact) {
+                lastDebug.ttCutoffs++;
+                return entry.score;
+            }
+            if (entry.flag == TTFlag::LowerBound && entry.score > alpha)
                 alpha = entry.score;
-            if (entry.flag == 2 && entry.score < beta)      // upper bound
+            if (entry.flag == TTFlag::UpperBound && entry.score < beta)
                 beta = entry.score;
-            if (alpha >= beta) return entry.score;
+            if (alpha >= beta) {
+                lastDebug.ttCutoffs++;
+                return entry.score;
+            }
         }
     }
 
@@ -230,8 +171,23 @@ int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
                   return a.first > b.first;
               });
 
+    // TT move-to-front: if a prior search stored a best move for this position,
+    // try it first. Guarded by row>=0 sentinel and linear search (no-op on hash
+    // collision or different candidate set).
+    if (ttBestMove.row >= 0) {
+        for (size_t i = 1; i < scored.size(); ++i) {
+            if (scored[i].second.row == ttBestMove.row &&
+                scored[i].second.col == ttBestMove.col) {
+                std::swap(scored[0], scored[i]);
+                lastDebug.ttHoists++;
+                break;
+            }
+        }
+    }
+
     int origAlpha = alpha;
     int bestEval;
+    Move bestMoveHere{-1, -1};
 
     if (maximizing) {
         bestEval = -1000000;
@@ -247,7 +203,10 @@ int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
             int eval = minimax(board, depth - 1, alpha, beta, false,
                                aiMark, opponentMark, newScore);
             board.undoMove(move.row, move.col, prevLast);
-            if (eval > bestEval) bestEval = eval;
+            if (eval > bestEval) {
+                bestEval = eval;
+                bestMoveHere = move;
+            }
             if (bestEval > alpha) alpha = bestEval;
             if (beta <= alpha) break;
         }
@@ -265,7 +224,10 @@ int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
             int eval = minimax(board, depth - 1, alpha, beta, true,
                                aiMark, opponentMark, newScore);
             board.undoMove(move.row, move.col, prevLast);
-            if (eval < bestEval) bestEval = eval;
+            if (eval < bestEval) {
+                bestEval = eval;
+                bestMoveHere = move;
+            }
             if (bestEval < beta) beta = bestEval;
             if (beta <= alpha) break;
         }
@@ -275,14 +237,16 @@ int AIPlayer::minimax(Board& board, int depth, int alpha, int beta,
     TTEntry newEntry{};
     newEntry.depth = depth;
     newEntry.score = bestEval;
+    newEntry.bestMove = bestMoveHere;
     if (bestEval <= origAlpha) {
-        newEntry.flag = 2;  // upper bound (failed low)
+        newEntry.flag = TTFlag::UpperBound;  // failed low
     } else if (bestEval >= beta) {
-        newEntry.flag = 1;  // lower bound (failed high)
+        newEntry.flag = TTFlag::LowerBound;  // failed high
     } else {
-        newEntry.flag = 0;  // exact
+        newEntry.flag = TTFlag::Exact;
     }
     transTable[hash] = newEntry;
+    lastDebug.ttStores++;
 
     return bestEval;
 }
@@ -662,73 +626,4 @@ Move AIPlayer::findThreatWin(Board& board, CellState attackMark,
     }
 
     return {-1, -1};
-}
-
-Move AIPlayer::getRapfiMove(const Board& board) {
-    // Lazy initialization
-    if (!rapfiEngine) {
-        rapfiEngine = std::make_unique<RapfiEngine>("assets/rapfi", 10000);
-        if (!rapfiEngine->start()) {
-            rapfiFailed = true;
-            rapfiEngine.reset();
-            return {-1, -1};
-        }
-        boardSynced = false;
-        lastSentMoveCount = 0;
-    }
-
-    if (!rapfiEngine->isRunning()) {
-        rapfiFailed = true;
-        rapfiEngine.reset();
-        return {-1, -1};
-    }
-
-    int moveCount = board.getMoveCount();
-    Move result{-1, -1};
-
-    if (moveCount == 0) {
-        // Engine plays first on empty board
-        result = rapfiEngine->sendBegin();
-        lastSentMoveCount = 1;
-        boardSynced = true;
-    } else if (!boardSynced || moveCount != lastSentMoveCount + 1) {
-        // Board state mismatch — full resync
-        result = rapfiEngine->sendBoard(board, mark);
-        lastSentMoveCount = moveCount + 1;
-        boardSynced = true;
-    } else {
-        // Normal incremental play
-        result = rapfiEngine->sendTurn(board.getLastMove());
-        lastSentMoveCount = moveCount + 1;
-        boardSynced = true;
-    }
-
-    if (result.row < 0) {
-        rapfiFailed = true;
-        rapfiEngine.reset();
-        return {-1, -1};
-    }
-
-    // Validate move
-    if (board.getCell(result.row, result.col) != CellState::Empty) {
-        rapfiFailed = true;
-        rapfiEngine.reset();
-        return {-1, -1};
-    }
-
-    // Populate debug info
-    lastDebug = {};
-    lastDebug.chosenMove = result;
-    lastDebug.reason = "rapfi_engine";
-    lastDebug.depthCompleted = 0;
-    lastDebug.totalCandidates = 0;
-    lastDebug.searchTimeMs = rapfiEngine->getLastResponseTimeMs();
-    lastDebug.topMoves.push_back({result, 0, 0});
-
-    return result;
-}
-
-void AIPlayer::resetEngine() {
-    boardSynced = false;
-    // Don't kill the process — just mark for BOARD resync on next move
 }

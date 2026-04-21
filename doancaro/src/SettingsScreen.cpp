@@ -20,9 +20,7 @@ void SettingsScreen::update() {
                 settings.vsAI = !settings.vsAI;
                 break;
             case 1:  // Cycle AI difficulty
-                if (settings.aiDepth == 2) settings.aiDepth = 4;
-                else if (settings.aiDepth == 4) settings.aiDepth = 6;
-                else settings.aiDepth = 2;
+                settings.aiDepth = (settings.aiDepth == 2) ? 4 : 2;
                 break;
             case 2:  // Back
                 done = true;
@@ -36,9 +34,7 @@ void SettingsScreen::update() {
                 settings.vsAI = !settings.vsAI;
                 break;
             case 1:
-                if (settings.aiDepth == 6) settings.aiDepth = 4;
-                else if (settings.aiDepth == 4) settings.aiDepth = 2;
-                else settings.aiDepth = 6;
+                settings.aiDepth = (settings.aiDepth == 2) ? 4 : 2;
                 break;
             default:
                 break;
@@ -73,9 +69,7 @@ void SettingsScreen::update() {
                         settings.vsAI = !settings.vsAI;
                         break;
                     case 1:
-                        if (settings.aiDepth == 2) settings.aiDepth = 4;
-                        else if (settings.aiDepth == 4) settings.aiDepth = 6;
-                        else settings.aiDepth = 2;
+                        settings.aiDepth = (settings.aiDepth == 2) ? 4 : 2;
                         break;
                     case 2:
                         done = true;
@@ -151,12 +145,7 @@ void SettingsScreen::reset() {
 }
 
 const char* SettingsScreen::getDifficultyLabel() const {
-    switch (settings.aiDepth) {
-        case 2:  return "Easy";
-        case 4:  return "Medium";
-        case 6:  return "Hard (Rapfi)";
-        default: return "Medium";
-    }
+    return (settings.aiDepth == 2) ? "Easy" : "Hard";
 }
 
 const char* SettingsScreen::getGameModeLabel() const {

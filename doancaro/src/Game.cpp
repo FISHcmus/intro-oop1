@@ -62,7 +62,6 @@ void Game::run() {
     // Stop AI engine before shutdown to prevent orphaned processes
     if (aiThread.joinable()) aiThread.join();
     auto* ai = dynamic_cast<AIPlayer*>(player2);
-    if (ai) ai->resetEngine();
     delete player1; player1 = nullptr;
     delete player2; player2 = nullptr;
 
@@ -133,15 +132,6 @@ void Game::updatePlaying() {
 
     // Check if AI finished thinking
     if (aiThinking.load() == false && aiResult.row >= 0) {
-        // Detect Rapfi fallback — warn user
-        if (aiDepth >= 6) {
-            auto* ai = dynamic_cast<AIPlayer*>(currentPlayer);
-            if (ai && ai->getLastDebug().reason != "rapfi_engine") {
-                std::snprintf(toastMessage, sizeof(toastMessage),
-                              "Rapfi unavailable - using minimax fallback");
-                toastTimer = 3.0f;
-            }
-        }
         applyMove(aiResult);
         aiResult = {-1, -1};
         return;
@@ -434,7 +424,7 @@ void Game::drawDebugPanel() {
     int py = 50;
     int pw = 280;
     int lineH = 18;
-    int numLines = 5 + static_cast<int>(dbg.topMoves.size());
+    int numLines = 8 + static_cast<int>(dbg.topMoves.size());
     int ph = 12 + numLines * lineH + 12;
 
     // Background
@@ -461,6 +451,21 @@ void Game::drawDebugPanel() {
     std::snprintf(buf, sizeof(buf), "Depth: %d  Candidates: %d  Time: %lldms",
                   dbg.depthCompleted, dbg.totalCandidates, dbg.searchTimeMs);
     Fonts::draw(Fonts::body, buf, tx, ty, 13, {200, 200, 200, 255});
+    ty += lineH;
+
+    // TT stats — hit rate = ttHits / ttProbes, cutoff rate = ttCutoffs / ttHits
+    double hitPct = (dbg.ttProbes > 0)
+                    ? (100.0 * static_cast<double>(dbg.ttHits) / static_cast<double>(dbg.ttProbes))
+                    : 0.0;
+    std::snprintf(buf, sizeof(buf), "Nodes: %lld  TT: %lld/%lld hits (%.1f%%)",
+                  dbg.nodesSearched, dbg.ttHits, dbg.ttProbes, hitPct);
+    Color ttColor = (dbg.ttHits > 0) ? Color{200, 200, 200, 255} : Color{255, 180, 120, 255};
+    Fonts::draw(Fonts::body, buf, tx, ty, 13, ttColor);
+    ty += lineH;
+
+    std::snprintf(buf, sizeof(buf), "Cutoffs: %lld  Hoists: %lld  Stored: %d",
+                  dbg.ttCutoffs, dbg.ttHoists, dbg.ttFinalSize);
+    Fonts::draw(Fonts::body, buf, tx, ty, 13, ttColor);
     ty += lineH;
 
     // Chosen move
@@ -627,7 +632,6 @@ void Game::undoLastMove() {
 
     // Force Rapfi engine to resync board state on next move
     auto* ai = dynamic_cast<AIPlayer*>(player2);
-    if (ai) ai->resetEngine();
 }
 
 void Game::autoSave() {
@@ -654,8 +658,10 @@ void Game::loadSettings() {
         if (end && end != buf) {
             long depth = strtol(end, &end, 10);
             vsAI = (ai != 0);
-            if (depth == 2 || depth == 4 || depth == 6) {
-                aiDepth = static_cast<int>(depth);
+            if (depth == 2) {
+                aiDepth = 2;
+            } else {
+                aiDepth = 4;  // legacy 6/8 or any other value normalizes to Hard
             }
         }
     }
