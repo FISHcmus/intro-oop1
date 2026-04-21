@@ -11,8 +11,8 @@ depth and the opening book differ.
 
 | Difficulty | Algorithm | `searchDepth` | TT | Opening book |
 |---|---|---|---|---|
-| Easy   | Greedy one-ply (Option C) | — (no tree) | n/a | off |
-| Normal | Minimax α-β                | 2           | on  | off |
+| Easy   | Greedy one-ply (Option C) | — (no tree) | n/a | on  |
+| Normal | Minimax α-β                | 2           | on  | on  |
 | Hard   | Minimax α-β                | 3           | on  | on  |
 
 **Why this split** — previously all three tiers were the same minimax engine
@@ -26,8 +26,8 @@ most one-move threats. We now draw a clean line:
 - **Normal and Hard** both search; they differ in how far ahead. TT is on
   for both because the `searchDepth >= 4` gate was arbitrary — TT helps
   wherever minimax runs (see §4).
-- Opening book stays Hard-only (hand-curated canonical moves, not a
-  depth-feature).
+- Opening book is probed on all tiers (hand-curated canonical moves,
+  109 LOC paid once — might as well use it everywhere).
 
 ## Architecture
 
@@ -35,7 +35,7 @@ most one-move threats. We now draw a clean line:
 AIPlayer::getMove(board)
   │
   ├── clear TT, reset debug
-  ├── if Hard && moveCount ≤ 6: probe OpeningBook
+  ├── if moveCount ≤ 6: probe OpeningBook (all tiers)
   │       hit → return book move   (reason = "opening_book")
   │
   ├── candidates = board.getCandidateMoves(radius=2)
@@ -71,7 +71,7 @@ if (searchDepth < 2) return greedyOnePly(board);   // Easy tier
 // TT is on whenever minimax runs (no depth gate).
 ```
 
-Opening book remains Hard-only (hand-curated; not a depth feature).
+Opening book is probed on every tier before the shared scaffolding runs.
 
 ### 1.0 Shared scaffolding (all tiers run this after the book probe)
 
@@ -91,7 +91,8 @@ if top score ≥ 200 000:                          ← opponent-win block
 
 ### 1.1 Easy — greedy one-ply (Option C)
 
-**No tree search. No transposition table. No opening book.**
+**No tree search. No transposition table.** Opening book is probed for
+all tiers (see §1.0 / §6), so Easy's first move may come from the book.
 
 After the shared scaffolding (§1.0), if no immediate win was taken, Easy
 evaluates each candidate by its **local-score delta**: measure the local
@@ -119,7 +120,7 @@ wins the argmax.
 | `searchDepth` | 1 (sentinel, means "no minimax") | `SettingsScreen.cpp` |
 | Tree search | none | early return |
 | Transposition table | n/a | never reached |
-| Opening book | disabled | Hard-only |
+| Opening book | enabled (probed before greedy) | `AIPlayer.cpp` getMove |
 | Candidate radius | 2 | `Board.cpp` |
 
 #### Why "greedy one-ply" and not something else — literature review
@@ -190,13 +191,13 @@ the first tactic that beats Easy cleanly.
 Straight 2-ply minimax α-β. The AI plays its move and evaluates every
 opponent reply, picking the move whose worst-case reply is best.
 **TT is on** (unlike the old Normal which gated it off); opening book is
-still Hard-only.
+probed before minimax.
 
 | Knob | Value | Source |
 |---|---|---|
 | `searchDepth` | 2 | `SettingsScreen.cpp` (label `"Normal"`) |
 | Transposition table | enabled | TT is always on when minimax runs |
-| Opening book | disabled | Hard-only |
+| Opening book | enabled (probed before minimax) | `AIPlayer.cpp` getMove |
 | Candidate radius | 2 | `Board.cpp` |
 
 **Feel:** sees exactly one counter-move. Catches the "build-open-three →
@@ -208,9 +209,10 @@ fork/double-threat setups that need two AI plies to see.
 dropping Normal to d=2 and Hard to d=3 (from d=4) gives a cleaner,
 faster tier ladder — Normal now thinks in <100 ms per move.
 
-### 1.3 Hard — minimax d=3 + TT + opening book
+### 1.3 Hard — minimax d=3 + TT
 
-3-ply minimax α-β with both performance features enabled:
+3-ply minimax α-β. Shares the opening book probe with Easy/Normal; the
+tier-specific feature here is the deeper search.
 
 1. **Transposition table** (`std::unordered_map<uint64_t, TTEntry>` in
    `AIPlayer`): each visited position is stored keyed by Zobrist hash with
@@ -223,11 +225,11 @@ faster tier ladder — Normal now thinks in <100 ms per move.
 
    Cleared at the start of every `getMove()` call (TT is per-turn).
 
-2. **Opening book** (`OpeningBook.cpp`): hand-curated table keyed by
-   Zobrist hash. 6 base entries × D4 symmetry expansion = 22 stored
-   hashes covering all single-stone near-center positions plus the empty
-   board. Probed *before* candidate generation — a hit short-circuits
-   the entire search.
+2. **Opening book** (`OpeningBook.cpp`, shared across all tiers):
+   hand-curated table keyed by Zobrist hash. 6 base entries × D4 symmetry
+   expansion = 22 stored hashes covering all single-stone near-center
+   positions plus the empty board. Probed *before* candidate generation —
+   a hit short-circuits the entire search on every tier.
 
    Current Tier 1 base entries:
 
@@ -438,9 +440,9 @@ at our evaluation strength.
 
 ## 6. Opening Book (`OpeningBook.cpp`)
 
-Hard-mode only. A hand-curated table of Zobrist-hash → Move entries
-representing canonical opening theory. See §1.3 for the Tier 1 base
-entries and the D4 symmetry expansion.
+Shared across all tiers. A hand-curated table of Zobrist-hash → Move
+entries representing canonical opening theory. See §1.3 for the Tier 1
+base entries and the D4 symmetry expansion.
 
 ### Symmetry expansion
 
@@ -601,7 +603,9 @@ AI move.
 
 7. **Opening book is tiny (Tier 1).** 6 base entries / 22 hashes only
    covers the AI's first move. The AI falls out of book as soon as two
-   stones are on the board. Tier 2 (Renju openings) not implemented.
+   stones are on the board — every tier. Tier 2 (Renju openings with
+   ~10 three-stone entries for Kouyoku/Keigetsu/Suigetsu move-4 replies)
+   not implemented.
 
 ---
 
@@ -630,6 +634,7 @@ AI move.
 | 2026-04-21 | TT + opening book gated Hard-only (`searchDepth >= 4`) | Superseded (below) |
 | 2026-04-21 | Revise tier split — Easy=greedy one-ply (no minimax), Normal=d2+TT, Hard=d3+TT. Drop `searchDepth >= 4` TT gate (TT always on when minimax runs). Drop d=4 Hard (120 s/move unshippable). Opening book stays Hard-only. | Kept — current |
 | 2026-04-21 | Easy defense fix — rank by `computeLocalScore` delta (`after - before`) instead of `scoreMove`'s absolute `\|localAfter\|`. Fixes blindness to opponent open-threes and 4-in-rows; `scoreMove` and minimax untouched. | Kept — current |
+| 2026-04-21 | Opening book probed on all tiers (drop `searchDepth >= 3` gate). 120 LOC of `OpeningBook.cpp` now benefits Easy/Normal/Hard equally instead of only Hard's first move. | Kept — current |
 
 ---
 
