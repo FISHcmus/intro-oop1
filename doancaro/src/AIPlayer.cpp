@@ -80,18 +80,43 @@ Move AIPlayer::getMove(const Board& board) {
         return scored[0].second;
     }
 
-    // Easy tier — greedy one-ply (Option C): return the highest-scored
-    // candidate from the scoreMove ranking. No tree search, no TT, no
-    // opening book. searchDepth<2 is the sentinel from SettingsScreen.
+    // Easy tier — greedy one-ply (Option C). scoreMove's |localAfter|
+    // ranks blocking moves low (post-block windows collapse to near-zero),
+    // so rank on delta = localAfter - localBefore. Positive delta both for
+    // building own threats AND for breaking opponent threats (localBefore
+    // strongly negative via DEF_MULT). No tree search, no TT, no book.
     if (searchDepth < 2) {
-        lastDebug.chosenMove = scored[0].second;
+        std::vector<std::pair<int, Move>> easyScored;
+        easyScored.reserve(candidates.size());
+        int bestDelta = INT_MIN;
+        Move bestEasyMove = candidates[0];
+        for (const auto& m : candidates) {
+            int before = computeLocalScore(searchBoard, m.row, m.col,
+                                           aiMark, opponentMark);
+            Move prevLast = searchBoard.getLastMove();
+            searchBoard.placeMove(m.row, m.col, aiMark);
+            int after = computeLocalScore(searchBoard, m.row, m.col,
+                                          aiMark, opponentMark);
+            searchBoard.undoMove(m.row, m.col, prevLast);
+            int delta = after - before;
+            easyScored.emplace_back(delta, m);
+            if (delta > bestDelta) {
+                bestDelta = delta;
+                bestEasyMove = m;
+            }
+        }
+        std::sort(easyScored.begin(), easyScored.end(),
+                  [](const std::pair<int, Move>& a, const std::pair<int, Move>& b) {
+                      return a.first > b.first;
+                  });
+        lastDebug.chosenMove = bestEasyMove;
         lastDebug.reason = "greedy_one_ply";
         lastDebug.depthCompleted = 0;
-        lastDebug.totalCandidates = static_cast<int>(scored.size());
-        for (size_t i = 0; i < std::min(scored.size(), static_cast<size_t>(5)); i++)
+        lastDebug.totalCandidates = static_cast<int>(easyScored.size());
+        for (size_t i = 0; i < std::min(easyScored.size(), static_cast<size_t>(5)); i++)
             lastDebug.topMoves.push_back(
-                {scored[i].second, scored[i].first, INT_MIN});
-        return scored[0].second;
+                {easyScored[i].second, easyScored[i].first, INT_MIN});
+        return bestEasyMove;
     }
 
     // Single-depth search at configured searchDepth (no iterative deepening,

@@ -93,14 +93,26 @@ if top score ≥ 200 000:                          ← opponent-win block
 
 **No tree search. No transposition table. No opening book.**
 
-After the shared scaffolding (§1.0), if no immediate win/block was taken,
-Easy simply returns the single highest-scored candidate from `scoreMove()`.
-That's it — one pass, one pick, `O(candidates × windows)` work.
+After the shared scaffolding (§1.0), if no immediate win was taken, Easy
+evaluates each candidate by its **local-score delta**: measure the local
+pattern score at the cell, place the AI stone, measure again, rank by
+`after - before`. Argmax wins. One pass, one pick, `O(candidates × windows)`
+work.
 
 ```
 reason = "greedy_one_ply"
-return scored[0].move
+delta  = computeLocalScore(after) - computeLocalScore(before)
+return argmax(delta, candidates)
 ```
+
+Why delta and not `scoreMove()`'s absolute score? `scoreMove` returns
+`|localAfter|`. At a block cell, `localAfter` is tiny — the AI's lone
+stone makes no pattern while the opponent's former 4-in-row window has
+collapsed. `scoreMove`-rank would pick a distant pair-builder (score
+~140) over a direct block (score ~40). Delta restores sanity:
+`localBefore` at a block cell is strongly negative (opponent pattern ×
+1.5 defense multiplier), so `after - before` is strongly positive and
+wins the argmax.
 
 | Knob | Value | Source |
 |---|---|---|
@@ -124,12 +136,14 @@ The design space for a weak Gomoku AI is well-trodden; major prior art:
 | Minimax d ≥ 2 (current Normal and Hard) | sen.ltd "Normal" d=2 [²], tournament AIs [⁷] | strong; crushes new players |
 
 Pure random (A) and neighborhood-random (B) are too weak — the AI looks
-broken. Option C is the sweet spot because the underlying pattern scorer
-already knows about direct wins and direct blocks (via `scoreMove`'s
-hard-coded 200 000 / 150 000 returns), and the `patternScore[]` table
-assigns high value to extending your own three-in-a-row. So Option C
-reliably **takes wins**, **blocks direct fives**, and **extends its own
-lines**, giving it a purposeful feel.
+broken. Option C is the sweet spot because delta captures the three
+things the AI must do: **take direct wins** (handled by `scoreMove`'s
+200 000 short-circuit in §1.0 before Easy is entered), **block direct
+threats** (delta captures the loss of an opponent pattern weighted by
+`DEF_MULT = 1.5` in `computeLocalScore`), and **extend own lines**
+(delta rises when the AI's own pattern improves). So Option C reliably
+takes wins, blocks direct 4-in-a-rows and open-threes, and extends its
+own lines — giving it a purposeful feel.
 
 #### What Option C can and cannot see
 
@@ -141,25 +155,23 @@ horizon is zero plies after the move.
 ```
 What Option C handles correctly           What it misses
 ─────────────────────────────────         ──────────────────────────────
-Take a 5-in-a-row (win)                   Opponent's open three
-Block opponent's direct 5-in-a-row          (builds open four next turn,
-  (when opponent has a 4)                   then forces win)
-Extend own open-two / open-three          Fork / double-threat setups
-  when it's the highest-scoring move      Any multi-move tactic
-                                          Positional sacrifices
-                                          "Opponent will extend my threat"
-Incidentally blocks some open threes        reasoning
-  when the block cell happens to
-  form AI's own pattern
+Take a 5-in-a-row (win)                   Forks / double-threat setups
+Block opponent's direct 5 or 4            Multi-move tactics (VCF, VCT)
+Block opponent's open three               "Opponent extends my threat"
+  (DEF_MULT weights the delta)              reasoning
+Extend own open-two / open-three          Positional sacrifices
+Prefer high-value blocks over own         Anything needing 2+ plies of
+  medium-value builds                       lookahead
 ```
 
-**Concrete consequence** — a human player who builds an open three
-(`_OOO_` with both ends empty) that Option C didn't block will convert
-it to an open four next turn. Option C's scoreMove scores the block cell
-at 0 (no AI pattern forms there) while scoring some other build move at
-1500+ — so it ignores the threat. The human then has a forced win. This
-is intentional and matches what Gomoku strategy guides describe as the
-first tactic beginners learn [⁵].
+**Concrete consequence** — a human player who sets up a **fork** (two
+open threes that intersect at a single cell, or an open four + open
+three double-threat) beats Option C every time. Easy evaluates each
+block cell independently; each threat looks equally blockable. Whichever
+it picks, the other converts to an open four next turn. This is
+intentional: Option C can't read two moves ahead, so it can't reason
+"if I block here, the other threat wins anyway". A two-threat fork is
+the first tactic that beats Easy cleanly.
 
 #### Comparison to the old Easy (minimax d=2)
 
@@ -552,13 +564,14 @@ AI move.
 
 ## 9. Known Weaknesses
 
-1. **Easy is blind to opponent replies by construction.** Option C
-   scores only the AI's own move — the opponent's counter is not
-   evaluated. Any tactic that needs reading one ply ahead (open-three
-   block, fork setup, "opponent extends my pattern") is missed. This is
-   the horizon effect [⁸] at its extreme; it's the design, not a bug.
-   Players who learn the "build open three → force open four → win"
-   tactic will beat Easy every game.
+1. **Easy can't see multi-move tactics.** Option C evaluates only the
+   AI's own move (via local-score delta) — the opponent's reply is never
+   considered. Direct threats (5-in-a-row, 4-in-a-row, open three) are
+   blocked via the defense-weighted delta. But **forks** — two
+   simultaneous threats that intersect at a single cell — beat Easy
+   every time. Any tactic that needs reading one ply ahead (fork setup,
+   "opponent extends my pattern") is missed. This is the horizon
+   effect [⁸] at its extreme; it's the design, not a bug.
 
 2. **Horizon at depth 3 on Hard.** The AI still can't see forced-win
    sequences longer than ~3 plies. A proper VCF/VCT pass using the
@@ -616,6 +629,7 @@ AI move.
 | 2026-04-21 | 3-tier difficulty (Easy d=2 / Normal d=3 / Hard d=4) | Superseded (below) |
 | 2026-04-21 | TT + opening book gated Hard-only (`searchDepth >= 4`) | Superseded (below) |
 | 2026-04-21 | Revise tier split — Easy=greedy one-ply (no minimax), Normal=d2+TT, Hard=d3+TT. Drop `searchDepth >= 4` TT gate (TT always on when minimax runs). Drop d=4 Hard (120 s/move unshippable). Opening book stays Hard-only. | Kept — current |
+| 2026-04-21 | Easy defense fix — rank by `computeLocalScore` delta (`after - before`) instead of `scoreMove`'s absolute `\|localAfter\|`. Fixes blindness to opponent open-threes and 4-in-rows; `scoreMove` and minimax untouched. | Kept — current |
 
 ---
 
