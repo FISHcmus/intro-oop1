@@ -99,16 +99,10 @@ jobs:
       - name: Remove build outputs — teacher rebuilds
         shell: pwsh
         run: |
+          # x64/ and .vs/ contain every build artifact msbuild produces
+          # (.obj, .pdb, .ilk, .tlog are all under x64/Release/).
           Remove-Item -Recurse -Force "CaroGame_src\x64" -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force "CaroGame_src\.vs" -ErrorAction SilentlyContinue
-          # x64/ and .vs/ already took the build output; these are belt-and-braces
-          # in case msbuild scatters intermediates elsewhere. Guard against null
-          # results from Get-ChildItem (errors with "Object reference not set" in pwsh 7).
-          foreach ($ext in @("*.obj","*.pdb","*.ilk","*.tlog")) {
-            # $matches is a PowerShell automatic variable — don't shadow it.
-            $hits = Get-ChildItem -Path "CaroGame_src" -Recurse -Filter $ext -ErrorAction SilentlyContinue
-            if ($hits) { $hits | Remove-Item -Force -ErrorAction SilentlyContinue }
-          }
 
       - name: Portability gate — fail if any absolute path survives
         shell: pwsh
