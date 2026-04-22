@@ -15,7 +15,7 @@ Mở thư mục `bin/`, double-click `CaroGame.exe`.
 
 ## Build bằng Visual Studio 2022
 
-Mở `vs2022/CaroGame.sln`, chọn cấu hình **Release**, nền tảng **x64**, bấm **Ctrl+F5**.
+Mở `CaroGame.sln` ở thư mục gốc, chọn cấu hình **Release**, nền tảng **x64**, bấm **Ctrl+F5**. Không cần CMake — `raylib.lib` đã được đóng gói sẵn trong `raylib/lib/`.
 
 ## Điều khiển
 

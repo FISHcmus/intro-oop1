@@ -20,117 +20,98 @@ jobs:
           $stage = "CaroGame_src"
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
-          # Our source + assets (drop unused subdirs)
+          # Source + assets (drop unused subdirs)
           Copy-Item -Recurse doancaro\src "$stage\"
           Copy-Item -Recurse doancaro\assets "$stage\"
-          Remove-Item -Recurse -Force "$stage\assets\rapfi"  -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force "$stage\assets\music"  -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force "$stage\assets\sounds" -ErrorAction SilentlyContinue
           Get-ChildItem -Path "$stage\assets" -Recurse -Filter ".gitkeep" | Remove-Item -Force
 
           Copy-Item doancaro\demo.png "$stage\"
 
-          # Portable CMakeLists + README
-          Copy-Item ci-assets\CMakeLists.bundle.txt "$stage\CMakeLists.txt"
-          Copy-Item ci-assets\README.bundle.md      "$stage\README.md"
+          # Hand-written, portable VS 2022 project files (no CMake involved)
+          Copy-Item ci-assets\CaroGame.sln     "$stage\"
+          Copy-Item ci-assets\CaroGame.vcxproj "$stage\"
+          Copy-Item ci-assets\README.bundle.md "$stage\README.md"
 
-          # Bundle raylib 5.5 source (offline build)
-          Invoke-WebRequest -Uri "https://github.com/raysan5/raylib/archive/refs/tags/5.5.tar.gz" -OutFile raylib.tar.gz
-          tar -xzf raylib.tar.gz -C $stage
-          # Strip raylib extras not needed to build
-          Remove-Item -Recurse -Force "$stage\raylib-5.5\examples"      -ErrorAction SilentlyContinue
-          Remove-Item -Recurse -Force "$stage\raylib-5.5\projects"      -ErrorAction SilentlyContinue
-          Remove-Item -Recurse -Force "$stage\raylib-5.5\parser"        -ErrorAction SilentlyContinue
-          Remove-Item -Recurse -Force "$stage\raylib-5.5\logo"          -ErrorAction SilentlyContinue
-          Remove-Item -Recurse -Force "$stage\raylib-5.5\.github"       -ErrorAction SilentlyContinue
-
-      - name: Generate VS 2022 solution (portable)
+      - name: Download raylib 5.5 source
         shell: pwsh
         run: |
-          cmake -S CaroGame_src -B CaroGame_src\vs2022 `
-            -G "Visual Studio 17 2022" -A x64 `
-            -DCMAKE_SUPPRESS_REGENERATION=TRUE `
-            -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+          Invoke-WebRequest -Uri "https://github.com/raysan5/raylib/archive/refs/tags/5.5.tar.gz" -OutFile raylib.tar.gz
+          tar -xzf raylib.tar.gz
 
-      - name: Cache raylib build output (saves ~3 min on repeat runs)
+      - name: Cache raylib.lib (saves ~3 min on repeat runs)
+        id: cache-raylib
         uses: actions/cache@v4
         with:
-          path: CaroGame_src/vs2022/raylib
-          key: raylib-5.5-vs2022-${{ hashFiles('.github/workflows/msvc-build.yml') }}
+          path: raylib-prebuilt
+          key: raylib-5.5-vs2022-x64-static-v4
 
-      - name: Build .exe (smoke test — proves the .sln compiles)
+      - name: Build raylib.lib (static, v143, x64, Release)
+        if: steps.cache-raylib.outputs.cache-hit != 'true'
         shell: pwsh
-        run: cmake --build CaroGame_src\vs2022 --config Release -- /m
+        run: |
+          cmake -S raylib-5.5 -B raylib-build `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_POLICY_DEFAULT_CMP0091=NEW `
+            -DBUILD_EXAMPLES=OFF `
+            -DBUILD_GAMES=OFF `
+            -DCUSTOMIZE_BUILD=OFF `
+            -DWITH_PIC=OFF
+          cmake --build raylib-build --config Release --target raylib -- /m
+
+          # Stage just the headers + static lib — nothing else
+          New-Item -ItemType Directory -Path "raylib-prebuilt\include" -Force | Out-Null
+          New-Item -ItemType Directory -Path "raylib-prebuilt\lib"     -Force | Out-Null
+          Copy-Item "raylib-5.5\src\raylib.h"    "raylib-prebuilt\include\"
+          Copy-Item "raylib-5.5\src\raymath.h"   "raylib-prebuilt\include\"
+          Copy-Item "raylib-5.5\src\rlgl.h"      "raylib-prebuilt\include\"
+          Copy-Item "raylib-build\raylib\Release\raylib.lib" "raylib-prebuilt\lib\"
+
+      - name: Stage raylib into bundle
+        shell: pwsh
+        run: |
+          $dst = "CaroGame_src\raylib"
+          New-Item -ItemType Directory -Path "$dst\include" -Force | Out-Null
+          New-Item -ItemType Directory -Path "$dst\lib"     -Force | Out-Null
+          Copy-Item "raylib-prebuilt\include\*" "$dst\include\"
+          Copy-Item "raylib-prebuilt\lib\*"     "$dst\lib\"
+
+      - name: Smoke test — msbuild the hand-written solution
+        shell: pwsh
+        run: |
+          # Find msbuild via vswhere
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+          Write-Host "MSBuild: $msbuild"
+
+          & $msbuild "CaroGame_src\CaroGame.sln" /p:Configuration=Release /p:Platform=x64 /m /nologo /verbosity:minimal
+          if ($LASTEXITCODE -ne 0) { throw "msbuild failed with exit code $LASTEXITCODE" }
 
       - name: Stage runnable binary + assets into bin/
         shell: pwsh
         run: |
           $bin = "CaroGame_src\bin"
           New-Item -ItemType Directory -Path $bin -Force | Out-Null
-          Copy-Item "CaroGame_src\vs2022\Release\CaroGame.exe" "$bin\"
+          Copy-Item "CaroGame_src\x64\Release\CaroGame.exe" "$bin\"
           Copy-Item -Recurse "CaroGame_src\assets" "$bin\assets"
 
-      - name: Clean non-portable CMake artifacts, keep .sln + .vcxproj
+      - name: Remove build outputs — teacher rebuilds
         shell: pwsh
         run: |
-          $vs = "CaroGame_src\vs2022"
-
-          # Remove build outputs — teacher rebuilds
-          Get-ChildItem -Path $vs -Recurse -Directory -Filter "Release" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-          Get-ChildItem -Path $vs -Recurse -Directory -Filter "Debug"   | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-          Get-ChildItem -Path $vs -Recurse -Directory -Filter "x64"     | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-
-          # Strip CMake-generated cache files (contain absolute runner paths)
-          Get-ChildItem -Path $vs -Recurse -Directory -Filter "CMakeFiles" | Remove-Item -Recurse -Force
-          Get-ChildItem -Path $vs -Recurse -File      -Filter "CMakeCache.txt"      | Remove-Item -Force
-          Get-ChildItem -Path $vs -Recurse -File      -Filter "cmake_install.cmake" | Remove-Item -Force
-          Get-ChildItem -Path $vs -Recurse -File      -Filter "CPackConfig.cmake"    | Remove-Item -Force -ErrorAction SilentlyContinue
-          Get-ChildItem -Path $vs -Recurse -File      -Filter "CPackSourceConfig.cmake" | Remove-Item -Force -ErrorAction SilentlyContinue
-
-          # Drop CMake-housekeeping vcxproj projects (ALL_BUILD, ZERO_CHECK, INSTALL, PACKAGE)
-          # Teacher only needs CaroGame + raylib targets.
-          $housekeeping = @("ALL_BUILD", "ZERO_CHECK", "INSTALL", "PACKAGE")
-          foreach ($name in $housekeeping) {
-              Get-ChildItem -Path $vs -Recurse -File -Filter "$name.vcxproj*" | Remove-Item -Force -ErrorAction SilentlyContinue
-          }
-
-      - name: Rewrite absolute paths to $(SolutionDir) macros — makes bundle portable
-        shell: pwsh
-        run: |
-          $vs = "CaroGame_src\vs2022"
-          $workspace = (Resolve-Path "CaroGame_src").Path              # D:\a\...\CaroGame_src
-          $workspaceBs = $workspace.TrimEnd('\') + '\'
-          $workspaceFs = ($workspace -replace '\\','/').TrimEnd('/') + '/'
-          $vsBs = (Resolve-Path $vs).Path.TrimEnd('\') + '\'
-          $vsFs = ($vsBs -replace '\\','/')
-
-          Write-Host "Rewriting paths in $vs ..."
-          Write-Host "  '$vsBs'        → '`$(SolutionDir)'"
-          Write-Host "  '$workspaceBs' → '`$(SolutionDir)..\\'"
-
-          $files = Get-ChildItem -Path $vs -Recurse -File -Include *.sln,*.vcxproj,*.vcxproj.filters
-          foreach ($f in $files) {
-              $content = Get-Content $f.FullName -Raw
-
-              # Order matters: longest prefix first (vs\ is inside workspace\)
-              $content = $content.Replace($vsBs,        '$(SolutionDir)')
-              $content = $content.Replace($vsFs,        '$(SolutionDir)')
-              $content = $content.Replace($workspaceBs, '$(SolutionDir)..\')
-              $content = $content.Replace($workspaceFs, '$(SolutionDir)../')
-
-              # Free the hardcoded CMake path so teacher's PATH resolves it
-              $content = $content.Replace('"C:\Program Files\CMake\bin\cmake.exe"', 'cmake.exe')
-              $content = $content.Replace('C:\Program Files\CMake\bin\cmake.exe',    'cmake.exe')
-
-              Set-Content -Path $f.FullName -Value $content -NoNewline -Encoding UTF8
-          }
+          Remove-Item -Recurse -Force "CaroGame_src\x64" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "CaroGame_src\.vs" -ErrorAction SilentlyContinue
+          Get-ChildItem -Path "CaroGame_src" -Recurse -Filter "*.obj"  | Remove-Item -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -Path "CaroGame_src" -Recurse -Filter "*.pdb"  | Remove-Item -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -Path "CaroGame_src" -Recurse -Filter "*.ilk"  | Remove-Item -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -Path "CaroGame_src" -Recurse -Filter "*.tlog" | Remove-Item -Force -ErrorAction SilentlyContinue
 
       - name: Portability gate — fail if any absolute path survives
         shell: pwsh
         run: |
           # Match Windows drive paths only. Exclude URL schemes like http://, xmlns="..."
           # by requiring a backslash (MSBuild-native separator in .vcxproj).
-          $files = Get-ChildItem -Path "CaroGame_src\vs2022" -Recurse -File -Include *.sln,*.vcxproj,*.vcxproj.filters
+          $files = Get-ChildItem -Path "CaroGame_src" -File -Include *.sln,*.vcxproj,*.vcxproj.filters
           $leaks = $files | Select-String -Pattern '(?i)\b[A-Z]:\\' -AllMatches -ErrorAction SilentlyContinue
           if ($leaks) {
             Write-Host "=== ABSOLUTE PATH LEAKS — build non-portable ===" -ForegroundColor Red
@@ -150,6 +131,5 @@ jobs:
         with:
           name: vs-project-files
           path: |
-            CaroGame_src/vs2022/*.sln
-            CaroGame_src/vs2022/**/*.vcxproj
-            CaroGame_src/vs2022/**/*.vcxproj.filters
+            CaroGame_src/*.sln
+            CaroGame_src/*.vcxproj
