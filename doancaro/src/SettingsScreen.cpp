@@ -1,5 +1,6 @@
 #include "SettingsScreen.h"
 #include "Fonts.h"
+#include "UI.h"
 #include "raylib.h"
 #include <cstdio>
 
@@ -67,18 +68,19 @@ void SettingsScreen::update() {
     int startY = screenH / 3;
     int itemHeight = 50;
     Vector2 mouse = GetMousePosition();
+    bool mouseMoved = UI::mouseMoved();
 
     for (int i = 0; i < ITEM_COUNT; i++) {
         int y = startY + i * itemHeight;
         Rectangle itemRect = {
-            static_cast<float>(screenW / 2 - 200),
+            static_cast<float>(screenW) / 2.0f - 200.0f,
             static_cast<float>(y - 5),
             400.0f,
             static_cast<float>(itemHeight - 5)
         };
 
         if (CheckCollisionPointRec(mouse, itemRect)) {
-            selectedIndex = i;
+            if (mouseMoved) selectedIndex = i;
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 switch (i) {
                     case 0:

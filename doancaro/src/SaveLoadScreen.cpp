@@ -1,5 +1,6 @@
 #include "SaveLoadScreen.h"
 #include "Fonts.h"
+#include "UI.h"
 #include "raylib.h"
 #include <cstdio>
 #include <ctime>
@@ -74,6 +75,7 @@ void SaveLoadScreen::update() {
     int startY = 120;
     int gap = 10;
     Vector2 mouse = GetMousePosition();
+    bool mouseMoved = UI::mouseMoved();
 
     int firstSlot = (mode == SlotScreenMode::Save) ? 1 : 0;
     for (int i = firstSlot; i < MAX_SLOTS; i++) {
@@ -87,8 +89,10 @@ void SaveLoadScreen::update() {
         };
 
         if (CheckCollisionPointRec(mouse, cardRect)) {
-            selectedSlot = i;
-            deleteConfirmSlot = -1;
+            if (mouseMoved) {
+                selectedSlot = i;
+                deleteConfirmSlot = -1;
+            }
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 if (mode == SlotScreenMode::Save && i >= 1) {
                     result = SlotScreenResult::Selected;

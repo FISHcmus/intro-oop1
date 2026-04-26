@@ -1,5 +1,6 @@
 #include "MenuScreen.h"
 #include "Fonts.h"
+#include "UI.h"
 #include "raylib.h"
 
 MenuScreen::MenuScreen() : selectedIndex(0), choice(MenuChoice::None),
@@ -28,6 +29,7 @@ void MenuScreen::update() {
     int startY = screenH / 3;
     int itemHeight = 50;
     Vector2 mouse = GetMousePosition();
+    bool mouseMoved = UI::mouseMoved();
 
     for (int i = 0; i < ITEM_COUNT; i++) {
         int textWidth = Fonts::measure(Fonts::bold, items[i], itemSize);
@@ -41,7 +43,7 @@ void MenuScreen::update() {
         };
 
         if (CheckCollisionPointRec(mouse, itemRect)) {
-            selectedIndex = i;
+            if (mouseMoved) selectedIndex = i;
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 switch (i) {
                     case 0: choice = MenuChoice::NewGame; break;

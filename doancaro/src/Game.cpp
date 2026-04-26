@@ -1,6 +1,7 @@
 #include "Game.h"
 #include "Fonts.h"
 #include <climits>
+#include <cstdlib>
 #include <ctime>
 #include <cstring>
 
@@ -25,6 +26,8 @@ Game::~Game() {
 }
 
 void Game::run() {
+    std::srand(static_cast<unsigned>(std::time(nullptr)));
+
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Caro Game — OOP1 Project");
     SetTargetFPS(60);
     SetExitKey(0);  // Disable ESC auto-close; we handle ESC ourselves
@@ -34,6 +37,21 @@ void Game::run() {
     audioManager.init();
 
     while (!WindowShouldClose()) {
+        // Settings/Save/Load fall through on purpose: they keep whatever's
+        // already playing so a quick visit doesn't cut the current track.
+        switch (state) {
+            case GameState::Menu:
+                audioManager.switchToMenuMusic();
+                break;
+            case GameState::Playing:
+            case GameState::GameOver:
+                audioManager.switchToGameMusic();
+                break;
+            default:
+                break;
+        }
+        audioManager.updateMusic();
+
         // Update
         switch (state) {
             case GameState::Menu:       updateMenu();           break;
@@ -272,6 +290,8 @@ void Game::drawGameOver() {
 }
 
 void Game::startNewGame() {
+    audioManager.stopGameOverSounds();
+
     if (aiThread.joinable()) aiThread.join();
     aiThinking.store(false);
     aiResult = {-1, -1};
@@ -596,7 +616,12 @@ void Game::applyMove(Move move) {
         if (winner != CellState::Empty) {
             currentPlayer->addWin();
             state = GameState::GameOver;
-            audioManager.playWinSound();
+            // PvAI: AI is player2. AI win ⇒ human lost ⇒ lose sound.
+            if (vsAI && currentPlayer == player2) {
+                audioManager.playLoseSound();
+            } else {
+                audioManager.playWinSound();
+            }
         } else if (board.isFull()) {
             state = GameState::GameOver;
         } else {
@@ -608,6 +633,8 @@ void Game::applyMove(Move move) {
 void Game::undoLastMove() {
     if (moveHistory.empty()) return;
     if (aiThinking.load()) return;  // don't undo while AI is thinking
+
+    audioManager.stopGameOverSounds();
 
     // In PvAI, undo two moves (AI + player) to get back to player's turn
     int undoCount = (vsAI && moveHistory.size() >= 2) ? 2 : 1;
@@ -635,9 +662,6 @@ void Game::undoLastMove() {
 
     // Reset renderer animation state for undone cells
     renderer.resetAnimations();
-
-    // Force Rapfi engine to resync board state on next move
-    auto* ai = dynamic_cast<AIPlayer*>(player2);
 }
 
 void Game::autoSave() {
