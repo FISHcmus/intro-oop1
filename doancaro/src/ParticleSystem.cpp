@@ -1,6 +1,49 @@
 #include "ParticleSystem.h"
+#include "rlgl.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+
+namespace {
+    const Color confettiColors[] = {
+        {255, 215, 0, 255},    // gold
+        {255, 69, 0, 255},     // orange-red
+        {0, 191, 255, 255},    // deep sky blue
+        {50, 205, 50, 255},    // lime green
+        {255, 105, 180, 255},  // hot pink
+        {148, 103, 255, 255},  // purple
+        {255, 255, 100, 255},  // yellow
+        {255, 255, 255, 255},  // white
+    };
+    constexpr int numConfettiColors =
+        sizeof(confettiColors) / sizeof(confettiColors[0]);
+
+    constexpr int   kCelebrationWaves = 3;
+    constexpr float kWaveDelaySec     = 0.25f;
+    constexpr int   kRainCount        = 40;
+
+    struct BurstParams {
+        float yOffset;
+        float speedLo, speedHi;
+        float vyLo, vyHi;
+        float sizeLo, sizeHi;
+        float lifeLo, lifeHi;
+        float rotSpeedAbs;
+        ParticleShape shape;
+        bool randomShimmerPhase;
+        int count;
+    };
+    constexpr BurstParams kConfettiParams = {
+        0.3f, 2.5f, 7.0f, 4.0f, 10.0f,
+        0.06f, 0.14f, 1.5f, 3.0f, 400.0f,
+        ParticleShape::FlatRect, false, 8
+    };
+    constexpr BurstParams kSparkleParams = {
+        0.4f, 1.0f, 3.5f, 2.0f, 6.0f,
+        0.03f, 0.07f, 0.8f, 1.8f, 200.0f,
+        ParticleShape::Spark, true, 3
+    };
+}
 
 ParticleSystem::ParticleSystem() {}
 
@@ -100,69 +143,21 @@ void ParticleSystem::emitLanding(float x, float z, Color baseColor) {
 }
 
 void ParticleSystem::emitWinCelebration(const std::vector<std::pair<float, float>>& positions) {
-    static const Color confettiColors[] = {
-        {255, 215, 0, 255},    // gold
-        {255, 69, 0, 255},     // orange-red
-        {0, 191, 255, 255},    // deep sky blue
-        {50, 205, 50, 255},    // lime green
-        {255, 105, 180, 255},  // hot pink
-        {148, 103, 255, 255},  // purple
-        {255, 255, 100, 255},  // yellow
-        {255, 255, 255, 255},  // white
-    };
-    static const int numColors = sizeof(confettiColors) / sizeof(confettiColors[0]);
-
-    // Confetti burst from each winning cell
-    for (const auto& pos : positions) {
-        float x = pos.first;
-        float z = pos.second;
-
-        // Tumbling flat rectangles (confetti)
-        for (int i = 0; i < 25; i++) {
-            Particle p{};
-            p.position = {x, 0.3f, z};
-            float angle = randRange(0.0f, 2.0f * PI);
-            float speed = randRange(2.5f, 7.0f);
-            p.velocity = {
-                std::cos(angle) * speed,
-                randRange(4.0f, 10.0f),
-                std::sin(angle) * speed
-            };
-            p.color = confettiColors[std::rand() % numColors];
-            p.size = randRange(0.06f, 0.14f);
-            p.lifetime = randRange(1.5f, 3.0f);
-            p.age = 0.0f;
-            p.rotation = randRange(0.0f, 360.0f);
-            p.rotSpeed = randRange(-400.0f, 400.0f);
-            p.shape = ParticleShape::FlatRect;
-            p.shimmerPhase = 0.0f;
-            particles.push_back(p);
-        }
-
-        // Sparkle burst (smaller, twinkling)
-        for (int i = 0; i < 10; i++) {
-            Particle p{};
-            p.position = {x, 0.4f, z};
-            float angle = randRange(0.0f, 2.0f * PI);
-            float speed = randRange(1.0f, 3.5f);
-            p.velocity = {
-                std::cos(angle) * speed,
-                randRange(2.0f, 6.0f),
-                std::sin(angle) * speed
-            };
-            p.color = {255, 255, 220, 255};  // warm white sparkle
-            p.size = randRange(0.03f, 0.07f);
-            p.lifetime = randRange(0.8f, 1.8f);
-            p.age = 0.0f;
-            p.rotation = randRange(0.0f, 360.0f);
-            p.rotSpeed = randRange(-200.0f, 200.0f);
-            p.shape = ParticleShape::Spark;
-            p.shimmerPhase = randRange(0.0f, 2.0f * PI);
-            particles.push_back(p);
+    // Queue 3 waves of confetti + sparkle per winning cell, separated by 0.25 s.
+    // Total per cell ≈ original (24 confetti, 9 sparkles) — feel changes from
+    // a one-frame burst into a 3-step crescendo. Drained in update().
+    pendingBursts.clear();
+    pendingClock = 0.0f;
+    for (int wave = 0; wave < kCelebrationWaves; wave++) {
+        float delay = kWaveDelaySec * static_cast<float>(wave);
+        for (const auto& pos : positions) {
+            pendingBursts.push_back({delay, pos.first, pos.second, BurstKind::Confetti});
+            pendingBursts.push_back({delay, pos.first, pos.second, BurstKind::Sparkle});
         }
     }
 
-    // Extra screen-wide confetti rain (falls from above the board center)
+    // Screen-wide confetti rain stays as one immediate spawn — that's the
+    // shower backdrop; staggering it would make the rain feel sparse.
     float cx = 0.0f, cz = 0.0f;
     for (const auto& pos : positions) {
         cx += pos.first;
@@ -172,7 +167,7 @@ void ParticleSystem::emitWinCelebration(const std::vector<std::pair<float, float
         cx /= static_cast<float>(positions.size());
         cz /= static_cast<float>(positions.size());
     }
-    for (int i = 0; i < 40; i++) {
+    for (int i = 0; i < kRainCount; i++) {
         Particle p{};
         p.position = {
             cx + randRange(-4.0f, 4.0f),
@@ -184,7 +179,7 @@ void ParticleSystem::emitWinCelebration(const std::vector<std::pair<float, float
             randRange(-1.0f, 1.0f),
             randRange(-1.0f, 1.0f)
         };
-        p.color = confettiColors[std::rand() % numColors];
+        p.color = confettiColors[std::rand() % numConfettiColors];
         p.size = randRange(0.05f, 0.12f);
         p.lifetime = randRange(2.0f, 4.0f);
         p.age = 0.0f;
@@ -196,7 +191,42 @@ void ParticleSystem::emitWinCelebration(const std::vector<std::pair<float, float
     }
 }
 
+void ParticleSystem::spawnBurst(float x, float z, BurstKind kind) {
+    const BurstParams& cfg = (kind == BurstKind::Confetti) ? kConfettiParams : kSparkleParams;
+    for (int i = 0; i < cfg.count; i++) {
+        Particle p{};
+        p.position = {x, cfg.yOffset, z};
+        float angle = randRange(0.0f, 2.0f * PI);
+        float speed = randRange(cfg.speedLo, cfg.speedHi);
+        p.velocity = {
+            std::cos(angle) * speed,
+            randRange(cfg.vyLo, cfg.vyHi),
+            std::sin(angle) * speed
+        };
+        p.color = (kind == BurstKind::Confetti)
+            ? confettiColors[std::rand() % numConfettiColors]
+            : Color{255, 255, 220, 255};  // warm white sparkle
+        p.size = randRange(cfg.sizeLo, cfg.sizeHi);
+        p.lifetime = randRange(cfg.lifeLo, cfg.lifeHi);
+        p.age = 0.0f;
+        p.rotation = randRange(0.0f, 360.0f);
+        p.rotSpeed = randRange(-cfg.rotSpeedAbs, cfg.rotSpeedAbs);
+        p.shape = cfg.shape;
+        p.shimmerPhase = cfg.randomShimmerPhase ? randRange(0.0f, 2.0f * PI) : 0.0f;
+        particles.push_back(p);
+    }
+}
+
 void ParticleSystem::update(float dt) {
+    // Drain pending bursts queued by emitWinCelebration crescendo.
+    pendingClock += dt;
+    while (!pendingBursts.empty() && pendingBursts.front().spawnAt <= pendingClock) {
+        const PendingBurst b = pendingBursts.front();
+        pendingBursts.pop_front();
+        spawnBurst(b.x, b.z, b.kind);
+    }
+    if (pendingBursts.empty()) pendingClock = 0.0f;
+
     float time = static_cast<float>(GetTime());
 
     for (auto& p : particles) {
@@ -249,48 +279,61 @@ void ParticleSystem::update(float dt) {
 }
 
 void ParticleSystem::draw() const {
+    if (particles.empty()) return;
+
     float time = static_cast<float>(GetTime());
 
+    // Cube pass — plain alpha-blended draws, no state changes.
     for (const auto& p : particles) {
+        if (p.shape != ParticleShape::Cube) continue;
         float lifeRatio = p.age / p.lifetime;
         float fadeAlpha = static_cast<float>(p.color.a) * (1.0f - lifeRatio);
-
-        switch (p.shape) {
-            case ParticleShape::Spark: {
-                // Twinkle effect: modulate alpha with sin wave
-                float shimmer = (std::sin(time * 12.0f + p.shimmerPhase) + 1.0f) * 0.5f;
-                float sparkAlpha = fadeAlpha * (0.4f + 0.6f * shimmer);
-                auto a = static_cast<unsigned char>(sparkAlpha);
-                Color c = {p.color.r, p.color.g, p.color.b, a};
-                // Draw as small bright cube
-                DrawCube(p.position, p.size, p.size, p.size, c);
-                // Additive glow: slightly larger, dimmer
-                auto ga = static_cast<unsigned char>(sparkAlpha * 0.3f);
-                Color gc = {p.color.r, p.color.g, p.color.b, ga};
-                DrawCube(p.position, p.size * 2.5f, p.size * 2.5f, p.size * 2.5f, gc);
-                break;
-            }
-            case ParticleShape::FlatRect: {
-                auto a = static_cast<unsigned char>(fadeAlpha);
-                Color c = {p.color.r, p.color.g, p.color.b, a};
-                // Flat tumbling rectangle
-                float w = p.size * 1.5f;
-                float h = p.size * 0.15f;
-                float d = p.size * 0.8f;
-                DrawCube(p.position, w, h, d, c);
-                break;
-            }
-            case ParticleShape::Cube:
-            default: {
-                auto a = static_cast<unsigned char>(fadeAlpha);
-                Color c = {p.color.r, p.color.g, p.color.b, a};
-                DrawCube(p.position, p.size, p.size, p.size, c);
-                break;
-            }
-        }
+        auto a = static_cast<unsigned char>(fadeAlpha);
+        Color c = {p.color.r, p.color.g, p.color.b, a};
+        DrawCube(p.position, p.size, p.size, p.size, c);
     }
+
+    // FlatRect pass — each slab needs its own rlgl matrix because rotation is
+    // per-particle. Off-axis spin axis (1, 0.4, 0.2) shows both face and edge
+    // as the slab tumbles — proper paper feel.
+    for (const auto& p : particles) {
+        if (p.shape != ParticleShape::FlatRect) continue;
+        float lifeRatio = p.age / p.lifetime;
+        float fadeAlpha = static_cast<float>(p.color.a) * (1.0f - lifeRatio);
+        auto a = static_cast<unsigned char>(fadeAlpha);
+        Color c = {p.color.r, p.color.g, p.color.b, a};
+        float w = p.size * 1.5f;
+        float h = p.size * 0.15f;
+        float d = p.size * 0.8f;
+        rlPushMatrix();
+        rlTranslatef(p.position.x, p.position.y, p.position.z);
+        rlRotatef(p.rotation, 1.0f, 0.4f, 0.2f);
+        DrawCube({0.0f, 0.0f, 0.0f}, w, h, d, c);
+        rlPopMatrix();
+    }
+
+    // Spark pass — additive blend brightens the underlying surface (real
+    // twinkle look on the wood-tone board). One Begin/End for the whole pass
+    // so we don't flush the rlgl batch per particle.
+    BeginBlendMode(BLEND_ADDITIVE);
+    for (const auto& p : particles) {
+        if (p.shape != ParticleShape::Spark) continue;
+        float lifeRatio = p.age / p.lifetime;
+        float fadeAlpha = static_cast<float>(p.color.a) * (1.0f - lifeRatio);
+        float shimmer = (std::sin(time * 12.0f + p.shimmerPhase) + 1.0f) * 0.5f;
+        float sparkAlpha = fadeAlpha * (0.4f + 0.6f * shimmer);
+        auto a = static_cast<unsigned char>(sparkAlpha);
+        Color c = {p.color.r, p.color.g, p.color.b, a};
+        auto ga = static_cast<unsigned char>(sparkAlpha * 0.3f);
+        Color gc = {p.color.r, p.color.g, p.color.b, ga};
+        DrawCube(p.position, p.size, p.size, p.size, c);
+        DrawCube(p.position, p.size * 2.5f, p.size * 2.5f, p.size * 2.5f, gc);
+    }
+    EndBlendMode();
 }
 
 void ParticleSystem::clear() {
     particles.clear();
+    pendingBursts.clear();
+    pendingClock = 0.0f;
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <deque>
 #include "raylib.h"
 
 enum class ParticleShape { Cube, FlatRect, Spark };
@@ -38,11 +39,20 @@ public:
     bool empty() const { return particles.empty(); }
 
 private:
+    enum class BurstKind { Confetti, Sparkle };
+
+    struct PendingBurst {
+        float spawnAt;
+        float x, z;
+        BurstKind kind;
+    };
+
     std::vector<Particle> particles;
+    std::deque<PendingBurst> pendingBursts;
+    float pendingClock = 0.0f;
 
-    // Helper: random float in range
+    void spawnBurst(float x, float z, BurstKind kind);
+
     static float randRange(float lo, float hi);
-
-    // Helper: color with random variation
     static Color varyColor(Color base, int range);
 };
