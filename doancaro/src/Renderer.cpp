@@ -1,6 +1,6 @@
 #include "Renderer.h"
 #include "Fonts.h"
-#include "raymath.h"
+#include "Theme.h"
 #include "rlgl.h"
 #include <cmath>
 
@@ -127,6 +127,8 @@ Renderer::Renderer()
       winParticlesEmitted(false),
       boardModel({}), boardModelLoaded(false),
       pieceModelLight({}), pieceModelDark({}), pieceModelsLoaded(false),
+      pieceModelSon({}), pieceModelThuy({}),
+      pieceScaleSon(1.0f), pieceScaleThuy(1.0f), pieceGLBLoaded(false),
       glossShader({}), glossShaderLoaded(false), glossViewPosLoc(0),
       matteShader({}), matteShaderLoaded(false), matteViewPosLoc(0),
       groundModel({}), groundLoaded(false) {}
@@ -185,9 +187,40 @@ void Renderer::init(int width, int height) {
     btnRestart = {static_cast<float>(width) - BTN_PAD - 80 - BTN_PAD - 60 - BTN_PAD - 70, BTN_PAD, 70, BTN_SIZE};
     btnUndo = {btnRestart.x - BTN_PAD - 60, BTN_PAD, 60, BTN_SIZE};
 
-    // Load piece textures asynchronously
+    // Try GLB runes first; fall back to sphere stones with per-cell PNG
+    // textures only when the runes can't load. Wrapping the fallback path in
+    // a single `if` skips a 450-PNG disk scan + ~450 unused 1024² uploads
+    // when the runes are present.
     {
-        // Create default textures (used until per-position textures are loaded)
+        auto fitScale = [](const Model& m) -> float {
+            constexpr float kCellFit = 0.7f;
+            BoundingBox bb = GetModelBoundingBox(m);
+            float dx = bb.max.x - bb.min.x;
+            float dy = bb.max.y - bb.min.y;
+            float dz = bb.max.z - bb.min.z;
+            float dmax = dx > dy ? dx : dy;
+            if (dz > dmax) dmax = dz;
+            return dmax > 0.0f ? (kCellFit / dmax) : 1.0f;
+        };
+        pieceModelSon  = LoadModel("assets/models/fire_rune.glb");
+        pieceModelThuy = LoadModel("assets/models/water_rune.glb");
+        if (pieceModelSon.meshCount > 0 && pieceModelThuy.meshCount > 0) {
+            // GLB-loader quirk seen on table.glb: when there are 2 materials,
+            // the textured one lives at index 1 — point the mesh at it.
+            if (pieceModelSon.materialCount > 1)  pieceModelSon.meshMaterial[0]  = 1;
+            if (pieceModelThuy.materialCount > 1) pieceModelThuy.meshMaterial[0] = 1;
+            pieceScaleSon  = fitScale(pieceModelSon);
+            pieceScaleThuy = fitScale(pieceModelThuy);
+            pieceGLBLoaded = true;
+        } else {
+            UnloadModel(pieceModelSon);
+            UnloadModel(pieceModelThuy);
+            pieceModelSon  = {};
+            pieceModelThuy = {};
+        }
+    }
+
+    if (!pieceGLBLoaded) {
         Image defLight = GenImageColor(4, 4, {210, 180, 140, 255});
         defaultTexLight = LoadTextureFromImage(defLight);
         UnloadImage(defLight);
@@ -195,7 +228,6 @@ void Renderer::init(int width, int height) {
         defaultTexDark = LoadTextureFromImage(defDark);
         UnloadImage(defDark);
 
-        // Initialize all textures to defaults
         for (int r = 0; r < Board::SIZE; r++) {
             for (int c = 0; c < Board::SIZE; c++) {
                 pieceTexLight[r][c] = defaultTexLight;
@@ -204,7 +236,6 @@ void Renderer::init(int width, int height) {
             }
         }
 
-        // Start background thread to load images from disk (CPU only, no OpenGL)
         imagesLoaded.store(0);
         texUploadIndex = 0;
         texLoaderThread = std::thread([this]() {
@@ -220,30 +251,34 @@ void Renderer::init(int width, int height) {
             }
         });
 
-        // Create sphere mesh (flattened when drawn to look like Go stones)
         Mesh stoneMesh = GenMeshSphere(0.35f, 16, 16);
-
-        // Build light piece model (texture swapped per-piece during draw)
         pieceModelLight = LoadModelFromMesh(stoneMesh);
         pieceModelLight.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = defaultTexLight;
 
-        // Build dark piece model — need a separate mesh copy since LoadModelFromMesh takes ownership
         Mesh stoneMesh2 = GenMeshSphere(0.35f, 16, 16);
         pieceModelDark = LoadModelFromMesh(stoneMesh2);
         pieceModelDark.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = defaultTexDark;
 
         pieceModelsLoaded = true;
+    }
 
-        // Load glossy Phong shader from embedded strings
-        glossShader = LoadShaderFromMemory(glossVS, glossFS);
-        glossShader.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(glossShader, "matModel");
-        glossShader.locs[SHADER_LOC_MATRIX_NORMAL] = GetShaderLocation(glossShader, "matNormal");
-        glossViewPosLoc = GetShaderLocation(glossShader, "viewPos");
-        glossShaderLoaded = true;
+    glossShader = LoadShaderFromMemory(glossVS, glossFS);
+    glossShader.locs[SHADER_LOC_MATRIX_MODEL]  = GetShaderLocation(glossShader, "matModel");
+    glossShader.locs[SHADER_LOC_MATRIX_NORMAL] = GetShaderLocation(glossShader, "matNormal");
+    glossViewPosLoc = GetShaderLocation(glossShader, "viewPos");
+    glossShaderLoaded = true;
 
-        // Assign the glossy shader to both piece models
+    if (pieceModelsLoaded) {
         pieceModelLight.materials[0].shader = glossShader;
-        pieceModelDark.materials[0].shader = glossShader;
+        pieceModelDark.materials[0].shader  = glossShader;
+    }
+    if (pieceGLBLoaded) {
+        // raylib's default shader renders GLB textures flat — gloss adds the
+        // ambient + directional shading the carved rune detail needs.
+        for (int i = 0; i < pieceModelSon.materialCount; i++)
+            pieceModelSon.materials[i].shader = glossShader;
+        for (int i = 0; i < pieceModelThuy.materialCount; i++)
+            pieceModelThuy.materials[i].shader = glossShader;
     }
 
     // Load matte Phong shader for board (low specular, satin wood finish)
@@ -300,6 +335,11 @@ void Renderer::shutdown() {
         UnloadModel(pieceModelLight);
         UnloadModel(pieceModelDark);
         pieceModelsLoaded = false;
+    }
+    if (pieceGLBLoaded) {
+        UnloadModel(pieceModelSon);
+        UnloadModel(pieceModelThuy);
+        pieceGLBLoaded = false;
     }
     if (glossShaderLoaded) {
         UnloadShader(glossShader);
@@ -485,16 +525,40 @@ bool Renderer::drawButton(Rectangle rect, const char* label, int fontSize) {
     bool hovered = CheckCollisionPointRec(mouse, rect);
     bool held = hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT);
 
-    Color bg = held ? Color{80, 80, 80, 220} : (hovered ? Color{70, 70, 70, 200} : Color{50, 50, 50, 180});
-    Color border = hovered ? WHITE : Color{150, 150, 150, 200};
+    Color frameColor = hovered ? Theme::palette.gold_foil : Theme::palette.ink_sumi;
+    Color bodyColor  = held    ? Theme::palette.ink_sumi   : Theme::withAlpha(Theme::palette.slate_fog, 220);
+    Color textColor  = hovered ? Theme::palette.gold_foil : Theme::palette.son_bone;
 
-    DrawRectangleRec(rect, bg);
-    DrawRectangleLinesEx(rect, 1.0f, border);
+    const float ox = held ? 1.5f : 0.0f;
+    const float oy = held ? 1.5f : 0.0f;
+    Rectangle outer = { rect.x + ox, rect.y + oy, rect.width, rect.height };
+    DrawRectangleRec(outer, frameColor);
+
+    const float frameInset = 2.0f;
+    Rectangle inner = {
+        outer.x + frameInset, outer.y + frameInset,
+        outer.width  - 2.0f * frameInset,
+        outer.height - 2.0f * frameInset
+    };
+    DrawRectangleRec(inner, bodyColor);
+
+    const int notchSize = hovered ? 5 : 4;
+    Color notchColor = hovered
+        ? Theme::palette.gold_foil
+        : Theme::withAlpha(Theme::palette.gold_foil, 140);
+    const int ix = static_cast<int>(inner.x);
+    const int iy = static_cast<int>(inner.y);
+    const int iw = static_cast<int>(inner.width);
+    const int ih = static_cast<int>(inner.height);
+    DrawRectangle(ix,                  iy,                  notchSize, 1,         notchColor);
+    DrawRectangle(ix,                  iy,                  1,         notchSize, notchColor);
+    DrawRectangle(ix + iw - notchSize, iy + ih - 1,         notchSize, 1,         notchColor);
+    DrawRectangle(ix + iw - 1,         iy + ih - notchSize, 1,         notchSize, notchColor);
 
     int tw = Fonts::measure(Fonts::bold, label, static_cast<float>(fontSize));
-    auto tx = static_cast<int>(rect.x + (rect.width - static_cast<float>(tw)) / 2.0f);
-    auto ty = static_cast<int>(rect.y + (rect.height - static_cast<float>(fontSize)) / 2.0f);
-    Fonts::draw(Fonts::bold, label, tx, ty, static_cast<float>(fontSize), WHITE);
+    auto tx = static_cast<int>(outer.x + (outer.width - static_cast<float>(tw)) / 2.0f);
+    auto ty = static_cast<int>(outer.y + (outer.height - static_cast<float>(fontSize)) / 2.0f);
+    Fonts::draw(Fonts::bold, label, tx, ty, static_cast<float>(fontSize), textColor);
 
     return hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
@@ -812,7 +876,28 @@ void Renderer::drawPiece3D(int row, int col, CellState state, float anim) {
 
     // --- Draw the piece ---
     float s = scaleFactor;
-    if (pieceModelsLoaded) {
+    if (pieceGLBLoaded) {
+        // GLB runes are authored upright; the sphere fallback's Y-squash
+        // would deform them, so animate scale uniformly here.
+        float modelScale = (state == CellState::PlayerX)
+                               ? pieceScaleSon : pieceScaleThuy;
+        Vector3 pos = {x, y + 0.05f * s, z};
+        Vector3 scaleVec = {
+            s * modelScale * squashX,
+            s * modelScale * squashY,
+            s * modelScale * squashX
+        };
+        Model& model = (state == CellState::PlayerX)
+                           ? pieceModelSon : pieceModelThuy;
+        // Co-prime multipliers spread yaw evenly across the 15×15 board;
+        // deterministic on (row, col) so save/load and replays match.
+        constexpr int kYawSeedRow  = 73;
+        constexpr int kYawSeedCol  = 113;
+        constexpr int kYawSeedBias = 17;
+        float yaw = static_cast<float>(
+            (row * kYawSeedRow + col * kYawSeedCol + kYawSeedBias) % 360);
+        DrawModelEx(model, pos, {0.0f, 1.0f, 0.0f}, yaw, scaleVec, WHITE);
+    } else if (pieceModelsLoaded) {
         Vector3 pos = {x, y + 0.15f * s, z};
         Vector3 scaleVec = {s * squashX, s * 0.5f * squashY, s * squashX};
         Model& model = (state == CellState::PlayerX) ? pieceModelLight : pieceModelDark;

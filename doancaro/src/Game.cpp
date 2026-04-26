@@ -88,6 +88,7 @@ void Game::run() {
     audioManager.shutdown();
     Fonts::cleanup();
     renderer.shutdown();
+    MenuScreen::shutdown();
     CloseWindow();
 }
 

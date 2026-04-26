@@ -5,8 +5,6 @@
 #include "ParticleSystem.h"
 #include "raylib.h"
 #include <atomic>
-#include <cmath>
-#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -119,6 +117,13 @@ private:
     Model pieceModelLight;  // PlayerX — light maple wood
     Model pieceModelDark;   // PlayerO — dark walnut wood
     bool pieceModelsLoaded;
+
+    // Sơn/Thủy talisman GLBs override the sphere fallback when loaded.
+    Model pieceModelSon;    // PlayerX — fire rune
+    Model pieceModelThuy;   // PlayerO — water rune
+    float pieceScaleSon;    // bbox-derived fit-to-cell scalar
+    float pieceScaleThuy;
+    bool  pieceGLBLoaded;
 
     // Per-position unique textures (each piece has distinct wood grain)
     Texture2D pieceTexLight[Board::SIZE][Board::SIZE];

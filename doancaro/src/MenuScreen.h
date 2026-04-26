@@ -13,6 +13,10 @@ public:
     // been created to keep the first menu frame from blocking on disk I/O.
     static void preload();
 
+    // Frees the ~200 MB of VRAM held by the animated background frames.
+    // Call before CloseWindow on shutdown.
+    static void shutdown();
+
     void update(AudioManager& audio);
     void draw();
 
