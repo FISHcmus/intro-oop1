@@ -35,6 +35,7 @@ void Game::run() {
     renderer.init(SCREEN_WIDTH, SCREEN_HEIGHT);
     Fonts::init();
     audioManager.init();
+    MenuScreen::preload();
 
     while (!WindowShouldClose()) {
         // Settings/Save/Load fall through on purpose: they keep whatever's

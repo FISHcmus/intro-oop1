@@ -64,6 +64,7 @@ set(SOURCES
     src/FileManager.cpp
     src/ParticleSystem.cpp
     src/Fonts.cpp
+    src/Theme.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
