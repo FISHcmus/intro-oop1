@@ -139,19 +139,31 @@ private:
     std::thread texLoaderThread;
     int texUploadIndex;  // next index to upload to GPU
 
-    // Glossy Phong lighting shader for pieces
+    // Glossy Phong wet-coat shader — applied to pieces, board, and the
+    // floating-island rock. Single shader keeps highlight direction and
+    // shininess consistent across every lit surface in the scene.
     Shader glossShader;
     bool glossShaderLoaded;
     int glossViewPosLoc;
 
-    // Matte Phong lighting shader for board
-    Shader matteShader;
-    bool matteShaderLoaded;
-    int matteViewPosLoc;
+    // 3D backdrop — Sketchfab "mountain & river scroll" (KHR_materials_unlit,
+    // vertex-colored anime style). Sits behind the play area; do NOT apply
+    // glossShader to it — model is already unlit.
+    Model scrollModel;
+    bool  scrollLoaded;
+    float scrollScale;
+    // X/Z offset to apply when drawing so the model's bbox center sits at the
+    // requested world position. Computed once at load — auto-recenters when
+    // kBackdropWidth changes, no manual position math needed.
+    Vector3 scrollCenterOffset;
 
-    // Ground plane
-    Model groundModel;
-    bool groundLoaded;
+    // Floating-island pedestal — sits directly under the board so the play
+    // area reads as resting on a chunk of levitating stone rather than hanging
+    // in mid-air. Same bbox-fit / auto-center pattern as the scroll backdrop.
+    Model   islandModel;
+    bool    islandLoaded;
+    float   islandScale;
+    Vector3 islandCenterOffset;
 
     // Animation constants
     static constexpr float PIECE_ANIM_DURATION = 0.7f;

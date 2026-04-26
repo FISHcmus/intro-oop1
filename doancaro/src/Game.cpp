@@ -65,7 +65,7 @@ void Game::run() {
 
         // Draw
         BeginDrawing();
-        ClearBackground({35, 28, 22, 255});  // warm dark wood tone
+        ClearBackground({200, 230, 240, 255});  // thuy_pearl — daylight sky behind floating board
 
         switch (state) {
             case GameState::Menu:       drawMenu();           break;

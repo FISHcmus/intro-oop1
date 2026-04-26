@@ -4,6 +4,23 @@
 #include "rlgl.h"
 #include <cmath>
 
+// Backdrop tunables — adjust freely without touching position math elsewhere.
+// kBackdropWidth fit-scales the model so it spans this many world units in
+// X (or Z, whichever is larger). kBackdropY is the world-Y for the model's
+// origin; raise this to sink the board into the mountains, lower to make
+// the diorama look small/distant.
+static constexpr float kBackdropWidth = 300.0f;
+static constexpr float kBackdropY     = -40.0f;
+
+// Floating-island pedestal under the board. kIslandWidth fit-scales the model
+// so it spans this many world units in X (or Z) — wider than the 21-unit
+// board diagonal so the corners don't overhang. kIslandTopY is the target
+// world-Y for the *top* of the scaled island; the load-time math places the
+// model so its bbox top lands here regardless of where the model's local
+// origin sits inside its mesh. Tune this single number to lift/drop the rock.
+static constexpr float kIslandWidth = 28.0f;
+static constexpr float kIslandTopY  = -0.5f;
+
 // Embedded Phong vertex shader (GLSL 330)
 static const char* glossVS =
     "#version 330\n"
@@ -36,9 +53,9 @@ static const char* glossFS =
     "void main() {\n"
     "    vec3 lightPos = vec3(10.0, 20.0, 10.0);\n"
     "    vec3 lightColor = vec3(1.0, 0.98, 0.95);\n"
-    "    float ambientStrength = 0.35;\n"
-    "    float specularStrength = 0.8;\n"
-    "    float shininess = 64.0;\n"
+    "    float ambientStrength = 0.30;\n"
+    "    float specularStrength = 1.0;\n"
+    "    float shininess = 96.0;\n"
     "    vec4 texColor = texture(texture0, fragTexCoord) * colDiffuse;\n"
     "    vec3 norm = normalize(fragNormal);\n"
     "    vec3 lightDir = normalize(lightPos - fragPosition);\n"
@@ -65,42 +82,6 @@ static const char* glossFS =
     "}\n";
 
 // Matte wood shader for the board — low specular, soft diffuse
-static const char* matteFS =
-    "#version 330\n"
-    "in vec3 fragPosition;\n"
-    "in vec2 fragTexCoord;\n"
-    "in vec3 fragNormal;\n"
-    "uniform sampler2D texture0;\n"
-    "uniform vec4 colDiffuse;\n"
-    "uniform vec3 viewPos;\n"
-    "out vec4 finalColor;\n"
-    "void main() {\n"
-    "    vec3 lightPos = vec3(10.0, 20.0, 10.0);\n"
-    "    vec3 lightColor = vec3(1.0, 0.98, 0.95);\n"
-    "    float ambientStrength = 0.4;\n"
-    "    float specularStrength = 0.12;\n"
-    "    float shininess = 8.0;\n"
-    "    vec4 texColor = texture(texture0, fragTexCoord) * colDiffuse;\n"
-    "    vec3 norm = normalize(fragNormal);\n"
-    "    vec3 lightDir = normalize(lightPos - fragPosition);\n"
-    "    float diff = max(dot(norm, lightDir), 0.0);\n"
-    "    vec3 viewDir = normalize(viewPos - fragPosition);\n"
-    "    vec3 halfDir = normalize(lightDir + viewDir);\n"
-    "    float spec = pow(max(dot(norm, halfDir), 0.0), shininess);\n"
-    "    vec3 ambient = ambientStrength * lightColor;\n"
-    "    vec3 diffuse = diff * lightColor;\n"
-    "    vec3 specular = specularStrength * spec * lightColor;\n"
-    "    vec3 lightPos2 = vec3(-5.0, 12.0, -5.0);\n"
-    "    vec3 lightDir2 = normalize(lightPos2 - fragPosition);\n"
-    "    float diff2 = max(dot(norm, lightDir2), 0.0) * 0.3;\n"
-    "    vec3 halfDir2 = normalize(lightDir2 + viewDir);\n"
-    "    float spec2 = pow(max(dot(norm, halfDir2), 0.0), shininess) * 0.3;\n"
-    "    diffuse += diff2 * lightColor;\n"
-    "    specular += specularStrength * spec2 * lightColor;\n"
-    "    vec3 result = (ambient + diffuse) * texColor.rgb + specular;\n"
-    "    finalColor = vec4(result, texColor.a);\n"
-    "}\n";
-
 // Board sits on XZ plane at Y=0, cells [0..SIZE) on both axes
 // Each cell is 1.0 world unit
 
@@ -108,11 +89,36 @@ static const float ORBIT_SPEED = 0.005f;     // radians per pixel of drag
 static const float BUTTON_ORBIT_SPEED = 0.05f; // radians per frame when button held
 static const float ZOOM_SPEED = 0.5f;
 static const float MIN_DISTANCE = 8.0f;
-static const float MAX_DISTANCE = 45.0f;
-static const float MIN_PITCH = 0.2f;          // ~11 degrees (don't go below board)
-static const float MAX_PITCH = 1.4f;          // ~80 degrees (nearly top-down)
+static const float MAX_DISTANCE = 80.0f;
+static const float MIN_PITCH = 11.0f * DEG2RAD;  // don't go below board
+static const float MAX_PITCH = 80.0f * DEG2RAD;  // nearly top-down
 static const int BTN_SIZE = 36;
 static const int BTN_PAD = 6;
+
+// Loads a GLB and computes a uniform XZ-fit scale + bbox-recenter offset so
+// the model spans `widthXZ` world units across its larger horizontal axis and
+// its bbox center sits at the caller's draw position. Caller can override
+// outOffset.y afterwards (e.g., to anchor the bbox top at a specific world Y).
+// Returns false if the file is missing or the model has no meshes.
+static bool loadFittedXZ(const char* path, float widthXZ, Model& outModel,
+                         float& outScale, Vector3& outOffset) {
+    if (!FileExists(path)) return false;
+    Model m = LoadModel(path);
+    if (m.meshCount == 0) {
+        UnloadModel(m);
+        return false;
+    }
+    BoundingBox bb = GetModelBoundingBox(m);
+    float dx = bb.max.x - bb.min.x;
+    float dz = bb.max.z - bb.min.z;
+    float dmax = dx > dz ? dx : dz;
+    outScale = (dmax > 0.0f) ? (widthXZ / dmax) : 1.0f;
+    outOffset.x = -((bb.min.x + bb.max.x) * 0.5f) * outScale;
+    outOffset.y = 0.0f;
+    outOffset.z = -((bb.min.z + bb.max.z) * 0.5f) * outScale;
+    outModel = m;
+    return true;
+}
 
 Renderer::Renderer()
     : camera({}), cellSize(1.0f), screenWidth(0), screenHeight(0),
@@ -130,8 +136,10 @@ Renderer::Renderer()
       pieceModelSon({}), pieceModelThuy({}),
       pieceScaleSon(1.0f), pieceScaleThuy(1.0f), pieceGLBLoaded(false),
       glossShader({}), glossShaderLoaded(false), glossViewPosLoc(0),
-      matteShader({}), matteShaderLoaded(false), matteViewPosLoc(0),
-      groundModel({}), groundLoaded(false) {}
+      scrollModel({}), scrollLoaded(false), scrollScale(1.0f),
+      scrollCenterOffset({0.0f, 0.0f, 0.0f}),
+      islandModel({}), islandLoaded(false), islandScale(1.0f),
+      islandCenterOffset({0.0f, 0.0f, 0.0f}) {}
 
 Renderer::~Renderer() = default;
 
@@ -144,8 +152,8 @@ void Renderer::init(int width, int height) {
 
     // Default orbital parameters
     defaultAngle = 0.0f;          // looking from front
-    defaultPitch = 0.85f;         // ~49 degrees down
-    defaultDistance = 22.0f;
+    defaultPitch = 40.0f * DEG2RAD;
+    defaultDistance = 35.0f;
 
     cameraAngle = defaultAngle;
     cameraPitch = defaultPitch;
@@ -281,30 +289,33 @@ void Renderer::init(int width, int height) {
             pieceModelThuy.materials[i].shader = glossShader;
     }
 
-    // Load matte Phong shader for board (low specular, satin wood finish)
-    matteShader = LoadShaderFromMemory(glossVS, matteFS);
-    matteShader.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(matteShader, "matModel");
-    matteShader.locs[SHADER_LOC_MATRIX_NORMAL] = GetShaderLocation(matteShader, "matNormal");
-    matteViewPosLoc = GetShaderLocation(matteShader, "viewPos");
-    matteShaderLoaded = true;
-
-    // Assign matte shader to board model
     if (boardModelLoaded) {
         for (int i = 0; i < boardModel.materialCount; i++) {
-            boardModel.materials[i].shader = matteShader;
+            boardModel.materials[i].shader = glossShader;
         }
     }
 
-    // Load ground texture and create tiled plane
-    if (FileExists("assets/textures/ground.png")) {
-        // Large plane, 4x4 subdivisions for tiling UV
-        Mesh plane = GenMeshPlane(20.0f, 20.0f, 1, 1);
-        groundModel = LoadModelFromMesh(plane);
-        Texture2D groundTex = LoadTexture("assets/textures/ground.png");
-        SetTextureFilter(groundTex, TEXTURE_FILTER_BILINEAR);
-        SetTextureWrap(groundTex, TEXTURE_WRAP_REPEAT);
-        groundModel.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = groundTex;
-        groundLoaded = true;
+    // Backdrop scroll — leave its materials alone; KHR_materials_unlit + vertex
+    // colors already carry the look, and forcing gloss would re-light a model
+    // that's authored as flat-shaded anime.
+    scrollLoaded = loadFittedXZ("assets/models/mountain_and_river_scroll.glb",
+                                kBackdropWidth, scrollModel, scrollScale,
+                                scrollCenterOffset);
+
+    // Floating-island pedestal. The asset is a ZBrush sculpt with no textures;
+    // raylib's default shader is unlit, so without overriding it the rock
+    // would render as a flat grey silhouette regardless of normals. Gloss
+    // gives diffuse + specular off the sculpt's normals.
+    if (loadFittedXZ("assets/models/floating_island.glb", kIslandWidth,
+                     islandModel, islandScale, islandCenterOffset)) {
+        BoundingBox bb = GetModelBoundingBox(islandModel);
+        islandCenterOffset.y = kIslandTopY - bb.max.y * islandScale;
+        if (glossShaderLoaded) {
+            for (int i = 0; i < islandModel.materialCount; i++) {
+                islandModel.materials[i].shader = glossShader;
+            }
+        }
+        islandLoaded = true;
     }
 }
 
@@ -345,13 +356,13 @@ void Renderer::shutdown() {
         UnloadShader(glossShader);
         glossShaderLoaded = false;
     }
-    if (matteShaderLoaded) {
-        UnloadShader(matteShader);
-        matteShaderLoaded = false;
+    if (scrollLoaded) {
+        UnloadModel(scrollModel);
+        scrollLoaded = false;
     }
-    if (groundLoaded) {
-        UnloadModel(groundModel);
-        groundLoaded = false;
+    if (islandLoaded) {
+        UnloadModel(islandModel);
+        islandLoaded = false;
     }
 }
 
@@ -606,9 +617,6 @@ void Renderer::drawBoard(const Board& board, int cursorRow, int cursorCol,
     if (glossShaderLoaded) {
         SetShaderValue(glossShader, glossViewPosLoc, viewPos, SHADER_UNIFORM_VEC3);
     }
-    if (matteShaderLoaded) {
-        SetShaderValue(matteShader, matteViewPosLoc, viewPos, SHADER_UNIFORM_VEC3);
-    }
 
     drawBoardSurface();
 
@@ -739,21 +747,36 @@ bool Renderer::getHoveredCell(int& row, int& col) const {
 void Renderer::drawBoardSurface() {
     float half = Board::SIZE / 2.0f;
 
-    // Tiled textured ground — 7x7 grid of 20x20 tiles centered on board
-    if (groundLoaded) {
-        float tileSize = 20.0f;
-        for (int tx = -3; tx <= 3; tx++) {
-            for (int tz = -3; tz <= 3; tz++) {
-                float gx = half + static_cast<float>(tx) * tileSize;
-                float gz = half + static_cast<float>(tz) * tileSize;
-                DrawModel(groundModel, {gx, -0.8f, gz}, 1.0f, WHITE);
-            }
-        }
+    // 3D backdrop scroll — board reads as floating among the mountains, not
+    // hovering above a toy diorama. X/Z auto-center via scrollCenterOffset
+    // (computed at load); only kBackdropWidth and kBackdropY are tunables.
+    // Backface culling stays on: the model has anime back-face-expanded
+    // outline meshes which only read correctly from near-horizontal angles —
+    // at any downward pitch they fan out as long black streaks. Trading the
+    // outline effect for a clean silhouette is the right call here.
+    if (scrollLoaded) {
+        Vector3 scrollPos = {
+            half + scrollCenterOffset.x,
+            kBackdropY,
+            half + scrollCenterOffset.z,
+        };
+        DrawModelEx(scrollModel, scrollPos, {0.0f, 1.0f, 0.0f}, 0.0f,
+                    {scrollScale, scrollScale, scrollScale}, WHITE);
     }
 
-    // Soft shadow under the board
-    float shadowSize = static_cast<float>(Board::SIZE) + 3.0f;
-    DrawPlane({half, -0.79f, half}, {shadowSize, shadowSize}, {0, 0, 0, 60});
+    // Floating island pedestal — drawn after scroll, before the table, so the
+    // board reads as resting on a chunk of stone hovering above the diorama.
+    // islandCenterOffset.y already encodes "place bbox top at kIslandTopY" —
+    // no kIslandY math here, just use the cached value.
+    if (islandLoaded) {
+        Vector3 islandPos = {
+            half + islandCenterOffset.x,
+            islandCenterOffset.y,
+            half + islandCenterOffset.z,
+        };
+        DrawModelEx(islandModel, islandPos, {0.0f, 1.0f, 0.0f}, 0.0f,
+                    {islandScale, islandScale, islandScale}, WHITE);
+    }
 
     if (boardModelLoaded) {
         // Go board model: ~35 units wide, 19x19 grid baked into wood texture
@@ -765,7 +788,6 @@ void Renderer::drawBoardSurface() {
         float worldCenter = Board::SIZE / 2.0f;  // 7.5
         float yOffset = -MODEL_TOP_Y * scale;
 
-        // Board uses default shader — no glossy reflection, just natural wood
         DrawModelEx(boardModel,
                     {worldCenter, yOffset, worldCenter},
                     {0.0f, 1.0f, 0.0f}, 0.0f,
