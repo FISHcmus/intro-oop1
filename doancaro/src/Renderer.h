@@ -28,7 +28,9 @@ public:
     void resetAnimations();
 
     // Camera update (call every frame)
-    void updateCamera();
+    // Returns true on the frame a left-click first lands on any camera UI
+    // button (rotate/zoom/reset). Caller plays a click SFX in response.
+    bool updateCamera();
     void uploadPendingTextures();  // call each frame to upload bg-loaded images to GPU
 
     // Camera UI buttons (draw after EndMode3D, in 2D overlay)
@@ -156,6 +158,7 @@ private:
     void handleRightClickDrag();
     void handleGestures();
     void handleScrollZoom();
+    bool isPointOnCameraButton(Vector2 point) const;
 
     // 3D drawing helpers
     // drawGrid3D removed — using baked grid from Go board model

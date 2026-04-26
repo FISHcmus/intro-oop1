@@ -1,6 +1,8 @@
 #ifndef SETTINGSSCREEN_H
 #define SETTINGSSCREEN_H
 
+class AudioManager;
+
 struct GameSettings {
     bool vsAI;
     int aiDepth;  // 1=Easy (greedy one-ply, no minimax), 2=Normal (d=2), 3=Hard (d=3)
@@ -10,7 +12,7 @@ class SettingsScreen {
 public:
     SettingsScreen();
 
-    void update();
+    void update(AudioManager& audio);
     void draw();
 
     bool isDone() const { return done; }

@@ -1,13 +1,15 @@
 #ifndef MENUSCREEN_H
 #define MENUSCREEN_H
 
+class AudioManager;
+
 enum class MenuChoice { None, NewGame, LoadGame, Settings, Exit };
 
 class MenuScreen {
 public:
     MenuScreen();
 
-    void update();
+    void update(AudioManager& audio);
     void draw();
 
     MenuChoice getChoice() const { return choice; }

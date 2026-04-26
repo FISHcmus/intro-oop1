@@ -3,6 +3,8 @@
 
 #include "FileManager.h"
 
+class AudioManager;
+
 enum class SlotScreenMode { Save, Load };
 enum class SlotScreenResult { None, Selected, Cancelled };
 
@@ -11,7 +13,7 @@ public:
     SaveLoadScreen();
 
     void open(SlotScreenMode mode);
-    void update();
+    void update(AudioManager& audio);
     void draw();
 
     SlotScreenResult getResult() const { return result; }
@@ -29,6 +31,7 @@ private:
     bool slotOccupied[MAX_SLOTS];
 
     void refreshSlotInfo();
+    bool canSelect(int slot) const;
     void drawSlotCard(int slot, int x, int y, int width, int height, bool selected);
 };
 

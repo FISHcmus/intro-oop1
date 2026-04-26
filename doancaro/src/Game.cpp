@@ -92,10 +92,11 @@ void Game::run() {
 
 void Game::updateMenu() {
     if (IsKeyPressed(KEY_ESCAPE)) {
+        audioManager.playMenuClickSound();
         CloseWindow();
         return;
     }
-    menuScreen.update();
+    menuScreen.update(audioManager);
     MenuChoice choice = menuScreen.getChoice();
 
     switch (choice) {
@@ -123,7 +124,7 @@ void Game::updateMenu() {
 }
 
 void Game::updateSettings() {
-    settingsScreen.update();
+    settingsScreen.update(audioManager);
     if (settingsScreen.isDone()) {
         GameSettings s = settingsScreen.getSettings();
         vsAI = s.vsAI;
@@ -145,7 +146,9 @@ void Game::updatePlaying() {
     playTime += GetFrameTime();
     if (toastTimer > 0.0f) toastTimer -= GetFrameTime();
 
-    renderer.updateCamera();
+    if (renderer.updateCamera()) {
+        audioManager.playMenuClickSound();
+    }
     renderer.uploadPendingTextures();
     renderer.updateParticles(GetFrameTime());
 
@@ -182,9 +185,11 @@ void Game::updateGameOver() {
     renderer.updateParticles(GetFrameTime());
 
     if (IsKeyPressed(KEY_ENTER)) {
+        audioManager.playMenuClickSound();
         startNewGame();
     }
     if (IsKeyPressed(KEY_ESCAPE)) {
+        audioManager.playMenuClickSound();
         state = GameState::Menu;
         menuScreen.reset();
     }
@@ -231,16 +236,19 @@ void Game::drawPlaying() {
 
     // Save/Load buttons
     if (renderer.drawSaveButton()) {
+        audioManager.playMenuClickSound();
         saveLoadScreen.open(SlotScreenMode::Save);
         state = GameState::SaveScreen;
     }
     if (renderer.drawLoadButton()) {
+        audioManager.playMenuClickSound();
         saveLoadScreen.open(SlotScreenMode::Load);
         state = GameState::LoadScreen;
     }
 
     // Menu/Settings buttons
     if (renderer.drawMenuButton()) {
+        audioManager.playMenuClickSound();
         if (aiThread.joinable()) aiThread.join();
         aiThinking.store(false);
         aiResult = {-1, -1};
@@ -248,6 +256,7 @@ void Game::drawPlaying() {
         state = GameState::Menu;
     }
     if (renderer.drawSettingsButton()) {
+        audioManager.playMenuClickSound();
         settingsScreen.setSettings({vsAI, aiDepth});
         settingsScreen.reset();
         settingsReturnState = GameState::Playing;
@@ -256,11 +265,13 @@ void Game::drawPlaying() {
 
     // Undo button
     if (renderer.drawUndoButton()) {
+        audioManager.playMenuClickSound();
         undoLastMove();
     }
 
     // Restart button
     if (renderer.drawRestartButton()) {
+        audioManager.playMenuClickSound();
         startNewGame();
     }
 
@@ -365,6 +376,7 @@ void Game::handleKeyboardInput() {
 
     // ESC → return to menu
     if (IsKeyPressed(KEY_ESCAPE)) {
+        audioManager.playMenuClickSound();
         if (aiThread.joinable()) aiThread.join();
         aiThinking.store(false);
         aiResult = {-1, -1};
@@ -392,7 +404,7 @@ void Game::handleKeyboardInput() {
 }
 
 void Game::updateSaveLoadScreen() {
-    saveLoadScreen.update();
+    saveLoadScreen.update(audioManager);
     SlotScreenResult res = saveLoadScreen.getResult();
 
     if (res == SlotScreenResult::Selected) {

@@ -1,4 +1,5 @@
 #include "SettingsScreen.h"
+#include "AudioManager.h"
 #include "Fonts.h"
 #include "UI.h"
 #include "raylib.h"
@@ -22,7 +23,7 @@ int cycleDifficulty(int current, int direction) {
 }
 }  // namespace
 
-void SettingsScreen::update() {
+void SettingsScreen::update(AudioManager& audio) {
     // Keyboard navigation
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
         selectedIndex = (selectedIndex - 1 + ITEM_COUNT) % ITEM_COUNT;
@@ -32,6 +33,7 @@ void SettingsScreen::update() {
     }
 
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
+        audio.playMenuClickSound();
         switch (selectedIndex) {
             case 0:  // Toggle game mode
                 settings.vsAI = !settings.vsAI;
@@ -46,6 +48,11 @@ void SettingsScreen::update() {
     }
 
     if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
+        // Only the value-cycling rows respond — stay silent on Back so the
+        // click sound never lies about an action that didn't happen.
+        if (selectedIndex == 0 || selectedIndex == 1) {
+            audio.playMenuClickSound();
+        }
         switch (selectedIndex) {
             case 0:
                 settings.vsAI = !settings.vsAI;
@@ -59,6 +66,7 @@ void SettingsScreen::update() {
     }
 
     if (IsKeyPressed(KEY_ESCAPE)) {
+        audio.playMenuClickSound();
         done = true;
     }
 
@@ -82,6 +90,7 @@ void SettingsScreen::update() {
         if (CheckCollisionPointRec(mouse, itemRect)) {
             if (mouseMoved) selectedIndex = i;
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                audio.playMenuClickSound();
                 switch (i) {
                     case 0:
                         settings.vsAI = !settings.vsAI;

@@ -1,4 +1,5 @@
 #include "SaveLoadScreen.h"
+#include "AudioManager.h"
 #include "Fonts.h"
 #include "UI.h"
 #include "raylib.h"
@@ -24,7 +25,12 @@ void SaveLoadScreen::refreshSlotInfo() {
     }
 }
 
-void SaveLoadScreen::update() {
+bool SaveLoadScreen::canSelect(int slot) const {
+    return (mode == SlotScreenMode::Save && slot >= 1)
+        || (mode == SlotScreenMode::Load && slotOccupied[slot]);
+}
+
+void SaveLoadScreen::update(AudioManager& audio) {
     // Keyboard navigation
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
         deleteConfirmSlot = -1;
@@ -41,12 +47,9 @@ void SaveLoadScreen::update() {
     }
 
     // Select slot
-    if (IsKeyPressed(KEY_ENTER)) {
-        if (mode == SlotScreenMode::Save && selectedSlot >= 1) {
-            result = SlotScreenResult::Selected;
-        } else if (mode == SlotScreenMode::Load && slotOccupied[selectedSlot]) {
-            result = SlotScreenResult::Selected;
-        }
+    if (IsKeyPressed(KEY_ENTER) && canSelect(selectedSlot)) {
+        audio.playMenuClickSound();
+        result = SlotScreenResult::Selected;
     }
 
     // Delete (Load mode only)
@@ -64,6 +67,7 @@ void SaveLoadScreen::update() {
 
     // Cancel
     if (IsKeyPressed(KEY_ESCAPE)) {
+        audio.playMenuClickSound();
         result = SlotScreenResult::Cancelled;
     }
 
@@ -93,12 +97,9 @@ void SaveLoadScreen::update() {
                 selectedSlot = i;
                 deleteConfirmSlot = -1;
             }
-            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                if (mode == SlotScreenMode::Save && i >= 1) {
-                    result = SlotScreenResult::Selected;
-                } else if (mode == SlotScreenMode::Load && slotOccupied[i]) {
-                    result = SlotScreenResult::Selected;
-                }
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && canSelect(i)) {
+                audio.playMenuClickSound();
+                result = SlotScreenResult::Selected;
             }
         }
     }

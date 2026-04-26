@@ -376,7 +376,7 @@ void Renderer::handleScrollZoom() {
     }
 }
 
-void Renderer::updateCamera() {
+bool Renderer::updateCamera() {
     // Process camera inputs
     handleRightClickDrag();
     handleGestures();
@@ -404,8 +404,14 @@ void Renderer::updateCamera() {
             rebuildCameraFromOrbit();
         }
     }
+    bool clickedUI = false;
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mouse = GetMousePosition();
+        // Held buttons (rotate/zoom) get the click SFX on first press only;
+        // continuous-while-held would spam at frame rate.
+        if (isPointOnCameraButton(mouse)) {
+            clickedUI = true;
+        }
         if (CheckCollisionPointRec(mouse, btnReset)) {
             cameraAngle = defaultAngle;
             cameraPitch = defaultPitch;
@@ -452,14 +458,20 @@ void Renderer::updateCamera() {
     } else {
         hoverValid = false;
     }
+
+    return clickedUI;
 }
 
-bool Renderer::isPointOnUI(Vector2 point) const {
+bool Renderer::isPointOnCameraButton(Vector2 point) const {
     return CheckCollisionPointRec(point, btnRotateLeft)
         || CheckCollisionPointRec(point, btnRotateRight)
         || CheckCollisionPointRec(point, btnZoomIn)
         || CheckCollisionPointRec(point, btnZoomOut)
-        || CheckCollisionPointRec(point, btnReset)
+        || CheckCollisionPointRec(point, btnReset);
+}
+
+bool Renderer::isPointOnUI(Vector2 point) const {
+    return isPointOnCameraButton(point)
         || CheckCollisionPointRec(point, btnSave)
         || CheckCollisionPointRec(point, btnLoad)
         || CheckCollisionPointRec(point, btnMenu)

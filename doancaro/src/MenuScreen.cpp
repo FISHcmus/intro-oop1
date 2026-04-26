@@ -1,4 +1,5 @@
 #include "MenuScreen.h"
+#include "AudioManager.h"
 #include "Fonts.h"
 #include "UI.h"
 #include "raylib.h"
@@ -6,7 +7,7 @@
 MenuScreen::MenuScreen() : selectedIndex(0), choice(MenuChoice::None),
     items{"New Game", "Load Game", "Settings", "Exit"} {}
 
-void MenuScreen::update() {
+void MenuScreen::update(AudioManager& audio) {
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
         selectedIndex = (selectedIndex - 1 + ITEM_COUNT) % ITEM_COUNT;
     }
@@ -14,6 +15,7 @@ void MenuScreen::update() {
         selectedIndex = (selectedIndex + 1) % ITEM_COUNT;
     }
     if (IsKeyPressed(KEY_ENTER)) {
+        audio.playMenuClickSound();
         switch (selectedIndex) {
             case 0: choice = MenuChoice::NewGame; break;
             case 1: choice = MenuChoice::LoadGame; break;
@@ -45,6 +47,7 @@ void MenuScreen::update() {
         if (CheckCollisionPointRec(mouse, itemRect)) {
             if (mouseMoved) selectedIndex = i;
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                audio.playMenuClickSound();
                 switch (i) {
                     case 0: choice = MenuChoice::NewGame; break;
                     case 1: choice = MenuChoice::LoadGame; break;
