@@ -81,6 +81,24 @@ static const char* glossFS =
     "    finalColor = vec4(result, texColor.a);\n"
     "}\n";
 
+// Sky-gradient fragment shader — 3-stop smoothstep between
+// sky_top / sky_mid / sky_horizon (fed as vec3 uniforms each frame).
+// Vertex shader uses raylib's default (passes fragTexCoord through).
+static const char* skyFS =
+    "#version 330\n"
+    "in vec2 fragTexCoord;\n"
+    "out vec4 finalColor;\n"
+    "uniform vec3 colorTop;\n"
+    "uniform vec3 colorMid;\n"
+    "uniform vec3 colorBot;\n"
+    "void main() {\n"
+    "    float t = fragTexCoord.y;\n"
+    "    vec3 col = (t < 0.5)\n"
+    "        ? mix(colorTop, colorMid, smoothstep(0.0, 0.5, t))\n"
+    "        : mix(colorMid, colorBot, smoothstep(0.5, 1.0, t));\n"
+    "    finalColor = vec4(col, 1.0);\n"
+    "}\n";
+
 // Matte wood shader for the board — low specular, soft diffuse
 // Board sits on XZ plane at Y=0, cells [0..SIZE) on both axes
 // Each cell is 1.0 world unit
@@ -136,6 +154,8 @@ Renderer::Renderer()
       pieceModelSon({}), pieceModelThuy({}),
       pieceScaleSon(1.0f), pieceScaleThuy(1.0f), pieceGLBLoaded(false),
       glossShader({}), glossShaderLoaded(false), glossViewPosLoc(0),
+      skyShader({}), skyShaderLoaded(false),
+      skyTopLoc(0), skyMidLoc(0), skyBotLoc(0),
       scrollModel({}), scrollLoaded(false), scrollScale(1.0f),
       scrollCenterOffset({0.0f, 0.0f, 0.0f}),
       islandModel({}), islandLoaded(false), islandScale(1.0f),
@@ -276,6 +296,13 @@ void Renderer::init(int width, int height) {
     glossViewPosLoc = GetShaderLocation(glossShader, "viewPos");
     glossShaderLoaded = true;
 
+    // Sky-gradient: NULL vertex source -> raylib's default vert shader.
+    skyShader = LoadShaderFromMemory(nullptr, skyFS);
+    skyTopLoc = GetShaderLocation(skyShader, "colorTop");
+    skyMidLoc = GetShaderLocation(skyShader, "colorMid");
+    skyBotLoc = GetShaderLocation(skyShader, "colorBot");
+    skyShaderLoaded = true;
+
     if (pieceModelsLoaded) {
         pieceModelLight.materials[0].shader = glossShader;
         pieceModelDark.materials[0].shader  = glossShader;
@@ -355,6 +382,10 @@ void Renderer::shutdown() {
     if (glossShaderLoaded) {
         UnloadShader(glossShader);
         glossShaderLoaded = false;
+    }
+    if (skyShaderLoaded) {
+        UnloadShader(skyShader);
+        skyShaderLoaded = false;
     }
     if (scrollLoaded) {
         UnloadModel(scrollModel);
@@ -806,6 +837,31 @@ void Renderer::drawBoardSurface() {
                       boardLen + padding * 2, boardHeight, boardLen + padding * 2,
                       {180, 140, 60, 255});
     }
+}
+
+void Renderer::drawSkyGradient() {
+    if (!skyShaderLoaded) {
+        // Fallback: flat horizon if shader didn't load.
+        ClearBackground(Theme::palette.sky_horizon);
+        return;
+    }
+
+    auto toF = [](Color c, float out[3]) {
+        out[0] = static_cast<float>(c.r) / 255.0f;
+        out[1] = static_cast<float>(c.g) / 255.0f;
+        out[2] = static_cast<float>(c.b) / 255.0f;
+    };
+    float topF[3]; toF(Theme::palette.sky_top,     topF);
+    float midF[3]; toF(Theme::palette.sky_mid,     midF);
+    float botF[3]; toF(Theme::palette.sky_horizon, botF);
+
+    SetShaderValue(skyShader, skyTopLoc, topF, SHADER_UNIFORM_VEC3);
+    SetShaderValue(skyShader, skyMidLoc, midF, SHADER_UNIFORM_VEC3);
+    SetShaderValue(skyShader, skyBotLoc, botF, SHADER_UNIFORM_VEC3);
+
+    BeginShaderMode(skyShader);
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
+    EndShaderMode();
 }
 
 void Renderer::drawVignette() {

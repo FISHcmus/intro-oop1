@@ -22,6 +22,10 @@ public:
     void drawWinLine(const std::vector<Move>& winLine);
     void drawVignette();
 
+    // 2D backdrop — 3-stop ink-wash sky drawn full-screen via inline shader.
+    // Call BEFORE BeginMode3D so the 3D scene draws on top.
+    void drawSkyGradient();
+
     // Animation control
     void resetAnimations();
 
@@ -145,6 +149,16 @@ private:
     Shader glossShader;
     bool glossShaderLoaded;
     int glossViewPosLoc;
+
+    // Sky-gradient shader — 3-stop smoothstep interpolation between
+    // sky_top / sky_mid / sky_horizon. Single fullscreen quad, no 3D state,
+    // no textures. Kills the Mach-band seam that two stacked
+    // DrawRectangleGradientV calls produce.
+    Shader skyShader;
+    bool   skyShaderLoaded;
+    int    skyTopLoc;
+    int    skyMidLoc;
+    int    skyBotLoc;
 
     // 3D backdrop — Sketchfab "mountain & river scroll" (KHR_materials_unlit,
     // vertex-colored anime style). Sits behind the play area; do NOT apply

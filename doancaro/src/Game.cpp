@@ -1,5 +1,6 @@
 #include "Game.h"
 #include "Fonts.h"
+#include "Theme.h"
 #include <climits>
 #include <cstdlib>
 #include <ctime>
@@ -65,7 +66,15 @@ void Game::run() {
 
         // Draw
         BeginDrawing();
-        ClearBackground({200, 230, 240, 255});  // thuy_pearl — daylight sky behind floating board
+        ClearBackground(Theme::palette.sky_horizon);
+
+        // 3-stop ink-wash sky behind the in-game 3D scene. Inline shader does
+        // smoothstep-interpolation between sky_top / sky_mid / sky_horizon —
+        // no Mach-band seam at the midline. Menu/Settings have their own
+        // animated wuxia-storm BG, so only Playing/GameOver get the sky.
+        if (state == GameState::Playing || state == GameState::GameOver) {
+            renderer.drawSkyGradient();
+        }
 
         switch (state) {
             case GameState::Menu:       drawMenu();           break;

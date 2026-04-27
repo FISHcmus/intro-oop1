@@ -30,9 +30,14 @@ struct Palette {
     Color gold_foil;         // 1px hairline, rim of pieces
     Color accent_vermillion; // CTA only — NEVER as fill
 
-    // Storm gradient
+    // Storm gradient (menu's mythological ink-storm backdrop)
     Color bg_top;            // top of ink-storm sky
     Color bg_bottom;         // bottom of ink-storm sky
+
+    // Daylight scroll-painting sky (in-game scene, behind the 3D backdrop)
+    Color sky_top;           // cream washi, scroll-paper white
+    Color sky_mid;           // warm mist gray, painted-haze layer
+    Color sky_horizon;       // cool fog gray, far mountains dissolve
 };
 
 struct Radius {

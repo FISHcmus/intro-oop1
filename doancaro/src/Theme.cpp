@@ -14,6 +14,9 @@ const Palette palette = {
     /* accent_vermillion */ {180,  70,  55, 255},  // CTA only
     /* bg_top            */ { 15,  18,  28, 255},  // ink-storm sky top
     /* bg_bottom         */ { 35,  40,  55, 255},  // ink-storm sky bottom
+    /* sky_top           */ {244, 238, 225, 255},  // cream washi (in-game)
+    /* sky_mid           */ {210, 212, 210, 255},  // warm mist gray (in-game)
+    /* sky_horizon       */ {165, 172, 178, 255},  // cool fog gray (in-game)
 };
 
 const Radius radius = { 6, 12, 20, 999 };
