@@ -192,6 +192,18 @@ private:
     bool   mistShaderLoaded;
     int    mistTimeLoc;
 
+    // 3D fluffy clouds — single GLB mesh instanced multiple times at
+    // varied positions, scales, and drift speeds, all kept BELOW the
+    // board's Y so the play area stays in clear sky.
+    struct CloudInstance {
+        Vector3 pos;        // world-space center
+        float   scale;      // uniform XYZ scale
+        float   driftSpeed; // X velocity (units/sec)
+    };
+    std::vector<CloudInstance> cloudInstances;
+    Model  cloudModel;
+    bool   cloudModelLoaded;
+
 
     // 3D backdrop — Sketchfab "mountain & river scroll" (KHR_materials_unlit,
     // vertex-colored anime style). Sits behind the play area; do NOT apply

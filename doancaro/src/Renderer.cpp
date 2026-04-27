@@ -193,7 +193,10 @@ static const char* mistFS =
     "    vec2 sp = uv * vec2(3.0, 1.5) + vec2(uTime * 0.020, uTime * 0.005);\n"
     "    float n = fbm(sp);\n"
     "    float density = smoothstep(0.42, 0.85, n);\n"
-    "    float yMask = smoothstep(0.05, 0.30, uv.y) * (1.0 - smoothstep(0.45, 0.65, uv.y));\n"
+    // Camera is locked top-down — upper sky is too distant to register.
+    // Sit mist in the same horizon band as wind (just above the board) so
+    // both effects work where the player's attention actually is.
+    "    float yMask = smoothstep(0.30, 0.48, uv.y) * (1.0 - smoothstep(0.60, 0.75, uv.y));\n"
     "    float a = density * yMask * 0.55;\n"
     "    finalColor = vec4(0.94, 0.95, 0.97, a);\n"
     "}\n";
@@ -229,6 +232,11 @@ static const float MIN_PITCH = 11.0f * DEG2RAD;  // don't go below board
 static const float MAX_PITCH = 80.0f * DEG2RAD;  // nearly top-down
 static const int BTN_SIZE = 36;
 static const int BTN_PAD = 6;
+
+// Cubic Hermite smoothstep over [0,1]. Caller clamps x first.
+static inline float smoothstep01(float x) {
+    return x * x * (3.0f - 2.0f * x);
+}
 
 // Loads a GLB and computes a uniform XZ-fit scale + bbox-recenter offset so
 // the model spans `widthXZ` world units across its larger horizontal axis and
@@ -278,6 +286,8 @@ Renderer::Renderer()
       edgeFadeShader({}), edgeFadeShaderLoaded(false),
       vignetteShader({}), vignetteShaderLoaded(false),
       mistShader({}), mistShaderLoaded(false), mistTimeLoc(0),
+      cloudInstances(),
+      cloudModel({}), cloudModelLoaded(false),
       scrollModel({}), scrollLoaded(false), scrollScale(1.0f),
       scrollCenterOffset({0.0f, 0.0f, 0.0f}),
       islandModel({}), islandLoaded(false), islandScale(1.0f),
@@ -445,6 +455,33 @@ void Renderer::init(int width, int height) {
     mistTimeLoc = GetShaderLocation(mistShader, "uTime");
     mistShaderLoaded = true;
 
+    // PBR GLB with black baseColor + emissive — override diffuse to WHITE
+    // so the texture isn't multiplied to near-black. See CLAUDE.md raylib
+    // gotchas. Per-instance jitter on top of the 10-unit bbox-fit base
+    // scale produces the wisp-vs-billow size variety.
+    float baseScale = 1.0f;
+    Vector3 cloudOffsetUnused;
+    if (loadFittedXZ("assets/models/fluffy_cloud.glb", 10.0f, cloudModel,
+                     baseScale, cloudOffsetUnused)) {
+        for (int i = 0; i < cloudModel.materialCount; ++i) {
+            cloudModel.materials[i].maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
+        }
+        constexpr int kCloudCount = 14;
+        cloudInstances.clear();
+        cloudInstances.reserve(kCloudCount);
+        for (int i = 0; i < kCloudCount; ++i) {
+            CloudInstance c;
+            c.pos.x      = -90.0f + static_cast<float>(GetRandomValue(0, 18000)) * 0.01f;
+            c.pos.y      = -30.0f + static_cast<float>(GetRandomValue(0, 1500))  * 0.01f;
+            c.pos.z      = -60.0f + static_cast<float>(GetRandomValue(0, 12000)) * 0.01f;
+            float jitter = 0.3f   + static_cast<float>(GetRandomValue(0, 320))   * 0.01f;
+            c.scale      = baseScale * jitter;
+            c.driftSpeed = 0.5f   + static_cast<float>(GetRandomValue(0, 150))   * 0.01f;
+            cloudInstances.push_back(c);
+        }
+        cloudModelLoaded = true;
+    }
+
     if (pieceModelsLoaded) {
         pieceModelLight.materials[0].shader = glossShader;
         pieceModelDark.materials[0].shader  = glossShader;
@@ -596,6 +633,10 @@ void Renderer::shutdown() {
     if (mistShaderLoaded) {
         UnloadShader(mistShader);
         mistShaderLoaded = false;
+    }
+    if (cloudModelLoaded) {
+        UnloadModel(cloudModel);
+        cloudModelLoaded = false;
     }
     if (scrollLoaded) {
         UnloadModel(scrollModel);
@@ -773,7 +814,7 @@ bool Renderer::updateCamera() {
     float ramp = (idleSeconds - 1.5f) / 0.5f;
     if (ramp < 0.0f) ramp = 0.0f;
     if (ramp > 1.0f) ramp = 1.0f;
-    ramp = ramp * ramp * (3.0f - 2.0f * ramp);
+    ramp = smoothstep01(ramp);
 
     constexpr float TWO_PI    = 6.28318530718f;
     constexpr float BREATH_HZ = 0.4f;
@@ -1039,6 +1080,50 @@ void Renderer::drawBoardSurface() {
         };
         DrawModelEx(scrollModel, scrollPos, {0.0f, 1.0f, 0.0f}, 0.0f,
                     {scrollScale, scrollScale, scrollScale}, WHITE);
+    }
+
+    // Cloud instances — shared wind direction wobbles ±34° around +X with
+    // ~30s period. Per-cloud alpha fades to 0 well before the cloud nears
+    // the board, with the exclusion radius SCALED by cloud size so big
+    // clouds (which extend further from their center) start fading sooner.
+    // Depth-mask is disabled so the cross-plane cloud cards don't z-fight
+    // and produce visible rectangular outlines.
+    if (cloudModelLoaded) {
+        float t  = static_cast<float>(GetTime());
+        float dt = GetFrameTime();
+        float windAngle = sinf(t * 0.20f) * 0.6f;
+        float windDirX  = cosf(windAngle);
+        float windDirZ  = sinf(windAngle);
+
+        constexpr unsigned char kBaseAlpha = 140;
+        rlDisableDepthMask();
+        for (auto& c : cloudInstances) {
+            c.pos.x += windDirX * c.driftSpeed * dt;
+            c.pos.z += windDirZ * c.driftSpeed * dt;
+            if (c.pos.x >  100.0f) c.pos.x = -100.0f;
+            if (c.pos.x < -100.0f) c.pos.x =  100.0f;
+            if (c.pos.z >   80.0f) c.pos.z =  -80.0f;
+            if (c.pos.z <  -80.0f) c.pos.z =   80.0f;
+
+            // c.scale is world-units (unit-bbox model × baseScale × jitter ≈ 3–35),
+            // so c.scale * 0.5 is the cloud's half-extent. Fade anchors on the
+            // cloud's EDGE vs the board edge (~7.5 from center) — big puffs get
+            // a proportionally bigger exclusion ring.
+            float effHalf   = c.scale * 0.5f;
+            float fadeEnd   =  7.5f + effHalf;
+            float fadeStart = 15.0f + effHalf;
+            float distToBoard = sqrtf(c.pos.x * c.pos.x + c.pos.z * c.pos.z);
+            float fade = (distToBoard - fadeEnd) / (fadeStart - fadeEnd);
+            if (fade < 0.0f) fade = 0.0f;
+            if (fade > 1.0f) fade = 1.0f;
+            fade = smoothstep01(fade);
+            unsigned char a = static_cast<unsigned char>(kBaseAlpha * fade);
+            Color tint = {255, 255, 255, a};
+
+            Vector3 worldPos = {half + c.pos.x, c.pos.y, half + c.pos.z};
+            DrawModel(cloudModel, worldPos, c.scale, tint);
+        }
+        rlEnableDepthMask();
     }
 
     // Floating island pedestal — drawn after scroll, before the table, so the
