@@ -141,6 +141,54 @@ static const char* vignetteFS =
     "    finalColor = vec4(0.0, 0.0, 0.0, a);\n"
     "}\n";
 
+// Mist fragment shader — multi-octave value-noise wisps drifting across
+// the upper-mid screen band. UV is scrolled by uTime so the noise field
+// pans slowly along a wind vector. A vertical mask concentrates density
+// in the upper-mid band (y ≈ 0.05..0.55) so the mist doesn't obscure the
+// floating-rock + board area below. Output is paper-white with low alpha,
+// which is what 山水 ink-wash mist looks like — bright highlights, not
+// puffy clouds. Drawn AFTER EndMode3D so it sits in front of the
+// mountain backdrop, BEFORE drawVignette so corner-darkening stacks.
+static const char* mistFS =
+    "#version 330\n"
+    "in vec2 fragTexCoord;\n"
+    "out vec4 finalColor;\n"
+    "uniform float uTime;\n"
+    "float hash(vec2 p) {\n"
+    "    p = fract(p * vec2(443.897, 441.423));\n"
+    "    p += dot(p, p + 19.19);\n"
+    "    return fract(p.x * p.y);\n"
+    "}\n"
+    "float vnoise(vec2 p) {\n"
+    "    vec2 i = floor(p);\n"
+    "    vec2 f = fract(p);\n"
+    "    float a = hash(i);\n"
+    "    float b = hash(i + vec2(1.0, 0.0));\n"
+    "    float c = hash(i + vec2(0.0, 1.0));\n"
+    "    float d = hash(i + vec2(1.0, 1.0));\n"
+    "    vec2 u = f * f * (3.0 - 2.0 * f);\n"
+    "    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);\n"
+    "}\n"
+    "float fbm(vec2 p) {\n"
+    "    float v = 0.0;\n"
+    "    float amp = 0.5;\n"
+    "    for (int i = 0; i < 3; i++) {\n"
+    "        v += amp * vnoise(p);\n"
+    "        p *= 2.0;\n"
+    "        amp *= 0.5;\n"
+    "    }\n"
+    "    return v;\n"
+    "}\n"
+    "void main() {\n"
+    "    vec2 uv = fragTexCoord;\n"
+    "    vec2 sp = uv * vec2(3.0, 1.5) + vec2(uTime * 0.020, uTime * 0.005);\n"
+    "    float n = fbm(sp);\n"
+    "    float density = smoothstep(0.42, 0.85, n);\n"
+    "    float yMask = smoothstep(0.05, 0.30, uv.y) * (1.0 - smoothstep(0.45, 0.65, uv.y));\n"
+    "    float a = density * yMask * 0.55;\n"
+    "    finalColor = vec4(0.94, 0.95, 0.97, a);\n"
+    "}\n";
+
 // Sky-gradient fragment shader — 3-stop smoothstep between
 // sky_top / sky_mid / sky_horizon (fed as vec3 uniforms each frame).
 // Vertex shader uses raylib's default (passes fragTexCoord through).
@@ -219,6 +267,7 @@ Renderer::Renderer()
       skyTopLoc(0), skyMidLoc(0), skyBotLoc(0),
       edgeFadeShader({}), edgeFadeShaderLoaded(false),
       vignetteShader({}), vignetteShaderLoaded(false),
+      mistShader({}), mistShaderLoaded(false), mistTimeLoc(0),
       scrollModel({}), scrollLoaded(false), scrollScale(1.0f),
       scrollCenterOffset({0.0f, 0.0f, 0.0f}),
       islandModel({}), islandLoaded(false), islandScale(1.0f),
@@ -374,6 +423,10 @@ void Renderer::init(int width, int height) {
     vignetteShader = LoadShaderFromMemory(nullptr, vignetteFS);
     vignetteShaderLoaded = true;
 
+    mistShader = LoadShaderFromMemory(nullptr, mistFS);
+    mistTimeLoc = GetShaderLocation(mistShader, "uTime");
+    mistShaderLoaded = true;
+
     if (pieceModelsLoaded) {
         pieceModelLight.materials[0].shader = glossShader;
         pieceModelDark.materials[0].shader  = glossShader;
@@ -520,6 +573,10 @@ void Renderer::shutdown() {
     if (vignetteShaderLoaded) {
         UnloadShader(vignetteShader);
         vignetteShaderLoaded = false;
+    }
+    if (mistShaderLoaded) {
+        UnloadShader(mistShader);
+        mistShaderLoaded = false;
     }
     if (scrollLoaded) {
         UnloadModel(scrollModel);
@@ -1031,6 +1088,15 @@ void Renderer::drawSkyGradient() {
 
     BeginShaderMode(skyShader);
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
+    EndShaderMode();
+}
+
+void Renderer::drawMist() {
+    if (!mistShaderLoaded) return;
+    float t = static_cast<float>(GetTime());
+    SetShaderValue(mistShader, mistTimeLoc, &t, SHADER_UNIFORM_FLOAT);
+    BeginShaderMode(mistShader);
+    DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
     EndShaderMode();
 }
 

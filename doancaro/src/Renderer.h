@@ -20,6 +20,7 @@ public:
     void drawBoard(const Board& board, int cursorRow, int cursorCol,
                    CellState currentTurn);
     void drawWinLine(const std::vector<Move>& winLine);
+    void drawMist();
     void drawVignette();
 
     // 2D backdrop — 3-stop ink-wash sky drawn full-screen via inline shader.
@@ -179,6 +180,13 @@ private:
     // so labels stay readable while the periphery dims into ink.
     Shader vignetteShader;
     bool   vignetteShaderLoaded;
+
+    // Drifting mist — multi-octave value-noise FS shader. UV scrolled by a
+    // time uniform so the noise field pans along a wind vector. Drawn on a
+    // fullscreen 2D quad between the 3D scene and the vignette pass.
+    Shader mistShader;
+    bool   mistShaderLoaded;
+    int    mistTimeLoc;
 
     // 3D backdrop — Sketchfab "mountain & river scroll" (KHR_materials_unlit,
     // vertex-colored anime style). Sits behind the play area; do NOT apply
