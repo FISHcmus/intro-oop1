@@ -203,6 +203,7 @@ Renderer::Renderer()
       cameraAngle(0), cameraPitch(0), cameraDistance(0),
       cameraTarget({}), defaultAngle(0), defaultPitch(0), defaultDistance(0),
       isDragging(false), dragStart({}),
+      idleSeconds(0.0f), breathTime(0.0f),
       btnRotateLeft({}), btnRotateRight({}), btnZoomIn({}), btnZoomOut({}), btnReset({}),
       btnSave({}), btnLoad({}), btnMenu({}), btnSettings({}), btnRestart({}), btnUndo({}),
       hoverValid(false), hoverRow(0), hoverCol(0),
@@ -673,6 +674,42 @@ bool Renderer::updateCamera() {
     } else {
         hoverValid = false;
     }
+
+    // Camera idle-breathing: detect any input this frame to gate the bob.
+    Vector2 mouseDelta = GetMouseDelta();
+    bool anyInput = mouseDelta.x != 0.0f || mouseDelta.y != 0.0f
+                 || IsMouseButtonDown(MOUSE_BUTTON_LEFT)
+                 || IsMouseButtonDown(MOUSE_BUTTON_RIGHT)
+                 || GetMouseWheelMove() != 0.0f
+                 || IsKeyDown(KEY_Q) || IsKeyDown(KEY_E)
+                 || IsKeyPressed(KEY_HOME);
+    float dt = GetFrameTime();
+    if (anyInput) {
+        idleSeconds = 0.0f;
+        // Keep breathTime advancing so the next idle resumes mid-phase
+        // — snapping back to 0 would visibly teleport the camera.
+        breathTime += dt;
+    } else {
+        idleSeconds += dt;
+        breathTime  += dt;
+    }
+    // Smooth ramp-in over 0.5s after the 1.5s idle threshold.
+    float ramp = (idleSeconds - 1.5f) / 0.5f;
+    if (ramp < 0.0f) ramp = 0.0f;
+    if (ramp > 1.0f) ramp = 1.0f;
+    ramp = ramp * ramp * (3.0f - 2.0f * ramp);
+
+    constexpr float TWO_PI    = 6.28318530718f;
+    constexpr float BREATH_HZ = 0.4f;
+    constexpr float BREATH_AMP = 0.05f;
+    float bob = sinf(breathTime * TWO_PI * BREATH_HZ) * BREATH_AMP * ramp;
+
+    // Always rebuild from orbit for a clean baseline, then bob both target
+    // and position together so the look-angle is preserved (pure vertical
+    // translation, not a tilt).
+    rebuildCameraFromOrbit();
+    camera.target.y   += bob;
+    camera.position.y += bob;
 
     return clickedUI;
 }

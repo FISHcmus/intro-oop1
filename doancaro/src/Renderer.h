@@ -84,6 +84,13 @@ private:
     bool isDragging;
     Vector2 dragStart;
 
+    // Idle camera-breathing — sin-wave Y bob applied AFTER orbit rebuild
+    // when no input has occurred for ≥1.5s. Cosmetic only; never mutates
+    // cameraTarget so it can't drift over time. breathTime keeps phase
+    // continuous so resuming idle doesn't snap (which would teleport).
+    float idleSeconds;
+    float breathTime;
+
     // UI button rectangles
     Rectangle btnRotateLeft;
     Rectangle btnRotateRight;
