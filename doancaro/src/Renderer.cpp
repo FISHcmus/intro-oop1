@@ -81,6 +81,50 @@ static const char* glossFS =
     "    finalColor = vec4(result, texColor.a);\n"
     "}\n";
 
+// Edge-fade vertex shader for the scroll backdrop. Passes world-space
+// fragPosition + vertex color through; raylib auto-fills mvp + matModel.
+static const char* edgeFadeVS =
+    "#version 330\n"
+    "in vec3 vertexPosition;\n"
+    "in vec2 vertexTexCoord;\n"
+    "in vec4 vertexColor;\n"
+    "uniform mat4 mvp;\n"
+    "uniform mat4 matModel;\n"
+    "out vec3 fragPosition;\n"
+    "out vec2 fragTexCoord;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    fragPosition = vec3(matModel * vec4(vertexPosition, 1.0));\n"
+    "    fragTexCoord = vertexTexCoord;\n"
+    "    fragColor = vertexColor;\n"
+    "    gl_Position = mvp * vec4(vertexPosition, 1.0);\n"
+    "}\n";
+
+// Edge-fade fragment shader: multiply texture alpha by ellipse-distance
+// falloff from scroll center in XZ. Inside fadeStart radius -> fully opaque;
+// between fadeStart and 1.0 -> smoothstep falloff to transparent. Gradient
+// sky behind the scroll shows through the faded edges.
+static const char* edgeFadeFS =
+    "#version 330\n"
+    "in vec3 fragPosition;\n"
+    "in vec2 fragTexCoord;\n"
+    "in vec4 fragColor;\n"
+    "out vec4 finalColor;\n"
+    "uniform sampler2D texture0;\n"
+    "uniform vec4 colDiffuse;\n"
+    "uniform vec3 scrollCenter;\n"
+    "uniform float scrollHalfX;\n"
+    "uniform float scrollHalfZ;\n"
+    "uniform float fadeStart;\n"
+    "void main() {\n"
+    "    vec4 texColor = texture(texture0, fragTexCoord) * colDiffuse * fragColor;\n"
+    "    float nx = (fragPosition.x - scrollCenter.x) / scrollHalfX;\n"
+    "    float nz = (fragPosition.z - scrollCenter.z) / scrollHalfZ;\n"
+    "    float distRatio = sqrt(nx * nx + nz * nz);\n"
+    "    float alphaMult = 1.0 - smoothstep(fadeStart, 1.0, distRatio);\n"
+    "    finalColor = vec4(texColor.rgb, texColor.a * alphaMult);\n"
+    "}\n";
+
 // Sky-gradient fragment shader — 3-stop smoothstep between
 // sky_top / sky_mid / sky_horizon (fed as vec3 uniforms each frame).
 // Vertex shader uses raylib's default (passes fragTexCoord through).
@@ -156,6 +200,7 @@ Renderer::Renderer()
       glossShader({}), glossShaderLoaded(false), glossViewPosLoc(0),
       skyShader({}), skyShaderLoaded(false),
       skyTopLoc(0), skyMidLoc(0), skyBotLoc(0),
+      edgeFadeShader({}), edgeFadeShaderLoaded(false),
       scrollModel({}), scrollLoaded(false), scrollScale(1.0f),
       scrollCenterOffset({0.0f, 0.0f, 0.0f}),
       islandModel({}), islandLoaded(false), islandScale(1.0f),
@@ -303,6 +348,11 @@ void Renderer::init(int width, int height) {
     skyBotLoc = GetShaderLocation(skyShader, "colorBot");
     skyShaderLoaded = true;
 
+    edgeFadeShader = LoadShaderFromMemory(edgeFadeVS, edgeFadeFS);
+    edgeFadeShader.locs[SHADER_LOC_MATRIX_MODEL] =
+        GetShaderLocation(edgeFadeShader, "matModel");
+    edgeFadeShaderLoaded = true;
+
     if (pieceModelsLoaded) {
         pieceModelLight.materials[0].shader = glossShader;
         pieceModelDark.materials[0].shader  = glossShader;
@@ -328,6 +378,61 @@ void Renderer::init(int width, int height) {
     scrollLoaded = loadFittedXZ("assets/models/mountain_and_river_scroll.glb",
                                 kBackdropWidth, scrollModel, scrollScale,
                                 scrollCenterOffset);
+    if (scrollLoaded) {
+        // Effective bbox = union of meshes whose XZ-footprint is >= 5% of
+        // the largest mesh's footprint. Skips thin decorative outliers that
+        // would otherwise drag the fade ellipse off the painted content.
+        std::vector<BoundingBox> bboxes(scrollModel.meshCount);
+        std::vector<float> areas(scrollModel.meshCount);
+        float maxArea = 0.0f;
+        for (int i = 0; i < scrollModel.meshCount; i++) {
+            bboxes[i] = GetMeshBoundingBox(scrollModel.meshes[i]);
+            areas[i] = (bboxes[i].max.x - bboxes[i].min.x) *
+                       (bboxes[i].max.z - bboxes[i].min.z);
+            if (areas[i] > maxArea) maxArea = areas[i];
+        }
+        const float threshold = maxArea * 0.05f;
+        BoundingBox effective = {{0,0,0}, {0,0,0}};
+        bool seeded = false;
+        for (int i = 0; i < scrollModel.meshCount; i++) {
+            if (areas[i] < threshold) continue;
+            if (!seeded) {
+                effective = bboxes[i];
+                seeded = true;
+            } else {
+                if (bboxes[i].min.x < effective.min.x) effective.min.x = bboxes[i].min.x;
+                if (bboxes[i].max.x > effective.max.x) effective.max.x = bboxes[i].max.x;
+                if (bboxes[i].min.z < effective.min.z) effective.min.z = bboxes[i].min.z;
+                if (bboxes[i].max.z > effective.max.z) effective.max.z = bboxes[i].max.z;
+            }
+        }
+        float scrollHalfX = (effective.max.x - effective.min.x) * scrollScale * 0.5f;
+        float scrollHalfZ = (effective.max.z - effective.min.z) * scrollScale * 0.5f;
+        float fadeOffsetX = (effective.min.x + effective.max.x) * 0.5f * scrollScale;
+        float fadeOffsetZ = (effective.min.z + effective.max.z) * 0.5f * scrollScale;
+        if (edgeFadeShaderLoaded) {
+            for (int i = 0; i < scrollModel.materialCount; i++) {
+                scrollModel.materials[i].shader = edgeFadeShader;
+            }
+            // Scroll position + extents are static post-init — push uniforms
+            // once. fadeStart=0.4 = inner 40% opaque, outer 60% smoothstep.
+            const float half = Board::SIZE / 2.0f;
+            float scrollCenter[3] = {
+                half + scrollCenterOffset.x + fadeOffsetX,
+                kBackdropY,
+                half + scrollCenterOffset.z + fadeOffsetZ,
+            };
+            float fadeStart = 0.4f;
+            int centerLoc = GetShaderLocation(edgeFadeShader, "scrollCenter");
+            int halfXLoc  = GetShaderLocation(edgeFadeShader, "scrollHalfX");
+            int halfZLoc  = GetShaderLocation(edgeFadeShader, "scrollHalfZ");
+            int fadeLoc   = GetShaderLocation(edgeFadeShader, "fadeStart");
+            SetShaderValue(edgeFadeShader, centerLoc, scrollCenter, SHADER_UNIFORM_VEC3);
+            SetShaderValue(edgeFadeShader, halfXLoc,  &scrollHalfX,  SHADER_UNIFORM_FLOAT);
+            SetShaderValue(edgeFadeShader, halfZLoc,  &scrollHalfZ,  SHADER_UNIFORM_FLOAT);
+            SetShaderValue(edgeFadeShader, fadeLoc,   &fadeStart,    SHADER_UNIFORM_FLOAT);
+        }
+    }
 
     // Floating-island pedestal. The asset is a ZBrush sculpt with no textures;
     // raylib's default shader is unlit, so without overriding it the rock
@@ -386,6 +491,10 @@ void Renderer::shutdown() {
     if (skyShaderLoaded) {
         UnloadShader(skyShader);
         skyShaderLoaded = false;
+    }
+    if (edgeFadeShaderLoaded) {
+        UnloadShader(edgeFadeShader);
+        edgeFadeShaderLoaded = false;
     }
     if (scrollLoaded) {
         UnloadModel(scrollModel);

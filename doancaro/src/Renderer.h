@@ -160,6 +160,13 @@ private:
     int    skyMidLoc;
     int    skyBotLoc;
 
+    // Edge-fade shader applied to the scroll backdrop. Multiplies fragment
+    // alpha by 1 - smoothstep(fadeStart, 1.0, ellipseDist) so the scroll's
+    // hard rectangular outer edge fades into the gradient sky behind it.
+    // All uniforms are static post-init — pushed once in init(), never per-frame.
+    Shader edgeFadeShader;
+    bool   edgeFadeShaderLoaded;
+
     // 3D backdrop — Sketchfab "mountain & river scroll" (KHR_materials_unlit,
     // vertex-colored anime style). Sits behind the play area; do NOT apply
     // glossShader to it — model is already unlit.
