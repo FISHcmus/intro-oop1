@@ -1,5 +1,9 @@
 # intro-oop1 — OOP1 (C++ Programming)
 
+## Web Interaction
+
+**Always use Chrome DevTools MCP** (`mcp__chrome-devtools__*`) for ALL web page interaction — fetching content, navigating, submitting forms, reading pages. NEVER use WebFetch or WebSearch unless the user explicitly asks for it. The browser is already open with an active CDP session.
+
 ## Course Info
 - **Student ID:** 25310023
 - **Language:** C++14 strict (must load into Visual Studio before submission)
@@ -10,6 +14,7 @@
   - Pham Ngoc Tram — 25310043
 - **Final project:** Caro game with raylib (see `DoAnCaro.pdf`)
 - **Slides:** PPSX in `baigiang/`, extracted markdown in `extracted_content/`
+- **Class pacing:** Painfully slow — by week 8 (2026-04-20) the class is only covering week 5 content (File Processing). Slides go up to week 10 but actual in-class progress lags ~3 weeks behind.
 - **Research:** Course analysis and strategy docs in `research/`
 
 ## Directory Structure
@@ -77,8 +82,7 @@ Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro
 |---|---|
 | Get file errors/warnings | `get_file_problems` |
 | Project diagnostics (toolchain, CMake) | `get_diagnostic_info` |
-| Build the project | `build_project` |
-| Run a configuration | `execute_run_configuration` |
+| Run a configuration (launches exe in IDE) | `execute_run_configuration` |
 | Open file in editor | `open_file_in_editor` |
 | Auto-format code | `reformat_file` |
 | Safe rename refactoring | `rename_refactoring` |
@@ -88,6 +92,23 @@ Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro
 | Find files by name/glob | `find_files_by_name_keyword`, `find_files_by_glob` |
 | View compiler/SDK info | `get_compiler_info` |
 
+### Build Rule (MANDATORY)
+
+**NEVER use `mcp__jetbrains__build_project` to build.** It returns `{"isSuccess": true/false, "problems": [{"message": "The project has limited build diagnostics functionality. Build messages cannot be collected."}]}` — pass/fail only, no compiler messages, no file/line info. Useless for debugging.
+
+**ALWAYS build via CLI:**
+```bash
+cmake --build /home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1/cmake-build-debug --target <target> 2>&1 | tail -50
+```
+Gives full stderr with file:line errors, warnings, linker output — everything needed to debug.
+
+**IDE MCP is for DIAGNOSIS, not building:**
+- `get_file_problems` — per-file errors/warnings from CLion inspection (no build needed)
+- `get_diagnostic_info` — toolchain / CMake setup health check
+- `get_compiler_info` — compiler version and flags
+
+Exception: `execute_run_configuration` is fine for launching a built exe (Run ▶). It's not a build tool.
+
 ### Decision flowchart
 
 1. **Need to understand a code file?** → `get_symbols_overview` first, then `find_symbol` with `include_body=true`
@@ -96,11 +117,16 @@ Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro
 4. **Need to rename?** → `rename_symbol` (Serena) or `rename_refactoring` (JetBrains)
 5. **Need to find usages?** → `find_referencing_symbols`
 6. **Need to search?** → `search_for_pattern` (Serena) or `search_in_files_by_text` (JetBrains)
-7. **Need to check errors?** → `get_file_problems` (per file) or `build_project` (whole project)
-8. **Non-code file?** → Use built-in Read/Edit/Write tools
+7. **Need to check per-file errors?** → `get_file_problems` (no build, fast)
+8. **Need to build?** → CLI: `cmake --build cmake-build-debug --target <target>` (see Build Rule above — NEVER use `build_project` MCP)
+9. **Non-code file?** → Use built-in Read/Edit/Write tools
 
 ## raylib Gotchas
-- **GLB material mapping**: `LoadModel("file.glb")` puts blank default at `materials[0]`, loaded texture at `materials[1]`. Fix: `model.meshMaterial[0] = 1;`
+- **GLB material mapping (single-material only)**: For GLBs with `materialCount == 1`, raylib prepends a blank default; bump with `model.meshMaterial[i] = 1;` for every mesh. For multi-material GLBs (`materialCount >= 2`) raylib already maps correctly — applying the bump shifts mappings off-by-one and breaks rendering. Always check `model.materialCount` before deciding.
+- **PBR GLB renders dark**: Models authored for PBR engines often use `baseColorFactor=(0,0,0)` + `emissive` (e.g. `fluffy_cloud.glb`). raylib's default shader ignores emissive, so the model multiplies down to near-black. Fix: `for (int i=0; i<model.materialCount; ++i) model.materials[i].maps[MATERIAL_MAP_DIFFUSE].color = WHITE;` after `LoadModel`.
+- **Cross-plane / transparent GLBs draw a "cube outline"**: Models built as 3 perpendicular plane cards (cloud-style billboards, fluffy_cloud.glb) show a hard bbox-edge outline because each card's transparent fragments still write depth, occluding the other cards behind them — the visible clip line is the bbox boundary. **Why:** raylib's default pipeline has depth-WRITE enabled even for alpha-blended fragments. **Fix:** wrap the draw with `rlDisableDepthMask(); /* DrawModelEx ... */ rlEnableDepthMask();` — turns off depth writes (test still runs, so clouds stay correctly hidden behind the board) so transparent fragments stop blocking siblings. Same rule applies to particle quads and any multi-card billboard.
+- **Cloud instance `c.scale` is world-units, not jitter**: After `baseScale = 10.0f / maxSpan` and `c.scale = baseScale * jitter`, `c.scale` ranges ~3.0–35.0 world units, NOT the input jitter ~0.3–3.5. Any extent math (fade radius, bbox checks) must use `c.scale * 0.5` for half-width — not `c.scale * 5`.
+- **Renderer default camera distance = 35**: Sanity-check any world-space radius against this. A fade-out radius >35 means every object sits inside its own invisibility ring at default zoom.
 - **GLB model stripping**: Remove node mesh refs with Python, then `npx @gltf-transform/cli prune in.glb out.glb` to shrink file
 - **Working directory**: Must run `./CaroGame` from `doancaro/build/` — assets use relative paths. Running from another dir causes silent asset load failures.
 - **GLFW init error**: Kill old game process before relaunching: `pkill -f CaroGame`
@@ -110,8 +136,26 @@ Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro
 - 3D models in `doancaro/assets/models/` (copied to build dir by CMake post-build)
 - Raw/original models in `doancaro/.raw-assets/` (gitignored, not bundled)
 - Board model: `table.glb` — Go board from Sketchfab, wood texture, 35 units wide, scaled to fit 15x15 grid
-- Rapfi engine: `doancaro/assets/rapfi/` — binary + NNUE weights + config.toml (bundled, ~12 MB)
 - Settings: `settings.cfg` in build dir — persists vsAI and aiDepth between restarts
+
+## Homework Structure (MANDATORY — applies to ALL homework except Caro project)
+
+Every homework file (lý thuyết + thực hành) MUST follow this exact layout. This rule OVERRIDES the C++14 preference in "Code Style Rules" for homework files.
+
+**Guiding principle: use C syntax as much as possible.** Teacher's own lecture code mixes C and C++ (e.g. `int& n` references inside otherwise-C code), but our submissions stay stricter — prefer C idioms in every choice where both work. When forced to pick (e.g. file extension must be `.cpp`), pick the smallest C++ concession.
+
+1. **Use C language, not C++** — `<stdio.h>`, `<stdlib.h>`, `<string.h>`, `<math.h>`, `<ctype.h>`. No `iostream`, no `std::`, no `cout`/`cin`, no references (output params use `T*` pointer, not `T&`), no classes, no templates, no STL, no `new`/`delete` (use `malloc`/`free`).
+2. **File extension stays `.cpp`** — submission naming `MSSV1_MSSV2_..._MSSV5.cpp` is enforced by Moodle, so the file must compile as C++ even though the code is pure C. Write code that is valid as BOTH C and C++ (verify with `gcc -x c -std=c11 -Wall -Wextra` AND `g++ -std=c++14 -Wall -Wextra`).
+3. **Fixed code layout** in this order:
+   ```
+   // 1. #include directives
+   // 2. Struct / typedef declarations (if any)
+   // 3. Khoi khai bao ham     — function prototypes
+   // 4. Ham main              — int main() { ... }
+   // 5. Khoi dinh nghia ham   — function bodies
+   ```
+   Prototypes block sits ABOVE `main`; definitions block sits BELOW `main`. Never inline function bodies before `main`.
+4. **Caro project is exempt** — it uses C++14 with raylib and keeps full C++ features.
 
 ## Code Style Rules
 
