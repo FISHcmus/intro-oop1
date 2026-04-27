@@ -50,6 +50,10 @@ static const char* glossFS =
     "uniform sampler2D texture0;\n"
     "uniform vec4 colDiffuse;\n"
     "uniform vec3 viewPos;\n"
+    // Rim-light: 0 disables (pieces/board); 1 enables (floating rock).
+    // rimPulse is animated per-frame so the rock breathes warm light.
+    "uniform float rimStrength;\n"
+    "uniform float rimPulse;\n"
     "out vec4 finalColor;\n"
     "void main() {\n"
     "    vec3 lightPos = vec3(10.0, 20.0, 10.0);\n"
@@ -79,6 +83,11 @@ static const char* glossFS =
     "    diffuse += diff2 * lightColor;\n"
     "    specular += specularStrength * spec2 * lightColor;\n"
     "    vec3 result = (ambient + diffuse) * texColor.rgb + specular;\n"
+    // Rim-light: edge-glow on grazing-angle fragments. Cubed so it stays
+    // tight to silhouettes; warm-white tint reads as soft caught light.
+    "    float rim = pow(1.0 - max(dot(viewDir, norm), 0.0), 3.0);\n"
+    "    vec3 rimColor = vec3(1.00, 0.95, 0.85);\n"
+    "    result += rim * rimStrength * rimPulse * rimColor;\n"
     "    finalColor = vec4(result, texColor.a);\n"
     "}\n";
 
@@ -264,6 +273,7 @@ Renderer::Renderer()
       pieceModelSon({}), pieceModelThuy({}),
       pieceScaleSon(1.0f), pieceScaleThuy(1.0f), pieceGLBLoaded(false),
       glossShader({}), glossShaderLoaded(false), glossViewPosLoc(0),
+      glossRimStrengthLoc(0), glossRimPulseLoc(0),
       skyShader({}), skyShaderLoaded(false),
       skyTopLoc(0), skyMidLoc(0), skyBotLoc(0),
       edgeFadeShader({}), edgeFadeShaderLoaded(false),
@@ -407,7 +417,15 @@ void Renderer::init(int width, int height) {
     glossShader = LoadShaderFromMemory(glossVS, glossFS);
     glossShader.locs[SHADER_LOC_MATRIX_MODEL]  = GetShaderLocation(glossShader, "matModel");
     glossShader.locs[SHADER_LOC_MATRIX_NORMAL] = GetShaderLocation(glossShader, "matNormal");
-    glossViewPosLoc = GetShaderLocation(glossShader, "viewPos");
+    glossViewPosLoc      = GetShaderLocation(glossShader, "viewPos");
+    glossRimStrengthLoc  = GetShaderLocation(glossShader, "rimStrength");
+    glossRimPulseLoc     = GetShaderLocation(glossShader, "rimPulse");
+    // Default rim OFF — pushed ON only around the rock draw.
+    {
+        float zero = 0.0f, one = 1.0f;
+        SetShaderValue(glossShader, glossRimStrengthLoc, &zero, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(glossShader, glossRimPulseLoc,    &one,  SHADER_UNIFORM_FLOAT);
+    }
     glossShaderLoaded = true;
 
     // Sky-gradient: NULL vertex source -> raylib's default vert shader.
@@ -1034,8 +1052,19 @@ void Renderer::drawBoardSurface() {
             islandCenterOffset.y,
             half + islandCenterOffset.z,
         };
+        // Push rim-light ON for the rock only — sin-pulse at 0.10 Hz so the
+        // edge glow breathes warm light over a ~10-second cycle.
+        constexpr float TWO_PI    = 6.28318530718f;
+        constexpr float RIM_HZ    = 0.10f;
+        float t = static_cast<float>(GetTime());
+        float rimPulse = sinf(t * TWO_PI * RIM_HZ) * 0.30f + 0.70f;
+        float rimOn  = 1.0f;
+        float rimOff = 0.0f;
+        SetShaderValue(glossShader, glossRimStrengthLoc, &rimOn,    SHADER_UNIFORM_FLOAT);
+        SetShaderValue(glossShader, glossRimPulseLoc,    &rimPulse, SHADER_UNIFORM_FLOAT);
         DrawModelEx(islandModel, islandPos, {0.0f, 1.0f, 0.0f}, 0.0f,
                     {islandScale, islandScale, islandScale}, WHITE);
+        SetShaderValue(glossShader, glossRimStrengthLoc, &rimOff, SHADER_UNIFORM_FLOAT);
     }
 
     if (boardModelLoaded) {

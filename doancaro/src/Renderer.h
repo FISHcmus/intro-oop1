@@ -158,6 +158,10 @@ private:
     Shader glossShader;
     bool glossShaderLoaded;
     int glossViewPosLoc;
+    // Rim-light uniform locations — pushed ON before rock draw, reset to OFF
+    // afterwards so pieces/board never get the glow.
+    int glossRimStrengthLoc;
+    int glossRimPulseLoc;
 
     // Sky-gradient shader — 3-stop smoothstep interpolation between
     // sky_top / sky_mid / sky_horizon. Single fullscreen quad, no 3D state,
