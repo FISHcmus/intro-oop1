@@ -125,6 +125,22 @@ static const char* edgeFadeFS =
     "    finalColor = vec4(texColor.rgb, texColor.a * alphaMult);\n"
     "}\n";
 
+// Vignette fragment shader — radial smoothstep on screen-space distance
+// from center, multiplied into a black overlay alpha. Drawn over the 3D
+// scene with a fullscreen rectangle: rectangle's fragTexCoord spans 0..1.
+// Max distance from center to corner is sqrt(0.5) ≈ 0.707, so outer radius
+// must stay below that for corners to actually hit full darken.
+static const char* vignetteFS =
+    "#version 330\n"
+    "in vec2 fragTexCoord;\n"
+    "out vec4 finalColor;\n"
+    "void main() {\n"
+    "    vec2 d = fragTexCoord - vec2(0.5);\n"
+    "    float r = length(d);\n"
+    "    float a = smoothstep(0.20, 0.60, r) * 0.85;\n"
+    "    finalColor = vec4(0.0, 0.0, 0.0, a);\n"
+    "}\n";
+
 // Sky-gradient fragment shader — 3-stop smoothstep between
 // sky_top / sky_mid / sky_horizon (fed as vec3 uniforms each frame).
 // Vertex shader uses raylib's default (passes fragTexCoord through).
@@ -201,6 +217,7 @@ Renderer::Renderer()
       skyShader({}), skyShaderLoaded(false),
       skyTopLoc(0), skyMidLoc(0), skyBotLoc(0),
       edgeFadeShader({}), edgeFadeShaderLoaded(false),
+      vignetteShader({}), vignetteShaderLoaded(false),
       scrollModel({}), scrollLoaded(false), scrollScale(1.0f),
       scrollCenterOffset({0.0f, 0.0f, 0.0f}),
       islandModel({}), islandLoaded(false), islandScale(1.0f),
@@ -353,6 +370,9 @@ void Renderer::init(int width, int height) {
         GetShaderLocation(edgeFadeShader, "matModel");
     edgeFadeShaderLoaded = true;
 
+    vignetteShader = LoadShaderFromMemory(nullptr, vignetteFS);
+    vignetteShaderLoaded = true;
+
     if (pieceModelsLoaded) {
         pieceModelLight.materials[0].shader = glossShader;
         pieceModelDark.materials[0].shader  = glossShader;
@@ -495,6 +515,10 @@ void Renderer::shutdown() {
     if (edgeFadeShaderLoaded) {
         UnloadShader(edgeFadeShader);
         edgeFadeShaderLoaded = false;
+    }
+    if (vignetteShaderLoaded) {
+        UnloadShader(vignetteShader);
+        vignetteShaderLoaded = false;
     }
     if (scrollLoaded) {
         UnloadModel(scrollModel);
@@ -974,27 +998,10 @@ void Renderer::drawSkyGradient() {
 }
 
 void Renderer::drawVignette() {
-    // Darken screen edges with semi-transparent black rectangles (gradient approximation)
-    int w = screenWidth;
-    int h = screenHeight;
-    int bands = 8;
-    int edgeSize = w / 4;  // vignette covers outer 25% of each edge
-
-    for (int i = 0; i < bands; i++) {
-        float t = static_cast<float>(i) / static_cast<float>(bands);
-        auto alpha = static_cast<unsigned char>(40.0f * (1.0f - t));  // fade from 40 to 0
-        Color c = {0, 0, 0, alpha};
-        int bandW = static_cast<int>(static_cast<float>(edgeSize) * (1.0f - t));
-
-        // Left edge
-        DrawRectangle(0, 0, bandW / bands, h, c);
-        // Right edge
-        DrawRectangle(w - bandW / bands, 0, bandW / bands, h, c);
-        // Top edge
-        DrawRectangle(0, 0, w, bandW / bands, c);
-        // Bottom edge
-        DrawRectangle(0, h - bandW / bands, w, bandW / bands, c);
-    }
+    if (!vignetteShaderLoaded) return;
+    BeginShaderMode(vignetteShader);
+    DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
+    EndShaderMode();
 }
 
 void Renderer::drawPiece3D(int row, int col, CellState state, float anim) {

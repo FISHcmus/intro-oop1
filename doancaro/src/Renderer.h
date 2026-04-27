@@ -167,6 +167,12 @@ private:
     Shader edgeFadeShader;
     bool   edgeFadeShaderLoaded;
 
+    // Fullscreen vignette — radial smoothstep on screen-space distance from
+    // center darkens the corners. Drawn over the 3D scene, under the HUD,
+    // so labels stay readable while the periphery dims into ink.
+    Shader vignetteShader;
+    bool   vignetteShaderLoaded;
+
     // 3D backdrop — Sketchfab "mountain & river scroll" (KHR_materials_unlit,
     // vertex-colored anime style). Sits behind the play area; do NOT apply
     // glossShader to it — model is already unlit.
