@@ -218,6 +218,7 @@ void Game::drawPlaying() {
     CellState turnMark = currentPlayer->getMark();
     renderer.drawBoard(board, cursorRow, cursorCol, turnMark);
     renderer.drawMist();
+    renderer.drawBirds();
     renderer.drawVignette();
 
     if (!winLine.empty()) {

@@ -21,6 +21,7 @@ public:
                    CellState currentTurn);
     void drawWinLine(const std::vector<Move>& winLine);
     void drawMist();
+    void drawBirds();
     void drawVignette();
 
     // 2D backdrop — 3-stop ink-wash sky drawn full-screen via inline shader.
@@ -187,6 +188,25 @@ private:
     Shader mistShader;
     bool   mistShaderLoaded;
     int    mistTimeLoc;
+
+    // Periodic V-formation bird flythroughs. Each bird drawn as a
+    // procedural ⌒⌒ ink-stroke (two DrawLineEx calls); wing-flap = sin
+    // wave on the wing-arc height. No assets — keeps the 山水 ink-wash
+    // idiom (birds-as-single-ink-strokes) without sprite detail.
+    struct Bird {
+        Vector2 offset;     // pixel offset from flock center (V-position)
+        float   flapPhase;  // per-bird phase so flock isn't synchronized
+    };
+    struct BirdFlock {
+        Vector2 pos;        // screen-space center of the lead bird
+        Vector2 velocity;   // pixels per second
+        std::vector<Bird> birds;
+        float   age;
+        float   maxAge;
+    };
+    std::vector<BirdFlock> birdFlocks;
+    float                  nextFlockTime;  // seconds until next spawn
+    void spawnBirdFlock();
 
     // 3D backdrop — Sketchfab "mountain & river scroll" (KHR_materials_unlit,
     // vertex-colored anime style). Sits behind the play area; do NOT apply

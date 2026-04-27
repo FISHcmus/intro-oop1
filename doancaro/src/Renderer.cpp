@@ -2,6 +2,7 @@
 #include "Fonts.h"
 #include "Theme.h"
 #include "rlgl.h"
+#include <algorithm>
 #include <cmath>
 
 // Backdrop tunables — adjust freely without touching position math elsewhere.
@@ -268,6 +269,7 @@ Renderer::Renderer()
       edgeFadeShader({}), edgeFadeShaderLoaded(false),
       vignetteShader({}), vignetteShaderLoaded(false),
       mistShader({}), mistShaderLoaded(false), mistTimeLoc(0),
+      birdFlocks(), nextFlockTime(5.0f),
       scrollModel({}), scrollLoaded(false), scrollScale(1.0f),
       scrollCenterOffset({0.0f, 0.0f, 0.0f}),
       islandModel({}), islandLoaded(false), islandScale(1.0f),
@@ -1098,6 +1100,75 @@ void Renderer::drawMist() {
     BeginShaderMode(mistShader);
     DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
     EndShaderMode();
+}
+
+void Renderer::spawnBirdFlock() {
+    BirdFlock f;
+    bool fromLeft = GetRandomValue(0, 1) == 0;
+    float startY = static_cast<float>(screenHeight)
+                 * (0.10f + static_cast<float>(GetRandomValue(0, 200)) * 0.001f);
+    f.pos.x  = fromLeft ? -100.0f : static_cast<float>(screenWidth) + 100.0f;
+    f.pos.y  = startY;
+    float speed = 80.0f + static_cast<float>(GetRandomValue(0, 60));
+    f.velocity.x = fromLeft ? speed : -speed;
+    f.velocity.y = (static_cast<float>(GetRandomValue(0, 30)) - 15.0f) * 0.5f;
+    f.age    = 0.0f;
+    f.maxAge = 30.0f;
+
+    int count = 3 + GetRandomValue(0, 2);
+    float xSign = fromLeft ? -1.0f : 1.0f;  // tail offsets opposite of motion
+    for (int i = 0; i < count; ++i) {
+        Bird b;
+        int row = (i + 1) / 2;
+        b.offset.x = static_cast<float>(row) * 18.0f * xSign;
+        b.offset.y = (i == 0) ? 0.0f
+                   : ((i % 2 == 1) ? 1.0f : -1.0f) * static_cast<float>(row) * 8.0f;
+        b.flapPhase = static_cast<float>(i) * 0.7f;
+        f.birds.push_back(b);
+    }
+    birdFlocks.push_back(f);
+}
+
+void Renderer::drawBirds() {
+    float dt = GetFrameTime();
+
+    // Spawn cadence
+    nextFlockTime -= dt;
+    if (nextFlockTime <= 0.0f) {
+        spawnBirdFlock();
+        nextFlockTime = 20.0f + static_cast<float>(GetRandomValue(0, 100)) * 0.1f;
+    }
+
+    // Integrate position, drop dead/off-screen flocks
+    for (auto& f : birdFlocks) {
+        f.pos.x += f.velocity.x * dt;
+        f.pos.y += f.velocity.y * dt;
+        f.age   += dt;
+    }
+    birdFlocks.erase(
+        std::remove_if(birdFlocks.begin(), birdFlocks.end(),
+            [this](const BirdFlock& f) {
+                return f.age > f.maxAge
+                    || f.pos.x < -150.0f
+                    || f.pos.x > static_cast<float>(screenWidth) + 150.0f;
+            }),
+        birdFlocks.end());
+
+    // Render — black-ink ⌒⌒ silhouettes, wing height pulses with flap phase
+    constexpr float TWO_PI    = 6.28318530718f;
+    constexpr float FLAP_HZ   = 4.0f;
+    constexpr Color INK       = {30, 35, 45, 220};
+    float t = static_cast<float>(GetTime());
+    for (const auto& f : birdFlocks) {
+        for (const auto& b : f.birds) {
+            float cx = f.pos.x + b.offset.x;
+            float cy = f.pos.y + b.offset.y;
+            float flap = sinf(t * TWO_PI * FLAP_HZ + b.flapPhase) * 0.5f + 0.5f;
+            float h = 3.0f + 4.0f * flap;
+            DrawLineEx({cx - 10.0f, cy}, {cx, cy - h}, 2.0f, INK);
+            DrawLineEx({cx, cy - h}, {cx + 10.0f, cy}, 2.0f, INK);
+        }
+    }
 }
 
 void Renderer::drawVignette() {
