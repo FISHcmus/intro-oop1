@@ -1,0 +1,175 @@
+#+title: Storyline Final — Cô Sử Tiên
+#+date: 2026-04-28
+#+author: nhannht (with team consensus: philosopher / narrative_designer / game_designer / historian)
+
+* Intro Monologue
+
+Cô Sử Tiên narrates from modern Vietnam. Played before the first match.
+Voice arc: tôi (contemporary, ordinary) → ta (classical, unmasked) at
+three identity-claim moments — divine reveal, the gieo-quẻ judgment,
+and the closing vow-break. The pronoun shift is the mask dropping
+after 4000 years of self-deception. Register: Thu Giang Nguyễn Duy
+Cần — Hán-Việt density, aphoristic cadence, restrained tone.
+
+#+begin_quote
+Tôi là Đại Sử Tiên - phần đông nguời ta biết đến ta qua 1 cái tên khác là  có 1 cái tên khác là Mỵ Nương.
+
+Mỗi sớm, tôi vẫn đi một chuyến xe quen, ghé một hàng cà phê cũ nơi góc phố — cái quán ấy đã mở rồi đóng, đóng rồi lại mở, ba bận trong ba mươi năm. Trông bề ngoài, tôi cũng chẳng khác chi muôn vạn kẻ đang sinh tồn trên dải đất hình chữ S này. Có điều, trong tôi giấu một điều mà người đời khó lòng tưởng tượng nổi.
+
+Dù ai cũng biết đến tên ta qua những câu chuyện thần thoại trong sách giáo khoa lớp 1, song chẳng mấy ai thật sự biết ta là ai, ta là đứa con gái duy nhất của vị thần mà các ngươi quen gọi Lạc Long Quân, mà ta gọi là Cha. Ta đã ở đây từ trước Âu Cơ, từ trước trăm trứng, từ trước cả khi câu chuyện về cõi này được kể lần đầu.
+
+Cha ta không chết theo cái nghĩa mà người đời hằng hiểu. Ngài là vị cổ thần khai thiên lập địa lên vùng đất này. Đến khi công việc đã thành, Ngài mới tan vào lòng đất. Xương Ngài hoá thành dãy Trường Sơn. Máu Ngài thấm xuống đất đỏ miền cao. Hơi thở Ngài ngưng tụ thành ngọn gió nồm thổi mãi trên biển Đông. Ngài không mất đi — Ngài chính là tất cả những gì các ngươi đang đứng trên đó.
+
+Suốt mấy nghìn năm, tôi tồn tại dưới nhiều nhân dạng - kẻ chép sử, người chứng kiến, ta chẳng bao giờ can thiệp vào dòng chảy lịch sử. Ấy là điều tôi hằng tự nhủ.
+
+Có hai vị đại tinh linh được sinh ra trong khoảnh khắc Cha tôi tan vào đất. Sơn Tinh — hiện thân của núi, của đất khô và rễ cây bám sâu. Thủy Tinh — hiện thân của nước, của triều dâng và bão cuốn. Mỗi viên đá Sơn Tinh đặt xuống là một mảnh đất được định hình. Mỗi con sóng Thủy Tinh dấy lên là một vùng đất bị nhấn chìm.
+
+Có một điều ít kẻ hay: thuở hỗn mang trước khi trời đất phân định, Sơn và Thủy vốn là một — chưa từng phân biệt đất với nước, núi với biển. Đến khi Cha tôi hy sinh thân mình mà định hình vũ trụ, sự hoá thân của Ngài xé toạc cả hai ra thành hai thực thể riêng biệt. Từ đó, Sơn và Thủy mang trong mình vết thương của sự phân ly — tương khắc, song chẳng thể tồn tại mà thiếu nhau.
+
+Cả hai đến tìm ta, đòi quyền cai quản cõi này. Đây là một quyết định khó khăn, ta lập đàn gieo quẻ bát quái, lấy kết quả thuận theo ý trời. Trời phán rằng:
+
+"Trong hai ngươi, kẻ mà cõi này đã chọn — Voi chín ngà, Gà chín cựa, Ngựa chín hồng mao sẽ tự tìm đến tay người ấy. Ta chỉ chờ xem."
+
+Sơn Tinh dễ dàng kiếm đủ cả ba. Còn Thủy Tinh, vì lòng chấp mê bất ngộ, đưa quân đến cướp lễ vật. Trận giao chiến long trời lỡ đất, xé toạc bầu trời. Cuối cùng, Sơn Tinh thắng. Ta trao quyền cai quản sự ấm no của cõi này cho người ấy.
+
+Song Thủy Tinh chưa bao giờ ngưng sân hận. Suốt bốn nghìn năm, mỗi độ mưa bão, y lại dấy quân lên, nhấn cả cõi này chìm trong biển nước. Cuộc binh đao ấy chưa từng tận. Chỉ tạm dừng mà thôi.
+
+Và bây giờ, mùa mưa bão lại đến.
+
+Sơn Tinh. Ta không ghi chép nữa.
+#+end_quote
+
+* Per-Set Story Beats (Story Mode only)
+
+Three story beats per set: an intro line when the set begins, plus a
+win line and a lose line keyed to the set's binary outcome. Each set
+is best-of-3 matches at fixed difficulty (Set 1 = Easy, Set 2 =
+Medium, Set 3 = Hard); the matches themselves carry no narrative
+beats — only the set does. Lose the set → player restarts that set.
+The free-play single-player mode is untouched by Story Mode.
+
+** Set 1 — Mưa giông (Easy)
+*** Intro
+Mưa giông lại kéo đến, nhưng không giống như những lần trước, Thủy Tinh tạo ra một cơn mưa lớn kéo dài hàng tháng trời ở vùng đất Sài Gòn. Hắn chưa bao giờ làm thế trước đây, chắc hẳn là có điều gì đó đáng ngờ.
+
+*** If win
+Thủy Tinh đã bị đánh bại, nhưng đấy không phải là trận đánh cuối cùng. Hắn đang âm mưu phá hủy Long mạch, nhờ có nó mà suốt hàng nghìn năm nay đất nước này luôn được phù hộ để vượt qua mọi thiên tai. Nếu hắn phá hủy được long mạch, hắn sẽ làm những thứ không ai có thể tưởng tượng được.
+
+*** If lose
+Thủy Tinh nhanh chóng chiếm lĩnh toàn bộ Việt Nam.
+
+** Set 2 — Cuồng phong (Medium)
+*** Intro
+Hắn đang ra sức tấn công Long Mạch ở Long An. Với một cơn lốc xoáy khổng lồ cùng hàng triệu binh lính đến từ biển sâu. Chúng ta phải chặn hắn bằng mọi giá. Sơn Tinh, hãy cưỡi Voi chín ngà đi nghênh chiến.
+
+*** If win
+Dù chúng ta đã đẩy lùi được đạo quân của Thủy Tinh, hắn đã thành công trong việc làm tổn thương long mạch, và sẽ huy động toàn bộ đạo quân cho trận đánh cuối cùng. May thay, phần long mạch cuối cùng hy sinh chính nó để đánh thức linh vật thứ hai: gà chín cựa
+*** If lose
+Sơn Tinh ngã xuống trong cuộc chiến huyền thoại bảo vệ long mạch. Cả thiên hạ chìm trong biển nước.
+
+** Set 3 — Cơn bão tận thế (Hard)
+*** Intro
+Hàng triệu quái vật đến từ biển khơi đang dồn cuộc tổng lực cuối cùng để thanh tẩy vùng đất Sài Gòn. Đó chính là mục đích cuối cùng của Thủy Tinh, y muốn san phẳng mọi thứ. Y muốn tất cả mọi thứ phải chìm xuống biển sâu. Và khi mọi thứ đã được thanh tẩy, y sẽ tạo ra một thế giới mới nơi mà y là vua của thiên hạ.
+
+*** If win: Từ dưới biển sâu, Thủy Tinh xuất hiện. Y mạnh đến nổi chỉ một cú vẫy tay, cả một quận đã bị nhấn chìm trong biển nước. Cùng lúc đó, trên trời cao, ngựa chín hồng mao giáng thế giúp người chơi đánh bại boss cuối cùng
+
+*** If lose: Sơn tinh đã ngã xuống, kéo theo hệ quả là cả thiên hạ chìm xuống biển sâu.
+** Final Boss Fight set:
+*** Intro: Thủy Tinh real his true form, an giant monster with nine dragon head line on octupus. He challenge direcly us with final set.
+#+begin_quote
+His cheating power. Rearrange the chess piece to make him destroy all current 4 alreay move. Is this consider hacked. No, dont forget user can just call mystical beast power.
+#+end_quote
+*** If win:
+Thủy Tinh lại bị hạ nhục, như hàng nghìn lần trong lịch sử. Nhưng lần này, y trở nên suy yếu đến mức cơ thể y hòa tan vào làm một với biển khơi. Và sẽ mất hàng chục năm để y phục hồi như ban đầu. Ít nhất vùng đất này có thể yên ổn thêm một khoảng thời gian.
+*** If lose
+Người ta nói cái ác sẽ chiến thắng cái thiện. Tôi, như một đại sử gia đã sống hàng nghìn năm, không tin vào điều đó. Cái ác luôn chiến thắng cái thiện. Và công sức hàng nghìn năm xây dựng nên nền văn minh này đã tiêu vong.
+
+* Linh Vật Unlock Lines
+
+Recognition events. The three sacred beasts do not get fetched as a
+procurement task — they acknowledge the worthy. From Việt điện u linh
+tập tradition: linh vật phục đức.
+
+** Set 1 win — Voi chín ngà
+Domain: earth-mass, permanence, memory of terrain.
+
+#+begin_quote
+Voi chín ngà vốn là một trong ba lễ vật Hùng Vương đặt ra thuở trước. Khi đã về tay Sơn Tinh, nó lui ẩn vào lòng đất, mất tích hàng nghìn năm — người đời sau chỉ còn nghe tên trong sử sách.
+
+Đến năm Hai Bà Trưng thua trận tại sông Hát, máu Trưng Trắc thấm vào thân con bạch tượng mà đã cưởi. Xác con voi trở thành nơi để Thần thú Voi Chín Ngà tái sinh. Sử sách ghi lại rằng voi thần đã bảo vệ bộ lạc của hai ba trưng khỏi nạn thảm sát, diệt chủng của giặc phương Bắc.
+
+Nó cho ngươi sức mạnh của ký ức — hoàn tác năm nước cờ đã đặt. Khi thắng thua đã định, voi không can dự.
+#+end_quote
+
+** Set 2 win — Gà chín cựa
+Domain: time-sovereignty, the rooster that calls dawn.
+Implicit: the storms (Thủy Tinh's flood) are night; surviving them earns dawn.
+
+#+begin_quote
+Gà chín cựa cũng là một lễ vật xưa của Hùng Vương. Sau khi về tay Sơn Tinh, nó biến mất vào sương mây núi Bắc, mất tích hàng trăm năm.
+
+Đến đời An Dương Vương xây thành Cổ Loa, đêm đêm tường thành cứ dựng lên rồi sụp xuống. Trên núi Thất Diệu, một con yêu kê đầu trắng được cho là đã  sống nghìn năm, mỗi đêm gáy ba tiếng, đất trời rung chuyển — chính là Gà chín cựa đã hoá yêu trong cô tịch của núi sâu. Nhờ Thần Kim Quy chỉ đường, vua đến chân núi mà cảm hoá, không giết. Gà cúi đầu, hứa rằng đến ngày giặc trời giặc đất kéo đến, sẽ trở về một lần.
+
+Lần ấy là bây giờ. Tiếng gáy của nó làm đối phương loạn trí, một lượt đi không theo lẽ thường. Ngươi gọi được ba bận.
+#+end_quote
+
+** Set 3 win — Ngựa chín hồng mao
+Domain: speed, wind, decisive movement. Nine red hairs = maximum yang
+fire-south energy.
+
+#+begin_quote
+Ngựa chín hồng mao là lễ vật cuối cùng trong ba thứ Hùng Vương đặt ra thuở trước. Sau khi Sơn Tinh ngự về, nó hoá vào gió nồm, lưu lạc bốn phương tám hướng.
+
+Đến đời giặc Ân kéo xuống nước Nam, một đứa bé ba tuổi vùng Phù Đổng vươn vai thành tráng sĩ. Vua trao ngựa sắt, roi sắt — song ít ai hay rằng dưới lớp sắt ấy là chính Ngựa chín hồng mao, mượn thân kim khí để xuôi gió đánh giặc. Khi giặc đã tan, sắt rơi rụng theo bước chân, ngựa cùng tráng sĩ phi thẳng về trời. Đến nay, dấu chân nó vẫn còn in trên đỉnh núi Sóc.
+
+Nay ngươi gọi đến nó một lần. Nếu ngươi ngã xuống, ngựa kéo ngươi về năm lượt trước, cho ngươi đứng dậy mà đánh tiếp. Một bận, không hai.
+#+end_quote
+
+* Implementation Notes (for the Caro engine)
+
+- *Particle system, zero new code.* Stone placement diegetically justified
+  by intro line 7: amber/brown burst on player Sơn-Tinh stones, blue
+  ripple on AI Thủy-Tinh stones. Existing ParticleSystem fires on stone
+  placement — only color framing changes.
+
+- *Storm escalation replay loop.* Track session loss count. After each
+  loss: increment AI depth +1 (cap), display next loss-screen line in
+  order. Single int + string array.
+
+- *Linh vật milestones.* Unlock voi/gà/ngựa icon on menu after win 1, 3,
+  5. Show the corresponding line on the unlock screen. FileManager
+  already persists; add a counter and three icon sprites.
+
+- *Win-screen line.* When player completes 5-in-a-row: Cô Sử Tiên
+  speaks. (Suggest one line, voice TBD: "Ngươi đã giữ vững giang sơn.
+  Ta ghi vào sử sách." — but team did not finalize this; flag for a
+  second pass.)
+
+* Provenance
+
+Intro decisions cleared by full team after multi-round debate:
+- *Đại Sử Tiên* over First Princess / Thiên Ký (UX register, Tứ Phủ
+  tradition, philosopher withdrew Thiên Ký push)
+- *Modern → mythic opening* (historian endorsed; contrast is deliberate)
+- *3-element father anatomy* (Trường Sơn / đất đỏ miền cao / gió nồm
+  trên biển Đông) over earlier 2-element draft
+- *"Tự nhủ" self-deception arc* (line 5 → 9 → 13: lie / flicker /
+  confession)
+- *Line 9 "đất đã chọn"* + ghost callback "như thể đó không phải là
+  một sự lựa chọn" (philosopher upgrades A & B applied; chronicler's
+  non-intervention rule self-consistent in her own mind because the
+  land chose, she only read)
+- *Line 8* "thời kỳ hỗn mang" (removed misapplied Âu Cơ egg motif) +
+  "tương khắc nhưng không thể tồn tại mà không có nhau" (thủy hỏa
+  tương khắc dialectic from Lĩnh Nam chích quái)
+- *Line 13* "Ta không ghi chép nữa" over "Ta gác bút lại đây" — the
+  vow-break / ledger-reopen irony is the dramatic payoff
+- *Thu Giang Nguyễn Duy Cần register pass* — Hán-Việt density raised
+  (cõi, muôn vạn, dằng dặc, binh đao, thuở hỗn mang); modernisms
+  softened (tàu điện → chuyến xe quen, ba thập kỷ → ba mươi năm,
+  hàng triệu → muôn vạn); pronoun for Thủy Tinh changed hắn → kẻ ấy
+  (deity-rivalry register, not schoolyard); deity addressed as Ngài
+  (capitalised) per classical reverent usage; line 9 "Tôi quyết định
+  lập đàn" fixed to "Ta lập đàn" to honour the documented
+  judgment-moment voice shift; loss-line verb ghi → chép (chép sử is
+  the classical idiom)
