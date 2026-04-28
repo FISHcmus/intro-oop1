@@ -114,6 +114,64 @@ intro-oop1/
 | New Catch2 test file | `add_executable(CaroTests …)` line in CMakeLists |
 | New gallery showcase | `tools/gallery_main.cpp` directly (one binary) |
 
+### How to Build (MANDATORY — read before touching CMake)
+
+**Canonical build directory is `cmake-build-debug/` at the intro-oop1 ROOT, NOT inside `doancaro/`.** CLion creates and manages this directory; any rebuild Claude does must target the same path so CLion's Run ▶ button picks up the latest binary.
+
+```
+intro-oop1/
+├── CMakeLists.txt              # top-level — declares week1/week2/week3/week8 + add_subdirectory(doancaro)
+├── cmake-build-debug/          # ← THE ONLY build directory
+│   └── doancaro/               #   compiled binaries land HERE
+│       ├── CaroGame
+│       ├── CaroGallery
+│       ├── CaroTests
+│       ├── libCaroUI.a
+│       ├── libGameLogic.a
+│       ├── assets/             #   POST_BUILD copies src assets here
+│       ├── saves/              #   user game saves (autosave.caro, .bak)
+│       └── settings.cfg        #   user runtime settings (vsAI, aiDepth)
+└── doancaro/                   # source — NEVER create build/ inside this
+    ├── src/, tools/, tests/
+    └── CMakeLists.txt          # declares CaroGame / CaroGallery / CaroTests targets
+```
+
+#### Build commands (always CLI, never the JetBrains MCP build_project)
+
+```bash
+# Build a single target (preferred — fast, focused stderr)
+cmake --build /home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1/cmake-build-debug --target CaroGallery 2>&1 | tail -30
+cmake --build /home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1/cmake-build-debug --target CaroGame    2>&1 | tail -30
+cmake --build /home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1/cmake-build-debug --target CaroTests   2>&1 | tail -30
+
+# Run tests (after CaroTests build)
+ctest --test-dir /home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1/cmake-build-debug --output-on-failure
+```
+
+#### Run a built binary
+
+```bash
+# Always cd into the build dir — assets use relative paths, run-from-elsewhere fails silently
+cd /home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1/cmake-build-debug/doancaro && ./CaroGame
+cd /home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1/cmake-build-debug/doancaro && ./CaroGallery
+```
+
+For UI work, launch via tmux per the global rule: `tmux new-window -n CaroGallery -d "cd /path/to/cmake-build-debug/doancaro && ./CaroGallery"`.
+
+#### Asset copy behavior (CMake POST_BUILD)
+
+Building `CaroGame` or `CaroGallery` triggers `cmake -E copy_directory doancaro/assets cmake-build-debug/doancaro/assets`. Adding a font / model / sound:
+1. Drop the file into `doancaro/assets/<subdir>/`
+2. Trigger ANY rebuild of CaroGame or CaroGallery — assets sync automatically
+3. No CMake edit needed for static assets (only for new `.cpp` source files)
+
+#### Hard rules — DO NOT
+
+- **DO NOT** create `doancaro/build/`, `doancaro/cmake-build*/`, `build/` or any other parallel build tree. CLion uses ONLY `intro-oop1/cmake-build-debug/`. A second tree means built binaries diverge from what CLion runs, asset copies land in the wrong place, and confusion compounds.
+- **DO NOT** invoke `cmake -S doancaro -B doancaro/build` to "build doancaro standalone." The top-level CMakeLists wraps doancaro via `add_subdirectory`; build from the top.
+- **DO NOT** use `mcp__jetbrains__build_project`. Returns pass/fail with no compiler messages — useless for debugging. Always CLI per above.
+- **DO NOT** delete `cmake-build-debug/doancaro/saves/` or `cmake-build-debug/doancaro/settings.cfg` — they hold the user's actual game saves and persisted settings. Build artifacts ARE safe to delete (force a rebuild).
+
 ## Code Editing Tools (MANDATORY)
 
 **CRITICAL: For ALL code files, you MUST use Serena MCP and JetBrains MCP tools instead of built-in Read/Edit/Grep/Write. Built-in tools are ONLY for non-code files (markdown, PDFs, JSON config, etc.).**
