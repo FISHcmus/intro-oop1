@@ -48,7 +48,18 @@ if (NOT raylib_FOUND)
     endif()
 endif()
 
-# --- Source files ---
+# --- Shared UI library (linked by CaroGame and CaroGallery) ---
+# Stateless UI primitives + the Theme/Fonts they depend on. Anything that
+# the gallery binary needs to render the same look as the game lives here.
+add_library(CaroUI STATIC
+    src/UIComponents.cpp
+    src/Theme.cpp
+    src/Fonts.cpp
+)
+target_include_directories(CaroUI PUBLIC src)
+target_link_libraries(CaroUI PUBLIC raylib)
+
+# --- CaroGame: production binary ---
 set(SOURCES
     src/main.cpp
     src/Game.cpp
@@ -59,17 +70,18 @@ set(SOURCES
     src/MenuScreen.cpp
     src/GameScreen.cpp
     src/SettingsScreen.cpp
+    src/DifficultyScreen.cpp
     src/SaveLoadScreen.cpp
     src/AudioManager.cpp
     src/FileManager.cpp
     src/ParticleSystem.cpp
-    src/Fonts.cpp
-    src/Theme.cpp
+    src/StoryMode.cpp
+    src/StoryContent.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE src)
-target_link_libraries(${PROJECT_NAME} raylib)
+target_link_libraries(${PROJECT_NAME} CaroUI raylib)
 
 # 4. Precompiled headers: parse shared headers once
 # Note: raylib.h excluded from PCH — it's found via target include dirs
@@ -86,6 +98,19 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${CMAKE_CURRENT_SOURCE_DIR}/assets $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets
     COMMENT "Copying assets to build directory"
+)
+
+# --- CaroGallery: standalone dev-only UI gallery ---
+# Shows every UIC component in every state. Not bundled in CaroGame.
+add_executable(CaroGallery tools/gallery_main.cpp)
+target_link_libraries(CaroGallery PRIVATE CaroUI raylib)
+
+# Gallery needs the same fonts CaroUI loads at runtime — copy assets so
+# the binary can be run from its build dir without setting cwd.
+add_custom_command(TARGET CaroGallery POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_CURRENT_SOURCE_DIR}/assets $<TARGET_FILE_DIR:CaroGallery>/assets
+    COMMENT "Copying assets to gallery build directory"
 )
 
 # --- Tests (Catch2 v3) ---

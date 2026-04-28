@@ -22,6 +22,11 @@ public:
     void reset();
     bool placeMove(int row, int col, CellState mark);
     void undoMove(int row, int col, Move previousLastMove);
+
+    // Destructive piece removal — used by the FinalBoss "cheating power"
+    // where Thủy Tinh tears 4 of the player's stones off the board mid-match.
+    // Unlike undoMove, leaves lastMove alone (caller orchestrates).
+    bool removeMove(int row, int col);
     CellState getCell(int row, int col) const;
     bool isFull() const;
     bool isEmpty(int row, int col) const;

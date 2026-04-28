@@ -3,7 +3,7 @@
 
 class AudioManager;
 
-enum class MenuChoice { None, NewGame, LoadGame, Settings, Exit };
+enum class MenuChoice { None, NewGame, StoryMode, LoadGame, Settings, Exit };
 
 class MenuScreen {
 public:
@@ -26,7 +26,7 @@ public:
 private:
     int selectedIndex;
     MenuChoice choice;
-    static const int ITEM_COUNT = 4;
+    static const int ITEM_COUNT = 5;
     const char* items[ITEM_COUNT];
 };
 

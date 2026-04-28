@@ -1,10 +1,13 @@
 #include "Game.h"
 #include "Fonts.h"
 #include "Theme.h"
+#include "UIComponents.h"
+#include "StoryContent.h"
 #include <climits>
 #include <cstdlib>
 #include <ctime>
 #include <cstring>
+#include <cstdio>
 
 static const int SCREEN_WIDTH = 1000;
 static const int SCREEN_HEIGHT = 700;
@@ -13,7 +16,9 @@ Game::Game()
     : state(GameState::Menu), settingsReturnState(GameState::Menu),
       player1(nullptr), player2(nullptr), currentPlayer(nullptr),
       cursorRow(Board::SIZE / 2), cursorCol(Board::SIZE / 2),
-      vsAI(true), aiDepth(3), playTime(0.0f),
+      vsAI(true), aiDepth(3),
+      inStoryMode(false),
+      playTime(0.0f),
       toastMessage{}, toastTimer(0.0f),
       showDebugPanel(false),
       aiThinking(false), aiResult{-1, -1} {
@@ -41,8 +46,11 @@ void Game::run() {
     while (!WindowShouldClose()) {
         // Settings/Save/Load fall through on purpose: they keep whatever's
         // already playing so a quick visit doesn't cut the current track.
+        // Story narration screens use menu music — they're between matches.
         switch (state) {
             case GameState::Menu:
+            case GameState::StoryIntro:
+            case GameState::StoryBeat:
                 audioManager.switchToMenuMusic();
                 break;
             case GameState::Playing:
@@ -56,12 +64,15 @@ void Game::run() {
 
         // Update
         switch (state) {
-            case GameState::Menu:       updateMenu();           break;
-            case GameState::Settings:   updateSettings();       break;
-            case GameState::Playing:    updatePlaying();        break;
-            case GameState::GameOver:   updateGameOver();       break;
+            case GameState::Menu:           updateMenu();           break;
+            case GameState::Settings:       updateSettings();       break;
+            case GameState::PickDifficulty: updateDifficulty();     break;
+            case GameState::Playing:        updatePlaying();        break;
+            case GameState::GameOver:       updateGameOver();       break;
             case GameState::SaveScreen: // fallthrough
-            case GameState::LoadScreen: updateSaveLoadScreen(); break;
+            case GameState::LoadScreen:     updateSaveLoadScreen(); break;
+            case GameState::StoryIntro:     updateStoryIntro();     break;
+            case GameState::StoryBeat:      updateStoryBeat();      break;
         }
 
         // Draw
@@ -77,12 +88,15 @@ void Game::run() {
         }
 
         switch (state) {
-            case GameState::Menu:       drawMenu();           break;
-            case GameState::Settings:   drawSettings();       break;
-            case GameState::Playing:    drawPlaying();        break;
-            case GameState::GameOver:   drawGameOver();       break;
+            case GameState::Menu:           drawMenu();           break;
+            case GameState::Settings:       drawSettings();       break;
+            case GameState::PickDifficulty: drawDifficulty();     break;
+            case GameState::Playing:        drawPlaying();        break;
+            case GameState::GameOver:       drawGameOver();       break;
             case GameState::SaveScreen: // fallthrough
-            case GameState::LoadScreen: drawSaveLoadScreen(); break;
+            case GameState::LoadScreen:     drawSaveLoadScreen(); break;
+            case GameState::StoryIntro:     drawStoryIntro();     break;
+            case GameState::StoryBeat:      drawStoryBeat();      break;
         }
 
         EndDrawing();
@@ -102,6 +116,8 @@ void Game::run() {
 }
 
 void Game::updateMenu() {
+    if (toastTimer > 0.0f) toastTimer -= GetFrameTime();
+
     if (IsKeyPressed(KEY_ESCAPE)) {
         audioManager.playMenuClickSound();
         CloseWindow();
@@ -112,7 +128,19 @@ void Game::updateMenu() {
 
     switch (choice) {
         case MenuChoice::NewGame:
-            startNewGame();
+            if (vsAI) {
+                difficultyScreen.reset();
+                state = GameState::PickDifficulty;
+                menuScreen.reset();
+            } else {
+                startNewGame();
+            }
+            break;
+        case MenuChoice::StoryMode:
+            inStoryMode = true;
+            storyMode.reset();
+            state = GameState::StoryIntro;
+            menuScreen.reset();
             break;
         case MenuChoice::LoadGame:
             saveLoadScreen.open(SlotScreenMode::Load);
@@ -120,7 +148,7 @@ void Game::updateMenu() {
             menuScreen.reset();
             break;
         case MenuChoice::Settings:
-            settingsScreen.setSettings({vsAI, aiDepth});
+            settingsScreen.setSettings({vsAI});
             settingsScreen.reset();
             settingsReturnState = GameState::Menu;
             state = GameState::Settings;
@@ -139,17 +167,22 @@ void Game::updateSettings() {
     if (settingsScreen.isDone()) {
         GameSettings s = settingsScreen.getSettings();
         vsAI = s.vsAI;
-        aiDepth = s.aiDepth;
         saveSettings();
-
-        // If returning to a game in progress, update existing AI player's depth
-        if (settingsReturnState == GameState::Playing && player2 != nullptr) {
-            auto* ai = dynamic_cast<AIPlayer*>(player2);
-            if (ai != nullptr) ai->setSearchDepth(aiDepth);
-        }
 
         state = settingsReturnState;
         settingsReturnState = GameState::Menu;
+    }
+}
+
+void Game::updateDifficulty() {
+    difficultyScreen.update(audioManager);
+    if (difficultyScreen.isDone()) {
+        if (difficultyScreen.wasCancelled()) {
+            state = GameState::Menu;
+        } else {
+            aiDepth = difficultyScreen.getChosenDepth();
+            startNewGame();
+        }
     }
 }
 
@@ -177,6 +210,14 @@ void Game::updatePlaying() {
 
     // If current player is AI, spawn thread
     if (dynamic_cast<AIPlayer*>(currentPlayer) != nullptr) {
+        if (inStoryMode && storyMode.consumeGaTurn()) {
+            auto cands = board.getCandidateMoves();
+            if (!cands.empty()) {
+                aiResult = cands[std::rand() % cands.size()];
+                return;  // applyMove picks it up next frame
+            }
+        }
+
         aiThinking.store(true);
         if (aiThread.joinable()) aiThread.join();
 
@@ -197,10 +238,26 @@ void Game::updateGameOver() {
 
     if (IsKeyPressed(KEY_ENTER)) {
         audioManager.playMenuClickSound();
-        startNewGame();
+        if (inStoryMode) {
+            // Best-of-3: if the set is decided, route to the win/lose panel;
+            // otherwise just start the next match in the set.
+            if (storyMode.subBeat == StoryMode::SubBeat::SetWin ||
+                storyMode.subBeat == StoryMode::SubBeat::SetLose) {
+                state = GameState::StoryBeat;
+            } else {
+                startNewGame();
+            }
+        } else {
+            startNewGame();
+        }
+        return;
     }
     if (IsKeyPressed(KEY_ESCAPE)) {
         audioManager.playMenuClickSound();
+        if (inStoryMode) {
+            inStoryMode = false;
+            storyMode.reset();
+        }
         state = GameState::Menu;
         menuScreen.reset();
     }
@@ -208,10 +265,15 @@ void Game::updateGameOver() {
 
 void Game::drawMenu() {
     menuScreen.draw();
+    drawToast();
 }
 
 void Game::drawSettings() {
     settingsScreen.draw();
+}
+
+void Game::drawDifficulty() {
+    difficultyScreen.draw();
 }
 
 void Game::drawPlaying() {
@@ -269,7 +331,7 @@ void Game::drawPlaying() {
     }
     if (renderer.drawSettingsButton()) {
         audioManager.playMenuClickSound();
-        settingsScreen.setSettings({vsAI, aiDepth});
+        settingsScreen.setSettings({vsAI});
         settingsScreen.reset();
         settingsReturnState = GameState::Playing;
         state = GameState::Settings;
@@ -286,6 +348,9 @@ void Game::drawPlaying() {
         audioManager.playMenuClickSound();
         startNewGame();
     }
+
+    // Story-mode overlays — linh vật charges + set score
+    if (inStoryMode) drawStoryHUD();
 
     // Debug panel
     if (showDebugPanel) drawDebugPanel();
@@ -413,6 +478,22 @@ void Game::handleKeyboardInput() {
             state = GameState::LoadScreen;
         }
     }
+
+    // ---- Story Mode linh vật hotkeys ----
+    if (inStoryMode && !aiThinking.load()) {
+        // 1 = Voi 9 ngà — undo 5 player turns (10 board moves in PvAI).
+        if (IsKeyPressed(KEY_ONE) && storyMode.useVoi()) {
+            undoTurns(5);
+            std::snprintf(toastMessage, sizeof(toastMessage),
+                          "Voi 9 nga - hoan tac 5 nuoc co");
+            toastTimer = 2.5f;
+        }
+        if (IsKeyPressed(KEY_TWO) && storyMode.useGa()) {
+            std::snprintf(toastMessage, sizeof(toastMessage),
+                          "Ga 9 cua gay! Doi thu loan tri 1 luot");
+            toastTimer = 2.5f;
+        }
+    }
 }
 
 void Game::updateSaveLoadScreen() {
@@ -440,6 +521,183 @@ void Game::updateSaveLoadScreen() {
 
 void Game::drawSaveLoadScreen() {
     saveLoadScreen.draw();
+}
+
+// ---- Story Mode screens ----
+
+namespace {
+
+// Map current set → its SetText block. Centralises the switch so update/draw
+// don't both repeat it.
+const StoryContent::SetText& setTextFor(StoryMode::SetId id) {
+    switch (id) {
+        case StoryMode::SetId::Set1:      return StoryContent::kSet1;
+        case StoryMode::SetId::Set2:      return StoryContent::kSet2;
+        case StoryMode::SetId::Set3:      return StoryContent::kSet3;
+        case StoryMode::SetId::FinalBoss: return StoryContent::kFinalBoss;
+    }
+    return StoryContent::kSet1;
+}
+
+const char* linhVatUnlockLineFor(StoryMode::SetId id) {
+    switch (id) {
+        case StoryMode::SetId::Set1: return StoryContent::kVoiUnlockLine;
+        case StoryMode::SetId::Set2: return StoryContent::kGaUnlockLine;
+        case StoryMode::SetId::Set3: return StoryContent::kNguaUnlockLine;
+        case StoryMode::SetId::FinalBoss: return "";
+    }
+    return "";
+}
+
+const char* linhVatNameFor(StoryMode::SetId id) {
+    switch (id) {
+        case StoryMode::SetId::Set1: return "VOI 9 NGÀ";
+        case StoryMode::SetId::Set2: return "GÀ 9 CỰA";
+        case StoryMode::SetId::Set3: return "NGỰA 9 HỒNG MAO";
+        case StoryMode::SetId::FinalBoss: return "";
+    }
+    return "";
+}
+
+}  // namespace
+
+void Game::updateStoryIntro() {
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        audioManager.playMenuClickSound();
+        inStoryMode = false;
+        storyMode.reset();
+        state = GameState::Menu;
+        return;
+    }
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
+        audioManager.playMenuClickSound();
+        storyMode.advance();
+        if (storyMode.subBeat == StoryMode::SubBeat::SetIntro) {
+            state = GameState::StoryBeat;
+        }
+    }
+}
+
+void Game::drawStoryIntro() {
+    int w = GetScreenWidth();
+    int h = GetScreenHeight();
+    DrawRectangleGradientV(0, 0, w, h,
+                           Theme::palette.bg_top, Theme::palette.bg_bottom);
+
+    UIC::drawTitle("CÔ SỬ TIÊN", w, h, 30);
+
+    char tag[32];
+    std::snprintf(tag, sizeof(tag), "TRANG %d/%d",
+                  storyMode.introPageIdx + 1, StoryContent::kIntroPageCount);
+
+    UIC::ComicPanel cp = {
+        "MỞ ĐẦU",
+        tag,
+        nullptr,
+        StoryContent::kIntroPages[storyMode.introPageIdx],
+        62
+    };
+    UIC::drawComicPanel(cp, w / 2, 110);
+
+    UIC::drawHintBar("ENTER tiếp · ESC về menu", w, h);
+}
+
+void Game::updateStoryBeat() {
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        audioManager.playMenuClickSound();
+        inStoryMode = false;
+        storyMode.reset();
+        state = GameState::Menu;
+        return;
+    }
+
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
+        audioManager.playMenuClickSound();
+
+        // Epilogue is a leaf — Enter exits to Menu without advancing.
+        if (storyMode.subBeat == StoryMode::SubBeat::Epilogue) {
+            inStoryMode = false;
+            storyMode.reset();
+            state = GameState::Menu;
+            return;
+        }
+
+        storyMode.advance();
+
+        // After advance: route GameState by the new subBeat.
+        if (storyMode.subBeat == StoryMode::SubBeat::MatchPlaying) {
+            vsAI = true;
+            aiDepth = storyMode.getCurrentDifficulty();
+            startNewGame();
+        }
+        // Otherwise stay on StoryBeat — next render shows the new panel.
+    }
+}
+
+void Game::drawStoryBeat() {
+    int w = GetScreenWidth();
+    int h = GetScreenHeight();
+    DrawRectangleGradientV(0, 0, w, h,
+                           Theme::palette.bg_top, Theme::palette.bg_bottom);
+
+    const char* hint = "ENTER tiếp · ESC về menu";
+    UIC::ComicPanel cp = { nullptr, nullptr, nullptr, "", 62 };
+
+    switch (storyMode.subBeat) {
+        case StoryMode::SubBeat::SetIntro: {
+            const auto& st = setTextFor(storyMode.currentSet);
+            UIC::drawTitle(st.title, w, h, 30);
+            cp.title = "VÀO TRẬN";
+            cp.tag   = st.tag;
+            cp.body  = st.intro;
+            // Final boss reveals the kraken art in the intro.
+            if (storyMode.currentSet == StoryMode::SetId::FinalBoss) {
+                cp.plot = StoryContent::kThuyTinhBossArt;
+            }
+            hint = "ENTER bắt đầu trận · ESC về menu";
+            break;
+        }
+        case StoryMode::SubBeat::SetWin: {
+            const auto& st = setTextFor(storyMode.currentSet);
+            UIC::drawTitle(st.title, w, h, 30);
+            cp.title = "THẮNG";
+            cp.tag   = st.tag;
+            cp.body  = st.win;
+            hint = "ENTER tiếp";
+            break;
+        }
+        case StoryMode::SubBeat::SetLose: {
+            const auto& st = setTextFor(storyMode.currentSet);
+            UIC::drawTitle(st.title, w, h, 30);
+            cp.title = "BẠI";
+            cp.tag   = st.tag;
+            cp.body  = st.lose;
+            hint = "ENTER chơi lại set";
+            break;
+        }
+        case StoryMode::SubBeat::LinhVatUnlock: {
+            UIC::drawTitle("LINH VẬT", w, h, 30);
+            cp.title = "BAN THƯỞNG";
+            cp.tag   = linhVatNameFor(storyMode.currentSet);
+            cp.body  = linhVatUnlockLineFor(storyMode.currentSet);
+            hint = "ENTER tiếp · ESC về menu";
+            break;
+        }
+        case StoryMode::SubBeat::Epilogue: {
+            UIC::drawTitle("HỒI KẾT", w, h, 30);
+            cp.title = "CÔ SỬ TIÊN";
+            cp.tag   = "VĨ THANH";
+            cp.body  = StoryContent::kEpilogueLine;
+            hint = "ENTER về menu";
+            break;
+        }
+        default:
+            // MatchPlaying / IntroMonologue should not reach drawStoryBeat.
+            break;
+    }
+
+    UIC::drawComicPanel(cp, w / 2, 110);
+    UIC::drawHintBar(hint, w, h);
 }
 
 void Game::drawToast() {
@@ -546,6 +804,49 @@ void Game::drawDebugPanel() {
     }
 }
 
+void Game::drawStoryHUD() {
+    const auto& st = setTextFor(storyMode.currentSet);
+
+    // Top-left: set badge with best-of-3 score (boss is best-of-1).
+    char badge[96];
+    if (storyMode.currentSet == StoryMode::SetId::FinalBoss) {
+        std::snprintf(badge, sizeof(badge), "%s · %s",
+                      st.tag, st.title);
+    } else {
+        std::snprintf(badge, sizeof(badge), "%s · %s · TRAN %d-%d",
+                      st.tag, st.title,
+                      storyMode.matchWinsInSet, storyMode.matchLossesInSet);
+    }
+    DrawRectangle(12, 12, Fonts::measure(Fonts::bold, badge, 16) + 24, 28,
+                  Theme::withAlpha(Theme::palette.ink_sumi, 180));
+    Fonts::draw(Fonts::bold, badge, 24, 18, 16,
+                Theme::withAlpha(Theme::palette.gold_foil, 240));
+
+    // Bottom-left: linh vật strip with charges + hotkeys.
+    auto label = [&](StoryMode::LinhVat lv, char* out, size_t n) -> const char* {
+        if (!storyMode.isUnlocked(lv))            return "khoa";
+        int c = storyMode.chargesLeft(lv);
+        if (c <= 0)                               return "het";
+        std::snprintf(out, n, "x%d", c);
+        return out;
+    };
+    char voiBuf[8], gaBuf[8], nguaBuf[8];
+    char strip[160];
+    std::snprintf(strip, sizeof(strip),
+                  "[1] VOI %s  [2] GA %s  [3] NGUA %s (tu dong)",
+                  label(StoryMode::LinhVat::Voi,  voiBuf,  sizeof(voiBuf)),
+                  label(StoryMode::LinhVat::Ga,   gaBuf,   sizeof(gaBuf)),
+                  label(StoryMode::LinhVat::Ngua, nguaBuf, sizeof(nguaBuf)));
+
+    int sw = Fonts::measure(Fonts::body, strip, 14);
+    int sx = 16;
+    int sy = GetScreenHeight() - 56;
+    DrawRectangle(sx - 8, sy - 4, sw + 16, 22,
+                  Theme::withAlpha(Theme::palette.ink_sumi, 170));
+    Fonts::draw(Fonts::body, strip, sx, sy, 14,
+                Theme::withAlpha(Theme::palette.son_bone, 230));
+}
+
 void Game::buildSaveData(SaveData& data) {
     data = {};
     data.header.timestamp = static_cast<int64_t>(std::time(nullptr));
@@ -637,19 +938,55 @@ void Game::applyMove(Move move) {
 
         winLine.clear();
         CellState winner = board.checkWinner(winLine);
-        if (winner != CellState::Empty) {
-            currentPlayer->addWin();
-            state = GameState::GameOver;
-            // PvAI: AI is player2. AI win ⇒ human lost ⇒ lose sound.
-            if (vsAI && currentPlayer == player2) {
-                audioManager.playLoseSound();
-            } else {
-                audioManager.playWinSound();
+        const bool hasWinner = (winner != CellState::Empty);
+        const bool isDraw    = !hasWinner && board.isFull();
+        if (hasWinner || isDraw) {
+            // PvAI: AI is player2. The mover's identity decides side.
+            const bool aiWon      = hasWinner && vsAI && currentPlayer == player2;
+            const bool playerWon  = hasWinner && !aiWon;
+            const bool playerLost = aiWon || isDraw;
+
+            // Story mode: Ngựa 9 hồng mao revives the player once per run.
+            if (inStoryMode && playerLost && storyMode.tryUseNguaOnLoss()) {
+                undoTurns(5);
+                winLine.clear();
+                std::snprintf(toastMessage, sizeof(toastMessage),
+                              "Ngua 9 hong mao dua nguoi ve 5 luot truoc");
+                toastTimer = 3.0f;
+                return;
             }
-        } else if (board.isFull()) {
+
+            if (hasWinner) currentPlayer->addWin();
             state = GameState::GameOver;
+            if (aiWon)            audioManager.playLoseSound();
+            else if (playerWon)   audioManager.playWinSound();
+            if (inStoryMode)      storyMode.onMatchEnd(playerWon);
         } else {
             switchTurn();
+
+            // FinalBoss cheating power: every 4 player moves, Thủy Tinh tears
+            // 4 of the player's stones off the board.
+            if (inStoryMode &&
+                storyMode.currentSet == StoryMode::SetId::FinalBoss &&
+                currentPlayer == player2 &&
+                storyMode.tickBossCheat()) {
+                int removed = 0;
+                for (int i = static_cast<int>(moveHistory.size()) - 1;
+                     i >= 0 && removed < 4; --i) {
+                    if (moveHistory[i].mark == player1->getMark()) {
+                        board.removeMove(moveHistory[i].move.row,
+                                         moveHistory[i].move.col);
+                        moveHistory.erase(moveHistory.begin() + i);
+                        ++removed;
+                    }
+                }
+                if (removed > 0) {
+                    std::snprintf(toastMessage, sizeof(toastMessage),
+                                  "Thuy Tinh xe ban co - %d quan bay mat!",
+                                  removed);
+                    toastTimer = 3.0f;
+                }
+            }
         }
     }
 }
@@ -688,6 +1025,12 @@ void Game::undoLastMove() {
     renderer.resetAnimations();
 }
 
+void Game::undoTurns(int n) {
+    for (int i = 0; i < n && !moveHistory.empty(); ++i) {
+        undoLastMove();
+    }
+}
+
 void Game::autoSave() {
     if (player1 == nullptr) return;
     SaveData data{};
@@ -698,7 +1041,7 @@ void Game::autoSave() {
 void Game::saveSettings() const {
     FILE* f = fopen("settings.cfg", "w");
     if (!f) return;
-    fprintf(f, "%d %d\n", vsAI ? 1 : 0, aiDepth);
+    fprintf(f, "%d\n", vsAI ? 1 : 0);
     fclose(f);
 }
 
@@ -710,13 +1053,7 @@ void Game::loadSettings() {
         char* end = nullptr;
         long ai = strtol(buf, &end, 10);
         if (end && end != buf) {
-            long depth = strtol(end, &end, 10);
             vsAI = (ai != 0);
-            if (depth == 1 || depth == 2 || depth == 3) {
-                aiDepth = static_cast<int>(depth);
-            } else {
-                aiDepth = 3;  // legacy 2/3/4/6/8 or any other value → Hard default
-            }
         }
     }
     fclose(f);

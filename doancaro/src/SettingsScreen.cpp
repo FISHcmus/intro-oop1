@@ -1,183 +1,87 @@
 #include "SettingsScreen.h"
 #include "AudioManager.h"
-#include "Fonts.h"
-#include "UI.h"
+#include "Theme.h"
+#include "UIComponents.h"
 #include "raylib.h"
+
 #include <cstdio>
 
-SettingsScreen::SettingsScreen()
-    : settings{true, 3}, selectedIndex(0), done(false) {}
-
 namespace {
-// Cycle difficulty 1 -> 2 -> 3 -> 1 (forward) or 1 -> 3 -> 2 -> 1 (backward).
-// 1=Easy (greedy), 2=Normal (minimax d=2), 3=Hard (minimax d=3).
-int cycleDifficulty(int current, int direction) {
-    if (direction > 0) {
-        if (current == 1) return 2;
-        if (current == 2) return 3;
-        return 1;  // from 3 (or any legacy value)
-    }
-    if (current == 1) return 3;
-    if (current == 3) return 2;
-    return 1;  // from 2 (or any legacy value)
+constexpr float kRowW   = 400.0f;
+constexpr float kRowH   = 56.0f;
+constexpr float kRowGap = 12.0f;
+
+Rectangle rowRect(int i, int screenW, int screenH) {
+    float x = (static_cast<float>(screenW) - kRowW) * 0.5f;
+    float y = static_cast<float>(screenH) / 3.0f
+              + static_cast<float>(i) * (kRowH + kRowGap);
+    return { x, y, kRowW, kRowH };
 }
 }  // namespace
 
+SettingsScreen::SettingsScreen()
+    : settings{true}, selectedIndex(1), done(false) {}
+
 void SettingsScreen::update(AudioManager& audio) {
-    // Keyboard navigation
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
-        selectedIndex = (selectedIndex - 1 + ITEM_COUNT) % ITEM_COUNT;
-    }
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
-        selectedIndex = (selectedIndex + 1) % ITEM_COUNT;
-    }
+    selectedIndex = 1;
 
-    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
-        audio.playMenuClickSound();
-        switch (selectedIndex) {
-            case 0:  // Toggle game mode
-                settings.vsAI = !settings.vsAI;
-                break;
-            case 1:  // Cycle AI difficulty forward
-                settings.aiDepth = cycleDifficulty(settings.aiDepth, +1);
-                break;
-            case 2:  // Back
-                done = true;
-                break;
-        }
-    }
-
-    if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
-        // Only the value-cycling rows respond — stay silent on Back so the
-        // click sound never lies about an action that didn't happen.
-        if (selectedIndex == 0 || selectedIndex == 1) {
-            audio.playMenuClickSound();
-        }
-        switch (selectedIndex) {
-            case 0:
-                settings.vsAI = !settings.vsAI;
-                break;
-            case 1:
-                settings.aiDepth = cycleDifficulty(settings.aiDepth, -1);
-                break;
-            default:
-                break;
-        }
-    }
-
-    if (IsKeyPressed(KEY_ESCAPE)) {
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)
+        || IsKeyPressed(KEY_ESCAPE)) {
         audio.playMenuClickSound();
         done = true;
+        return;
     }
 
-    // Mouse support
     int screenW = GetScreenWidth();
     int screenH = GetScreenHeight();
-    int startY = screenH / 3;
-    int itemHeight = 50;
     Vector2 mouse = GetMousePosition();
-    bool mouseMoved = UI::mouseMoved();
 
-    for (int i = 0; i < ITEM_COUNT; i++) {
-        int y = startY + i * itemHeight;
-        Rectangle itemRect = {
-            static_cast<float>(screenW) / 2.0f - 200.0f,
-            static_cast<float>(y - 5),
-            400.0f,
-            static_cast<float>(itemHeight - 5)
-        };
-
-        if (CheckCollisionPointRec(mouse, itemRect)) {
-            if (mouseMoved) selectedIndex = i;
-            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                audio.playMenuClickSound();
-                switch (i) {
-                    case 0:
-                        settings.vsAI = !settings.vsAI;
-                        break;
-                    case 1:
-                        settings.aiDepth = cycleDifficulty(settings.aiDepth, +1);
-                        break;
-                    case 2:
-                        done = true;
-                        break;
-                }
-            }
-        }
+    Rectangle backRect = rowRect(1, screenW, screenH);
+    if (CheckCollisionPointRec(mouse, backRect)
+        && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        audio.playMenuClickSound();
+        done = true;
     }
 }
 
 void SettingsScreen::draw() {
-    int itemSize = 26;
     int screenW = GetScreenWidth();
     int screenH = GetScreenHeight();
 
-    // Title
-    const char* title = "SETTINGS";
-    int titleWidth = Fonts::measure(Fonts::title, title, 50);
-    Fonts::draw(Fonts::title, title, (screenW - titleWidth) / 2, screenH / 6, 50, WHITE);
+    DrawRectangleGradientV(0, 0, screenW, screenH,
+                           Theme::palette.bg_top,
+                           Theme::palette.bg_bottom);
 
-    // Items
-    int startY = screenH / 3;
-    int itemHeight = 50;
+    UIC::drawTitle("SETTINGS", screenW, screenH);
 
-    // Item 0: Game Mode
-    {
-        char buf[64];
-        std::snprintf(buf, sizeof(buf), "Game Mode: < %s >", getGameModeLabel());
-        int textWidth = Fonts::measure(Fonts::bold, buf, itemSize);
-        int x = (screenW - textWidth) / 2;
-        int y = startY;
-        Color color = (selectedIndex == 0) ? GOLD : LIGHTGRAY;
-        Fonts::draw(Fonts::bold, buf, x, y, itemSize, color);
-        if (selectedIndex == 0) Fonts::draw(Fonts::bold, ">", x - 30, y, itemSize, GOLD);
-    }
+    Vector2 mouse = GetMousePosition();
+    bool mouseDown = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
 
-    // Item 1: AI Difficulty
-    {
-        char buf[64];
-        std::snprintf(buf, sizeof(buf), "AI Difficulty: < %s >", getDifficultyLabel());
-        int textWidth = Fonts::measure(Fonts::bold, buf, itemSize);
-        int x = (screenW - textWidth) / 2;
-        int y = startY + itemHeight;
-        Color color;
-        if (!settings.vsAI) {
-            color = DARKGRAY;  // Greyed out when PvP
+    char modeBuf[64];
+    std::snprintf(modeBuf, sizeof(modeBuf), "Mode: < %s >", getGameModeLabel());
+    const char* labels[ITEM_COUNT] = { modeBuf, "BACK" };
+
+    for (int i = 0; i < ITEM_COUNT; i++) {
+        Rectangle r = rowRect(i, screenW, screenH);
+        UIC::State st;
+        if (i == 0) {
+            st = UIC::State::Disabled;
+        } else if (i == selectedIndex) {
+            bool pressed = mouseDown && CheckCollisionPointRec(mouse, r);
+            st = pressed ? UIC::State::Pressed : UIC::State::Focused;
         } else {
-            color = (selectedIndex == 1) ? GOLD : LIGHTGRAY;
+            st = UIC::State::Rest;
         }
-        Fonts::draw(Fonts::bold, buf, x, y, itemSize, color);
-        if (selectedIndex == 1 && settings.vsAI) Fonts::draw(Fonts::bold, ">", x - 30, y, itemSize, GOLD);
+        UIC::drawPrimaryButton(r, labels[i], st);
     }
 
-    // Item 2: Back
-    {
-        const char* label = "Back";
-        int textWidth = Fonts::measure(Fonts::bold, label, itemSize);
-        int x = (screenW - textWidth) / 2;
-        int y = startY + 2 * itemHeight;
-        Color color = (selectedIndex == 2) ? GOLD : LIGHTGRAY;
-        Fonts::draw(Fonts::bold, label, x, y, itemSize, color);
-        if (selectedIndex == 2) Fonts::draw(Fonts::bold, ">", x - 30, y, itemSize, GOLD);
-    }
-
-    // Instructions
-    Fonts::draw(Fonts::body, "Left/Right to change, Enter to select, ESC to go back",
-                10, screenH - 30, 16, DARKGRAY);
+    UIC::drawHintBar("Enter or click BACK to return, ESC to go back",
+                     screenW, screenH);
 }
 
 void SettingsScreen::reset() {
-    selectedIndex = 0;
+    selectedIndex = 1;
     done = false;
-}
-
-const char* SettingsScreen::getDifficultyLabel() const {
-    switch (settings.aiDepth) {
-        case 1: return "Easy";
-        case 2: return "Normal";
-        case 3: return "Hard";
-        default: return "?";
-    }
 }
 
 const char* SettingsScreen::getGameModeLabel() const {

@@ -8,13 +8,20 @@
 #include "MenuScreen.h"
 #include "GameScreen.h"
 #include "SettingsScreen.h"
+#include "DifficultyScreen.h"
 #include "SaveLoadScreen.h"
 #include "AudioManager.h"
 #include "FileManager.h"
+#include "StoryMode.h"
 #include <thread>
 #include <atomic>
 
-enum class GameState { Menu, Settings, Playing, GameOver, SaveScreen, LoadScreen };
+enum class GameState {
+    Menu, Settings, PickDifficulty, Playing, GameOver,
+    SaveScreen, LoadScreen,
+    StoryIntro,   // Cô Sử Tiên paginated monologue
+    StoryBeat,    // per-set intro / win / lose / linh vật unlock / epilogue
+};
 
 class Game {
 public:
@@ -37,6 +44,7 @@ private:
     Renderer renderer;
     MenuScreen menuScreen;
     SettingsScreen settingsScreen;
+    DifficultyScreen difficultyScreen;
     SaveLoadScreen saveLoadScreen;
     GameScreen gameScreen;
     AudioManager audioManager;
@@ -48,6 +56,10 @@ private:
     // Settings
     bool vsAI;
     int aiDepth;
+
+    // Story Mode
+    StoryMode::State storyMode;
+    bool inStoryMode;
 
     // Play time tracking
     float playTime;
@@ -75,17 +87,24 @@ private:
     // Game loop phases
     void updateMenu();
     void updateSettings();
+    void updateDifficulty();
     void updatePlaying();
     void updateGameOver();
     void updateSaveLoadScreen();
+    void updateStoryIntro();
+    void updateStoryBeat();
 
     void drawMenu();
     void drawSettings();
+    void drawDifficulty();
     void drawPlaying();
     void drawGameOver();
     void drawSaveLoadScreen();
+    void drawStoryIntro();
+    void drawStoryBeat();
     void drawToast();
     void drawDebugPanel();
+    void drawStoryHUD();
 
     // Helpers
     void startNewGame();
@@ -101,6 +120,7 @@ private:
     void loadSettings();
     void applyMove(Move move);
     void undoLastMove();
+    void undoTurns(int n);
 };
 
 #endif

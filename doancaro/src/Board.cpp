@@ -58,6 +58,15 @@ void Board::undoMove(int row, int col, Move previousLastMove) {
     moveCount--;
 }
 
+bool Board::removeMove(int row, int col) {
+    if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) return false;
+    if (cells[row][col] == CellState::Empty) return false;
+    zobristHash ^= zobristTable[row][col][markIndex(cells[row][col])];
+    cells[row][col] = CellState::Empty;
+    moveCount--;
+    return true;
+}
+
 CellState Board::getCell(int row, int col) const {
     if (row < 0 || row >= SIZE || col < 0 || col >= SIZE)
         return CellState::Empty;

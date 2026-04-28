@@ -1,0 +1,86 @@
+#pragma once
+
+// Story Mode state machine. Pure state — no rendering, no input. The Game
+// class drives advance() / onMatchEnd() / useXxx() calls; the screen funcs
+// inspect this state to decide what to draw.
+//
+// Best-of-3 within Set1/Set2/Set3 (first to 2 wins or 2 losses decides).
+// FinalBoss is a single decisive match.
+
+namespace StoryMode {
+
+enum class SetId { Set1 = 0, Set2 = 1, Set3 = 2, FinalBoss = 3 };
+
+enum class SubBeat {
+    IntroMonologue,   // showing intro page introPageIdx
+    SetIntro,         // showing currentSet's intro line
+    MatchPlaying,     // game is in GameState::Playing — no story panel rendered
+    SetWin,           // showing currentSet's win line
+    SetLose,          // showing currentSet's lose line
+    LinhVatUnlock,    // showing the linh vật line for currentSet
+    Epilogue,         // post-FinalBoss-win closing line
+};
+
+enum class LinhVat { Voi = 0, Ga = 1, Ngua = 2 };
+
+class State {
+public:
+    State();
+    void reset();
+
+    // Narrative state
+    SubBeat subBeat;
+    int     introPageIdx;
+    SetId   currentSet;
+
+    // Best-of-3 within currentSet
+    int matchWinsInSet;
+    int matchLossesInSet;
+
+    // Linh vật charges. -1 = locked (not yet unlocked). >=0 = remaining uses.
+    int voiCharges;
+    int gaCharges;
+    int nguaCharges;
+
+    // Gà active counter — while > 0, AI plays a random move on its next turn.
+    int gaActiveTurns;
+
+    // FinalBoss "cheat" tick — counts player moves; every 4 moves boss
+    // removes pieces. Reset on FinalBoss entry.
+    int bossPlayerMoveCounter;
+
+    int getCurrentDifficulty() const;
+    bool isLastSetMatch() const;            // true when on match-point (next decides)
+    bool isUnlocked(LinhVat lv) const;
+    int  chargesLeft(LinhVat lv) const;
+
+    // Advance from a non-MatchPlaying subBeat to the next state.
+    // Caller (Game) transitions GameState afterwards based on new subBeat.
+    void advance();
+
+    // Called by Game when a match completes. Updates wins/losses counters.
+    // Returns true if the set is now decided (caller should route to
+    // StoryBeat with the new SetWin/SetLose subBeat); returns false when
+    // another match in the set is needed (caller should startNewGame again).
+    bool onMatchEnd(bool playerWon);
+
+    // Linh vật actions. Each returns true on success (charge consumed),
+    // false if locked / no charges.
+    bool useVoi();    // caller does the actual undo×5 on the Board
+    bool useGa();     // sets gaActiveTurns = 1 (one AI turn random)
+    // Ngựa is automatic on match loss — see tryUseNguaOnLoss().
+    bool tryUseNguaOnLoss();   // returns true if ngua saved the player
+
+    // AI side: call before each AI turn. Returns true (and decrements the
+    // ga counter) if the AI should play a random move this turn.
+    bool consumeGaTurn();
+
+    // FinalBoss only: call after each player move. Returns true exactly
+    // once every 4th call — that's when the boss should rip 4 pieces.
+    bool tickBossCheat();
+
+private:
+    int matchesToWin() const;   // 2 for Set1-3, 1 for FinalBoss
+};
+
+}  // namespace StoryMode
