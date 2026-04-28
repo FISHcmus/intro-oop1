@@ -14,21 +14,105 @@
   - Pham Ngoc Tram — 25310043
 - **Final project:** Caro game with raylib (see `DoAnCaro.pdf`)
 - **Slides:** PPSX in `baigiang/`, extracted markdown in `extracted_content/`
-- **Class pacing:** Painfully slow — by week 8 (2026-04-20) the class is only covering week 5 content (File Processing). Slides go up to week 10 but actual in-class progress lags ~3 weeks behind.
+- **Class pacing:** Painfully slow — by week 9 (2026-04-29) the class has barely cleared week 5 content (File Processing). Slides go up to week 10 but in-class progress lags ~3 weeks behind.
 - **Research:** Course analysis and strategy docs in `research/`
 
 ## Directory Structure
+
 ```
 intro-oop1/
-├── week1/          # Weekly homework
-├── week2/          #   Each week: exercise.md + 25310023.cpp
-├── ...
-├── baigiang/       # Lecture slides (PPSX)
-├── extracted_content/  # Markdown from slides
-├── research/       # Course analysis, style guide, algo reference
-├── .serena/        # Serena MCP config (project-scoped)
-└── .mcp.json       # MCP servers config
+├── doancaro/                    # Final project — Caro game (raylib, C++14)
+│   ├── src/                     #   18 modules — see "Caro Architecture" below
+│   ├── tools/gallery_main.cpp   #   CaroGallery dev binary (UI sandbox)
+│   ├── tests/                   #   Catch2 v3 unit tests (test_board, test_ai)
+│   ├── assets/                  #   fonts/, images/, models/, sounds/, pieces/, textures/, videos/
+│   ├── slides/                  #   Slidev defense deck (caro-slides, package.json)
+│   ├── report/                  #   our_work/ (.md, .org, .tex, .pdf) + example/
+│   ├── storyline/               #   storyline_final.org — Cô Sử Tiên 4-set Story Mode arc
+│   ├── public/                  #   screenshots used in the report
+│   ├── AI_ALGORITHM.md          #   AI design doc
+│   ├── CMakeLists.txt           #   3 targets (CaroGame, CaroGallery, CaroTests)
+│   └── .raw-assets/             #   gitignored — original GLB sources before stripping
+│
+├── week1/ … week3/, week7/, week8/   # Weekly homework dirs (note: 4, 5, 6 skipped — not yet done)
+├── homework_lythuyet/lythuyetlan5/   # Theory homework
+├── baigiang/                    # Lecture slides — PPSX (Week01–Week10)
+├── extracted_content/           # Markdown extracted from PPSX (CSLTr_Week*.md + week*_images/)
+├── research/                    # 5 strategy/reference docs (algorithms, style, libraries, course)
+├── books/                       # Reference PDFs — Stroustrup C++, CLRS Algorithms
+├── past_exams/                  # Mid-term archives (2023-2024 + 2026 thuchanh)
+├── ci-assets/                   # Visual Studio submission bundle (.sln, .vcxproj, bundle CMakeLists)
+├── cf/                          # Codeforces problem sets (gym W1-W2, W3-W4, W5-W6, OOP-Challenge)
+├── saves/                       # Runtime save data (.cdat slots)
+├── cmake-build-debug/           # CLion debug build dir
+├── cmake-build-release/         # CLion release build dir
+├── DoAnCaro.pdf                 # Final-project specification (teacher's rubric)
+├── DeCuongChiTietHocPhan_*.pdf  # Official syllabus
+├── midterm_cheatsheet.md, note*.md   # Hand-written prep notes
+├── compile_commands.json        # clangd / Serena LSP index
+├── .serena/                     # Serena MCP config (project-scoped)
+└── .mcp.json                    # MCP servers config
 ```
+
+## Caro Game Architecture (doancaro/)
+
+### Three build targets
+
+| Target | Source | Role |
+|---|---|---|
+| `CaroGame` | src/* (~14 .cpp incl. main.cpp) | Production binary |
+| `CaroGallery` | tools/gallery_main.cpp + CaroUI lib | Dev sandbox — exercises every UIC component in every state, no game state. Window 1100×700, ESC to quit |
+| `CaroTests` | tests/test_board.cpp, tests/test_ai.cpp + GameLogic lib | Catch2 v3.8.0 unit tests, FetchContent + CTest discovery |
+
+### Two internal static libraries
+
+| Library | Sources | Linked by |
+|---|---|---|
+| `CaroUI` | src/UIComponents.cpp, src/Theme.cpp, src/Fonts.cpp | CaroGame, CaroGallery |
+| `GameLogic` | src/Board.cpp, src/Player.cpp, src/AIPlayer.cpp | CaroTests |
+
+### Source modules — one-line role
+
+| File | Role |
+|---|---|
+| `main.cpp` | 6-line entry: `Game game; game.run();` |
+| `Game.{h,cpp}` | Top-level state machine (`enum class GameState { Menu, Settings, PickDifficulty, Playing, GameOver, SaveScreen, LoadScreen }`); owns Board + 2 Players + Renderer + every screen + AudioManager. Async AI thread. Move history for undo. Toast + debug panel. |
+| `Board.{h,cpp}` | 15×15 grid. `placeMove/undoMove`, win detection, `getCandidateMoves` for AI, Zobrist hash for TT. |
+| `Player.{h,cpp}` | Base class. Human `setNextMove` from input. Stats. |
+| `AIPlayer.{h,cpp}` | Minimax + alpha-beta + transposition table (`unordered_map<uint64_t, TTEntry>`) + 243-entry pattern table (3⁵ window encoding). Threat-space search code present but unwired. `lastDebug` exposes top-5 moves, depth completed, TT stats. |
+| `Renderer.{h,cpp}` | 3D scene — orbital camera, 6 GLB models, **5 shaders**: gloss/Phong wet-coat, sky 3-stop gradient, edge-fade scroll, vignette, multi-octave value-noise mist. Async texture loader (450 unique piece grains). Camera-breathing idle bob. |
+| `MenuScreen.{h,cpp}` | Items: NewGame / **StoryMode** / LoadGame / Settings / Exit. preload() / shutdown() for ~200 MB animated background frames (121 PNGs). |
+| `SettingsScreen.{h,cpp}` | vsAI toggle + Back. |
+| `DifficultyScreen.{h,cpp}` | Easy / Normal / Hard / Cancel. Maps to AI search depth 1/2/3. |
+| `SaveLoadScreen.{h,cpp}` | 4 slots (0=autosave, 1–3 manual). Save/Load mode. Per-slot delete confirm. Slot card preview. |
+| `GameScreen.{h,cpp}` | HUD draw, message draw, prompt with text input. |
+| `AudioManager.{h,cpp}` | Place/Win/Lose/MenuClick SFX. BGM with menu/in-game pools, random reroll on track end. |
+| `FileManager.{h,cpp}` | Save format. Magic="CARO" (0x4341524F), version 3, CRC32 checksum, 4 slots. Header has stats + AI depth + game mode. |
+| `ParticleSystem.{h,cpp}` | 3D particles. Shapes: Cube/FlatRect/Spark. Emitters: placement / win-celebration / landing. Pending burst queue. |
+| `Theme.{h,cpp}` | Wuxia-storm palette (son_jade, son_bone, thuy_cyan, thuy_pearl, ink_sumi, gold_foil, etc.). Tokens: spacing, radius, elevation, motion. Type slots: `display_brush`, `body_serif`, `mono` (mono is declared but unset). |
+| `Fonts.{h,cpp}` | Inter Regular / Inter Bold / Bebas Neue. **Loaded with `LoadFontEx(..., nullptr, 0)` → ASCII 32–126 only.** Vietnamese diacritics + UTF-8 box-drawing chars currently render as `?`. |
+| `UIComponents.{h,cpp}` | UIC namespace: `drawPrimaryButton`, `drawTitle`, `drawHintBar`. State enum (Rest/Focused/Pressed/Disabled). Stateless free functions. |
+| `UI.h` | One inline helper: `mouseMoved()` — true only on frames the mouse delta is non-zero. |
+
+### Build optimizations (CMakeLists.txt)
+
+- **ccache** auto-detected → `CMAKE_{C,CXX}_COMPILER_LAUNCHER`
+- **mold linker** auto-detected → `-fuse-ld=mold` for native builds
+- `-pipe` always; `-gsplit-dwarf` in Debug
+- **PCH** for CaroGame: `<vector>`, `<string>`, `<cmath>`, `<cstdio>` (raylib.h excluded — quoted-include resolution clashes with PCH)
+- **PCH** for CaroTests: `<catch2/catch_test_macros.hpp>`, `<vector>`, `<string>`
+- raylib 5.5 via FetchContent (URL fallback when system pkg absent)
+- POST_BUILD copies `assets/` next to BOTH `CaroGame` and `CaroGallery` binaries
+
+### Where new code goes
+
+| Adding… | Goes in… |
+|---|---|
+| New game-logic .cpp (board/AI/player) | `SOURCES` (CaroGame) AND `GAME_LOGIC_SOURCES` (CaroTests) in CMakeLists |
+| New screen / Game-only feature | `SOURCES` (CaroGame) only |
+| New UI primitive (button, panel, text widget) | `CaroUI` library — auto-available to CaroGame + CaroGallery |
+| New Catch2 test file | `add_executable(CaroTests …)` line in CMakeLists |
+| New gallery showcase | `tools/gallery_main.cpp` directly (one binary) |
 
 ## Code Editing Tools (MANDATORY)
 
@@ -130,13 +214,74 @@ Exception: `execute_run_configuration` is fine for launching a built exe (Run �
 - **GLB model stripping**: Remove node mesh refs with Python, then `npx @gltf-transform/cli prune in.glb out.glb` to shrink file
 - **Working directory**: Must run `./CaroGame` from `doancaro/build/` — assets use relative paths. Running from another dir causes silent asset load failures.
 - **GLFW init error**: Kill old game process before relaunching: `pkill -f CaroGame`
-- **New .cpp files**: Must add to `SOURCES` list in `doancaro/CMakeLists.txt`
+- **New .cpp files**: See "Where new code goes" table above — destination depends on target (CaroGame `SOURCES`, `CaroUI` lib, `GameLogic` lib, or `CaroTests`).
 
 ## Caro Project Assets
-- 3D models in `doancaro/assets/models/` (copied to build dir by CMake post-build)
-- Raw/original models in `doancaro/.raw-assets/` (gitignored, not bundled)
-- Board model: `table.glb` — Go board from Sketchfab, wood texture, 35 units wide, scaled to fit 15x15 grid
-- Settings: `settings.cfg` in build dir — persists vsAI and aiDepth between restarts
+
+CMake POST_BUILD copies the entire `assets/` tree next to BOTH `CaroGame` and `CaroGallery` binaries. Raw/original sources live in `doancaro/.raw-assets/` (gitignored, not bundled).
+
+### `assets/fonts/` — 3 TTFs
+
+| File | Role | Notes |
+|---|---|---|
+| `Inter-Regular.ttf` | body / HUD | Currently loaded ASCII-only |
+| `Inter-Bold.ttf` | emphasis / player names | Currently loaded ASCII-only |
+| `BebasNeue.ttf` | titles / big text | Currently loaded ASCII-only |
+
+**No monospace font yet** — `Theme::type.mono` slot is declared in Theme.h but never assigned. Required for any UTF-8 box-drawing layout (panels with `╔═╗`).
+
+### `assets/models/` — 7 GLBs
+
+| File | Role | Notes |
+|---|---|---|
+| `table.glb` | 15×15 Go-style board | 35 units wide, baked grid |
+| `fire_rune.glb` | PlayerX (Sơn Tinh) piece | Talisman GLB overrides sphere fallback |
+| `water_rune.glb` | PlayerO (Thủy Tinh) piece | Same |
+| `floating_island.glb` | Pedestal under board | Auto-centered via bbox fit |
+| `mountain_and_river_scroll.glb` | Backdrop behind board | KHR_materials_unlit anime-style; do NOT apply glossShader |
+| `fluffy_cloud.glb` | Drifting cloud instances | 3-plane billboard — needs `rlDisableDepthMask` wrapper (see raylib gotchas) |
+| `birds.glb` | (unused — kept in tree for now) | — |
+
+### `assets/pieces/` — 450 pre-rendered piece textures
+
+`light_<row>_<col>.png` and `dark_<row>_<col>.png`, one PNG per cell × 2 colors = 15 × 15 × 2. Async loaded by `Renderer::texLoaderThread`, uploaded to GPU one-per-frame via `uploadPendingTextures()`.
+
+### `assets/sounds/` — SFX + 9 BGM tracks
+
+| Path | Files |
+|---|---|
+| `assets/sounds/place_0[0-4].ogg` | 5 piece-placement SFX (rotated to dodge repetition) |
+| `assets/sounds/win.ogg`, `lose.ogg`, `menu_click.ogg` | One-shot SFX |
+| `assets/sounds/menu/` | 3 menu-BGM tracks: Forest_Ambience, ObservingTheStar, TownTheme |
+| `assets/sounds/in-game/` | 6 game-BGM tracks: 003_Vaporware, Ambient Piano, dova_Eternal Terror, gone_fishin (CC0), sadpianov1, where-was-i |
+
+`AudioManager::updateMusic()` rerolls a random track when the current one ends.
+
+### `assets/images/` — menu chrome
+
+| Path | Role |
+|---|---|
+| `menu-background-1.png` | Static menu background |
+| `menu-button.png` | Menu button base sprite |
+| `buttons/` | exit/play-via-internet/play-with-ai/settings PNGs |
+| `menu-frames/` | **121-frame animated menu background** (~200 MB VRAM — `MenuScreen::preload/shutdown` manages it) |
+
+### `assets/videos/`, `assets/textures/`
+
+| File | Role |
+|---|---|
+| `videos/menu-background.mp4` | Menu video backdrop |
+| `videos/setting-background.mp4` | Settings screen video backdrop |
+| `textures/ground.png` | Generic ground texture |
+
+### Runtime config
+
+- `settings.cfg` in build dir — persists `vsAI` and `aiDepth` between restarts
+- Save slots: `slot0.cdat` (autosave) … `slot3.cdat` in user dir, NOT bundle dir
+
+## Story Mode (storyline_final.org)
+
+`MenuScreen::MenuChoice` already includes `StoryMode` — wired into the enum, no impl yet. The narrative spec is in `doancaro/storyline/storyline_final.org` ("Cô Sử Tiên 4-set arc"). Three sets at fixed difficulties (Easy/Medium/Hard) plus a final boss set, each with intro / win / lose narration beats and per-set linh-vật unlock lines (Voi 9 ngà / Gà 9 cựa / Ngựa 9 hồng mao).
 
 ## Homework Structure (MANDATORY — applies to ALL homework except Caro project)
 
