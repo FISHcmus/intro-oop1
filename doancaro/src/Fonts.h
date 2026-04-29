@@ -23,4 +23,10 @@ int measure(Font font, const char* text, float fontSize, float spacing = 1.0f);
 void draw(Font font, const char* text, int x, int y, float fontSize, Color color,
           float spacing = 1.0f);
 
+// Helper: horizontally center text on cx. Equivalent to a measure + draw at
+// `cx - width/2`. Saves the boilerplate `int w = measure(...); draw(..., x +
+// (W - w)/2, ...)` pattern that recurs in card layouts.
+void drawCentered(Font font, const char* text, int cx, int y,
+                  float fontSize, Color color, float spacing = 1.0f);
+
 } // namespace Fonts

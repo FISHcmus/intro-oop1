@@ -67,6 +67,12 @@ public:
     // Caller (Game) transitions GameState afterwards based on new subBeat.
     void advance();
 
+    // Picker entry: jump to any set's intro narrative regardless of where
+    // the state machine was. Resets all set-level + per-match state and
+    // points subBeat at IntroMonologue (so the global monologue still plays
+    // first). Caller transitions GameState to StoryIntro.
+    void jumpToSet(SetId target);
+
     // Called by Game right before each new match in a set (including the
     // first). Resets per-match transient state (boss cheat counter, ga turns).
     // Does NOT reset set-level counters — those live with onSetStart logic
@@ -97,6 +103,12 @@ public:
 
 private:
     int matchesToWin() const;   // 2 for Set1-3, 1 for FinalBoss
+
+    // Refill charges based on currentSet. Called on every SetIntro entry,
+    // so jumps (via picker / cheat) and replays (after a SetLose) all give
+    // the same per-set starting hand. Set 1 = nothing, Set 2 = Voi, Set 3 =
+    // Voi+Gà, FinalBoss = all three. Charges reset to full each set entry.
+    void refreshLinhVatForCurrentSet();
 };
 
 }  // namespace StoryMode

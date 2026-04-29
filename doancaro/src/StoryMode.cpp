@@ -67,12 +67,15 @@ void State::advance() {
         case SubBeat::SetIntro:
             // Caller transitions GameState to Playing on this subBeat change.
             // Reset all set-level state so the sigil starts at three Pending
-            // orbs and the boss cheat clock starts fresh.
+            // orbs and the boss cheat clock starts fresh. Linh vật charges
+            // refresh per the current set — same hand whether you got here
+            // via linear advance, lose-replay, or picker jump.
             matchWinsInSet = 0;
             matchLossesInSet = 0;
             matchesPlayedInSet = 0;
             for (auto& orb : matchOutcomes) orb = OrbState::Pending;
             bossPlayerMoveCounter = 0;
+            refreshLinhVatForCurrentSet();
             subBeat = SubBeat::MatchPlaying;
             break;
 
@@ -86,11 +89,12 @@ void State::advance() {
             break;
 
         case SubBeat::LinhVatUnlock:
-            // Award the matching linh vật, then advance to next set.
+            // Bump to next set. Charge grants happen uniformly when the
+            // SetIntro→MatchPlaying transition runs refreshLinhVatForCurrentSet.
             switch (currentSet) {
-                case SetId::Set1: voiCharges  = 1; currentSet = SetId::Set2;      break;
-                case SetId::Set2: gaCharges   = 3; currentSet = SetId::Set3;      break;
-                case SetId::Set3: nguaCharges = 1; currentSet = SetId::FinalBoss; break;
+                case SetId::Set1: currentSet = SetId::Set2;      break;
+                case SetId::Set2: currentSet = SetId::Set3;      break;
+                case SetId::Set3: currentSet = SetId::FinalBoss; break;
                 case SetId::FinalBoss: break;  // unreachable: boss has no unlock
             }
             subBeat = SubBeat::SetIntro;
@@ -178,6 +182,17 @@ bool State::tickBossCheat() {
         return true;
     }
     return false;
+}
+
+void State::refreshLinhVatForCurrentSet() {
+    voiCharges  = (currentSet >= SetId::Set2)      ? 1 : -1;
+    gaCharges   = (currentSet >= SetId::Set3)      ? 3 : -1;
+    nguaCharges = (currentSet == SetId::FinalBoss) ? 1 : -1;
+}
+
+void State::jumpToSet(SetId target) {
+    reset();
+    currentSet = target;
 }
 
 }  // namespace StoryMode

@@ -82,4 +82,10 @@ void draw(Font font, const char* text, int x, int y, float fontSize, Color color
                fontSize, spacing, color);
 }
 
+void drawCentered(Font font, const char* text, int cx, int y,
+                  float fontSize, Color color, float spacing) {
+    int w = measure(font, text, fontSize, spacing);
+    draw(font, text, cx - w / 2, y, fontSize, color, spacing);
+}
+
 } // namespace Fonts

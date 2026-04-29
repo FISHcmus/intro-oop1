@@ -51,6 +51,73 @@ int drawNavRow(int screenW, int yCenter, const NavBtn* btns, int count) {
     return clicked;
 }
 
+// Linh-vật trigger card. `vivid` lifts the card out of the dimmed look
+// reserved for locked / spent beasts; `clickable` gates click registration
+// on top of `interactive` (set by caller for the current GameState).
+// Ngựa is always !clickable — it auto-fires on match loss.
+struct BeastCard {
+    const char* hotkey;
+    const char* name;
+    const char* hint;
+    const char* chargeText;
+    bool        clickable;
+    bool        vivid;
+};
+
+int drawBeastCardRow(int rightX, int bottomY,
+                     const BeastCard cards[3], bool interactive) {
+    constexpr int kCardW = 120;
+    constexpr int kCardH = 76;
+    constexpr int kGap   = 8;
+    int totalW = 3 * kCardW + 2 * kGap;
+    int leftX  = rightX - totalW;
+    int topY   = bottomY - kCardH;
+
+    int clicked = -1;
+    Vector2 mp = GetMousePosition();
+    for (int i = 0; i < 3; ++i) {
+        int x0 = leftX + i * (kCardW + kGap);
+        int y0 = topY;
+        int cx = x0 + kCardW / 2;
+        Rectangle r = { static_cast<float>(x0), static_cast<float>(y0),
+                        static_cast<float>(kCardW), static_cast<float>(kCardH) };
+
+        bool hot = interactive && cards[i].clickable
+                && CheckCollisionPointRec(mp, r);
+        if (hot && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) clicked = i;
+
+        unsigned char bgA      = cards[i].vivid ? 210 : 140;
+        unsigned char borderA  = cards[i].vivid ? (hot ? 240 : 170) : 80;
+        unsigned char nameA    = cards[i].vivid ? 240 : 130;
+        unsigned char hintA    = cards[i].vivid ? 200 : 110;
+        unsigned char chargeA  = cards[i].vivid ? 230 : 150;
+
+        DrawRectangleRounded(r, 0.18f, 6,
+                             Theme::withAlpha(Theme::palette.ink_sumi, bgA));
+        DrawRectangleRoundedLinesEx(r, 0.18f, 6, 2.0f,
+                                    Theme::withAlpha(Theme::palette.gold_foil, borderA));
+
+        Rectangle badge = { static_cast<float>(x0 + 6), static_cast<float>(y0 + 6),
+                            18.0f, 18.0f };
+        DrawRectangleRounded(badge, 0.4f, 4,
+                             Theme::withAlpha(Theme::palette.gold_foil,
+                                              cards[i].vivid ? 255 : 150));
+        Fonts::drawCentered(Fonts::bold, cards[i].hotkey,
+                            x0 + 6 + 9, y0 + 8, 13.0f, Theme::palette.ink_sumi);
+
+        int chW = Fonts::measure(Fonts::body, cards[i].chargeText, 12);
+        Fonts::draw(Fonts::body, cards[i].chargeText,
+                    x0 + kCardW - chW - 8, y0 + 8,
+                    12.0f, Theme::withAlpha(Theme::palette.gold_foil, chargeA));
+
+        Fonts::drawCentered(Fonts::bold, cards[i].name, cx, y0 + 28,
+                            16.0f, Theme::withAlpha(Theme::palette.son_bone, nameA));
+        Fonts::drawCentered(Fonts::body, cards[i].hint, cx, y0 + 52,
+                            12.0f, Theme::withAlpha(Theme::palette.son_bone, hintA));
+    }
+    return clicked;
+}
+
 }  // namespace
 
 Game::Game()
@@ -59,6 +126,7 @@ Game::Game()
       cursorRow(Board::SIZE / 2), cursorCol(Board::SIZE / 2),
       vsAI(true), aiDepth(3),
       inStoryMode(false),
+      storyMaxUnlocked(1), cheatUnlockAll(false),
       storySigilLastFillTime(-1.0f),
       playTime(0.0f),
       toastMessage{}, toastTimer(0.0f),
@@ -91,6 +159,7 @@ void Game::run() {
         // Story narration screens use menu music — they're between matches.
         switch (state) {
             case GameState::Menu:
+            case GameState::StoryPickSet:
             case GameState::StoryIntro:
             case GameState::StoryBeat:
                 audioManager.switchToMenuMusic();
@@ -113,6 +182,7 @@ void Game::run() {
             case GameState::GameOver:       updateGameOver();       break;
             case GameState::SaveScreen: // fallthrough
             case GameState::LoadScreen:     updateSaveLoadScreen(); break;
+            case GameState::StoryPickSet:   updateStoryPickSet();   break;
             case GameState::StoryIntro:     updateStoryIntro();     break;
             case GameState::StoryBeat:      updateStoryBeat();      break;
         }
@@ -137,6 +207,7 @@ void Game::run() {
             case GameState::GameOver:       drawGameOver();       break;
             case GameState::SaveScreen: // fallthrough
             case GameState::LoadScreen:     drawSaveLoadScreen(); break;
+            case GameState::StoryPickSet:   drawStoryPickSet();   break;
             case GameState::StoryIntro:     drawStoryIntro();     break;
             case GameState::StoryBeat:      drawStoryBeat();      break;
         }
@@ -179,9 +250,11 @@ void Game::updateMenu() {
             }
             break;
         case MenuChoice::StoryMode:
-            inStoryMode = true;
-            storyMode.reset();
-            state = GameState::StoryIntro;
+            // Picker is the entry hub — read storyMaxUnlocked + cheat flag,
+            // then user picks which set to play. Reset story state on the
+            // picker click, not here, so backing out (ESC → Menu) doesn't
+            // leak partial state.
+            state = GameState::StoryPickSet;
             menuScreen.reset();
             break;
         case MenuChoice::LoadGame:
@@ -190,7 +263,7 @@ void Game::updateMenu() {
             menuScreen.reset();
             break;
         case MenuChoice::Settings:
-            settingsScreen.setSettings({vsAI});
+            settingsScreen.setSettings({vsAI, cheatUnlockAll});
             settingsScreen.reset();
             settingsReturnState = GameState::Menu;
             state = GameState::Settings;
@@ -209,6 +282,7 @@ void Game::updateSettings() {
     if (settingsScreen.isDone()) {
         GameSettings s = settingsScreen.getSettings();
         vsAI = s.vsAI;
+        cheatUnlockAll = s.cheatUnlockAll;
         saveSettings();
 
         state = settingsReturnState;
@@ -373,14 +447,14 @@ void Game::drawPlaying() {
     }
     if (renderer.drawSettingsButton()) {
         audioManager.playMenuClickSound();
-        settingsScreen.setSettings({vsAI});
+        settingsScreen.setSettings({vsAI, cheatUnlockAll});
         settingsScreen.reset();
         settingsReturnState = GameState::Playing;
         state = GameState::Settings;
     }
 
-    // Undo button
-    if (renderer.drawUndoButton()) {
+    // Undo button — hidden in Story Mode (Voi card is the only undo path).
+    if (!inStoryMode && renderer.drawUndoButton()) {
         audioManager.playMenuClickSound();
         undoLastMove();
     }
@@ -653,6 +727,115 @@ const char* linhVatNameFor(StoryMode::SetId id) {
 
 }  // namespace
 
+void Game::updateStoryPickSet() {
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        audioManager.playMenuClickSound();
+        state = GameState::Menu;
+        menuScreen.reset();
+    }
+}
+
+void Game::drawStoryPickSet() {
+    int sw = GetScreenWidth();
+    int sh = GetScreenHeight();
+
+    DrawRectangle(0, 0, sw, sh, Theme::palette.ink_sumi);
+    UIC::drawTitle("BẢNG CHỌN ẢI", sw, sh, sh / 9);
+
+    Fonts::drawCentered(Fonts::body,
+                        "Chọn chương để vào trận. Linh vật làm mới mỗi ải.",
+                        sw / 2, sh / 9 + 64, 14.0f,
+                        Theme::withAlpha(Theme::palette.son_bone, 200));
+
+    int maxAvail = cheatUnlockAll ? 4 : storyMaxUnlocked;
+
+    struct CardMeta {
+        const char* tag;
+        const char* title;
+        const char* beasts;
+    };
+    static const CardMeta meta[4] = {
+        { "SET 1 · DỄ",    "MƯA GIÔNG",          "Chưa có linh vật" },
+        { "SET 2 · VỪA",   "CUỒNG PHONG",        "Voi ×1" },
+        { "SET 3 · KHÓ",   "CƠN BÃO TẬN THẾ",    "Voi ×1, Gà ×3" },
+        { "BOSS · TỬ ĐẤU", "CHÂN HÌNH THUỶ TINH","Đầy đủ 3 linh vật" },
+    };
+
+    constexpr int kCardW = 168;
+    constexpr int kCardH = 220;
+    constexpr int kGap   = 22;
+    int totalW = 4 * kCardW + 3 * kGap;
+    int leftX  = (sw - totalW) / 2;
+    int topY   = sh / 2 - kCardH / 2 + 10;
+
+    Vector2 mp = GetMousePosition();
+    for (int i = 0; i < 4; ++i) {
+        int x0 = leftX + i * (kCardW + kGap);
+        int y0 = topY;
+        int cx = x0 + kCardW / 2;
+        bool unlocked = (i + 1) <= maxAvail;
+        Rectangle r = { static_cast<float>(x0), static_cast<float>(y0),
+                        static_cast<float>(kCardW), static_cast<float>(kCardH) };
+        bool hot = unlocked && CheckCollisionPointRec(mp, r);
+
+        if (hot && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            audioManager.playMenuClickSound();
+            inStoryMode = true;
+            storyMode.jumpToSet(static_cast<StoryMode::SetId>(i));
+            storySigilLastFillTime = -1.0f;
+            state = GameState::StoryIntro;
+            return;
+        }
+
+        unsigned char bgA     = unlocked ? 215 : 130;
+        unsigned char borderA = unlocked ? (hot ? 250 : 180) : 80;
+        DrawRectangleRounded(r, 0.10f, 8,
+                             Theme::withAlpha(Theme::palette.ink_sumi, bgA));
+        DrawRectangleRoundedLinesEx(r, 0.10f, 8, 2.5f,
+                                    Theme::withAlpha(Theme::palette.gold_foil, borderA));
+
+        unsigned char tagA   = unlocked ? 240 : 130;
+        unsigned char titleA = unlocked ? 245 : 140;
+
+        Fonts::drawCentered(Fonts::bold, meta[i].tag, cx, y0 + 18, 13.0f,
+                            Theme::withAlpha(Theme::palette.gold_foil, tagA));
+        Fonts::drawCentered(Fonts::bold, meta[i].title, cx, y0 + 56, 17.0f,
+                            Theme::withAlpha(Theme::palette.son_bone, titleA));
+
+        if (unlocked) {
+            Fonts::drawCentered(Fonts::body, meta[i].beasts, cx, y0 + 110, 13.0f,
+                                Theme::withAlpha(Theme::palette.son_bone, 220));
+            Fonts::drawCentered(Fonts::bold, "Vào trận",
+                                cx, y0 + kCardH - 38, 15.0f,
+                                Theme::withAlpha(Theme::palette.gold_foil,
+                                                 hot ? 255 : 200));
+        } else {
+            Fonts::drawCentered(Fonts::bold, "[ KHÓA ]",
+                                cx, y0 + kCardH / 2 + 4, 16.0f,
+                                Theme::withAlpha(Theme::palette.son_bone, 150));
+            Fonts::drawCentered(Fonts::body, "Thắng ải trước để mở",
+                                cx, y0 + kCardH / 2 + 36, 12.0f,
+                                Theme::withAlpha(Theme::palette.son_bone, 110));
+        }
+    }
+
+    int backX = sw / 2 - 110;
+    int backY = sh - 80;
+    Rectangle backBtn = { static_cast<float>(backX),
+                          static_cast<float>(backY), 220.0f, 44.0f };
+    UIC::State bs = UIC::State::Rest;
+    if (CheckCollisionPointRec(mp, backBtn)) {
+        bs = IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? UIC::State::Pressed
+                                                  : UIC::State::Focused;
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            audioManager.playMenuClickSound();
+            state = GameState::Menu;
+            menuScreen.reset();
+        }
+    }
+    UIC::drawPrimaryButton(backBtn, "Quay lại", bs);
+}
+
 void Game::updateStoryIntro() {
     if (IsKeyPressed(KEY_ESCAPE)) {
         audioManager.playMenuClickSound();
@@ -734,7 +917,12 @@ void Game::updateStoryBeat() {
             return;
         }
 
+        StoryMode::SubBeat oldBeat = storyMode.subBeat;
+        StoryMode::SetId   oldSet  = storyMode.currentSet;
         storyMode.advance();
+        if (oldBeat == StoryMode::SubBeat::SetWin) {
+            onSetCompleted(oldSet);
+        }
 
         // After advance: route GameState by the new subBeat.
         if (storyMode.subBeat == StoryMode::SubBeat::MatchPlaying) {
@@ -817,7 +1005,12 @@ void Game::drawStoryBeat() {
         exitStoryToMenu();
     } else if (clicked == 1) {
         audioManager.playMenuClickSound();
+        StoryMode::SubBeat oldBeat = storyMode.subBeat;
+        StoryMode::SetId   oldSet  = storyMode.currentSet;
         storyMode.advance();
+        if (oldBeat == StoryMode::SubBeat::SetWin) {
+            onSetCompleted(oldSet);
+        }
         if (storyMode.subBeat == StoryMode::SubBeat::MatchPlaying) {
             startStoryMatch();
         }
@@ -948,30 +1141,53 @@ void Game::drawStoryHUD() {
     Fonts::draw(Fonts::bold, badge, 24, 18, 16,
                 Theme::withAlpha(Theme::palette.gold_foil, 240));
 
-    // Bottom-left: linh vật strip with charges + hotkeys.
-    auto label = [&](StoryMode::LinhVat lv, char* out, size_t n) -> const char* {
-        if (!storyMode.isUnlocked(lv))            return "khoa";
-        int c = storyMode.chargesLeft(lv);
-        if (c <= 0)                               return "het";
-        std::snprintf(out, n, "x%d", c);
-        return out;
-    };
-    char voiBuf[8], gaBuf[8], nguaBuf[8];
-    char strip[160];
-    std::snprintf(strip, sizeof(strip),
-                  "[1] VOI %s  [2] GA %s  [3] NGUA %s (tu dong)",
-                  label(StoryMode::LinhVat::Voi,  voiBuf,  sizeof(voiBuf)),
-                  label(StoryMode::LinhVat::Ga,   gaBuf,   sizeof(gaBuf)),
-                  label(StoryMode::LinhVat::Ngua, nguaBuf, sizeof(nguaBuf)));
+    // Bottom-right: linh vật cards. Voi/Gà clickable when charges > 0;
+    // Ngựa is auto-on-loss (informational only). Camera buttons live
+    // bottom-left (Renderer), so the right corner is free for these.
+    int voiC  = storyMode.chargesLeft(StoryMode::LinhVat::Voi);
+    int gaC   = storyMode.chargesLeft(StoryMode::LinhVat::Ga);
+    int nguaC = storyMode.chargesLeft(StoryMode::LinhVat::Ngua);
 
-    // Bottom-RIGHT — bottom-left is reserved for camera buttons (Renderer).
-    int sw = Fonts::measure(Fonts::body, strip, 14);
-    int sx = GetScreenWidth() - sw - 24;
-    int sy = GetScreenHeight() - 30;  // align with camera-button row baseline
-    DrawRectangle(sx - 8, sy - 4, sw + 16, 22,
-                  Theme::withAlpha(Theme::palette.ink_sumi, 170));
-    Fonts::draw(Fonts::body, strip, sx, sy, 14,
-                Theme::withAlpha(Theme::palette.son_bone, 230));
+    // Locked / spent are shared text; Voi & Gà show "×N" for live charges,
+    // Ngựa just shows "Sẵn sàng" since it auto-fires (count is always 1).
+    auto chargeStr = [](int c, const char* readyText, char* buf, size_t n) -> const char* {
+        if (c < 0)  return "Khóa";
+        if (c == 0) return "Hết";
+        if (readyText) return readyText;
+        std::snprintf(buf, n, "×%d", c);
+        return buf;
+    };
+    char voiBuf[8], gaBuf[8];
+
+    BeastCard cards[3] = {
+        { "1", "VOI",  "Hoàn 5 nước",
+          chargeStr(voiC, nullptr, voiBuf, sizeof(voiBuf)),
+          voiC > 0, voiC > 0 },
+        { "2", "GÀ",   "AI loạn 1 lượt",
+          chargeStr(gaC, nullptr, gaBuf, sizeof(gaBuf)),
+          gaC > 0, gaC > 0 },
+        { "3", "NGỰA", "Hồi sinh tự động",
+          chargeStr(nguaC, "Sẵn sàng", nullptr, 0),
+          false, nguaC > 0 },
+    };
+
+    bool interactive = (state == GameState::Playing) && !aiThinking.load();
+    int clicked = drawBeastCardRow(GetScreenWidth() - 16,
+                                   GetScreenHeight() - 16,
+                                   cards, interactive);
+
+    if (clicked == 0 && storyMode.useVoi()) {
+        audioManager.playMenuClickSound();
+        undoTurns(5);
+        std::snprintf(toastMessage, sizeof(toastMessage),
+                      "Voi 9 ngà - hoàn tác 5 nước cờ");
+        toastTimer = 2.5f;
+    } else if (clicked == 1 && storyMode.useGa()) {
+        audioManager.playMenuClickSound();
+        std::snprintf(toastMessage, sizeof(toastMessage),
+                      "Gà 9 cựa gáy! Đối thủ loạn trí 1 lượt");
+        toastTimer = 2.5f;
+    }
 
     // Middle-bottom: tam-thai sigil. Three orbs track best-of-3 outcomes;
     // pulses + radial screen-wash + caption all key off storySigilLastFillTime
@@ -1218,6 +1434,8 @@ void Game::saveSettings() const {
     FILE* f = fopen("settings.cfg", "w");
     if (!f) return;
     fprintf(f, "%d\n", vsAI ? 1 : 0);
+    fprintf(f, "%d\n", storyMaxUnlocked);
+    fprintf(f, "%d\n", cheatUnlockAll ? 1 : 0);
     fclose(f);
 }
 
@@ -1225,12 +1443,30 @@ void Game::loadSettings() {
     FILE* f = fopen("settings.cfg", "r");
     if (!f) return;
     char buf[64];
-    if (fgets(buf, sizeof(buf), f)) {
+    auto readInt = [&](int& out) -> bool {
+        if (!fgets(buf, sizeof(buf), f)) return false;
         char* end = nullptr;
-        long ai = strtol(buf, &end, 10);
-        if (end && end != buf) {
-            vsAI = (ai != 0);
-        }
+        long v = strtol(buf, &end, 10);
+        if (!end || end == buf) return false;
+        out = static_cast<int>(v);
+        return true;
+    };
+    int v;
+    if (readInt(v)) vsAI = (v != 0);
+    if (readInt(v)) {
+        if (v < 1) v = 1;
+        if (v > 4) v = 4;
+        storyMaxUnlocked = v;
     }
+    if (readInt(v)) cheatUnlockAll = (v != 0);
     fclose(f);
+}
+
+void Game::onSetCompleted(StoryMode::SetId completedSet) {
+    int newMin = static_cast<int>(completedSet) + 2;  // Set1→2, ..., FinalBoss→5
+    if (newMin > 4) newMin = 4;
+    if (newMin > storyMaxUnlocked) {
+        storyMaxUnlocked = newMin;
+        saveSettings();
+    }
 }

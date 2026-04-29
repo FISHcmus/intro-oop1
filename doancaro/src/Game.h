@@ -19,6 +19,7 @@
 enum class GameState {
     Menu, Settings, PickDifficulty, Playing, GameOver,
     SaveScreen, LoadScreen,
+    StoryPickSet, // campaign-select panel — pick which set to play
     StoryIntro,   // Cô Sử Tiên paginated monologue
     StoryBeat,    // per-set intro / win / lose / linh vật unlock / epilogue
 };
@@ -61,6 +62,15 @@ private:
     StoryMode::State storyMode;
     bool inStoryMode;
 
+    // Highest set the player has won (1..4). Persisted in settings.cfg.
+    // Set 1 always available even on a fresh save.
+    int  storyMaxUnlocked;
+
+    // Settings checkbox: when true the picker shows all sets clickable
+    // regardless of storyMaxUnlocked. Read at picker render time only —
+    // toggling mid-run does not affect the active match.
+    bool cheatUnlockAll;
+
     // Timestamp (GetTime()) of the most recent sigil orb fill — drives the
     // pulse, screen-wash, and caption animations in drawStoryHUD. -1 = no
     // fill yet (or new match in progress; reset on every onMatchStart).
@@ -96,6 +106,7 @@ private:
     void updatePlaying();
     void updateGameOver();
     void updateSaveLoadScreen();
+    void updateStoryPickSet();
     void updateStoryIntro();
     void updateStoryBeat();
 
@@ -105,6 +116,7 @@ private:
     void drawPlaying();
     void drawGameOver();
     void drawSaveLoadScreen();
+    void drawStoryPickSet();
     void drawStoryIntro();
     void drawStoryBeat();
     void drawToast();
@@ -125,6 +137,11 @@ private:
     void buildSaveData(SaveData& data);
     void saveSettings() const;
     void loadSettings();
+
+    // Called when a SetWin beat is dismissed (advance() runs). Bumps the
+    // persisted storyMaxUnlocked so the picker shows the next set as
+    // available on the user's next Story Mode entry.
+    void onSetCompleted(StoryMode::SetId completedSet);
     void applyMove(Move move);
     void undoLastMove();
     void undoTurns(int n);

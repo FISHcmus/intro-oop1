@@ -5,6 +5,7 @@ class AudioManager;
 
 struct GameSettings {
     bool vsAI;
+    bool cheatUnlockAll;   // Story Mode picker shows all 4 sets when true.
 };
 
 class SettingsScreen {
@@ -22,10 +23,9 @@ public:
 
 private:
     GameSettings settings;
-    int selectedIndex;
     bool done;
 
-    static const int ITEM_COUNT = 2;  // Game Mode, Back
+    static const int ITEM_COUNT = 3;  // Mode (info), Cheat toggle, Back
 
     const char* getGameModeLabel() const;
 };

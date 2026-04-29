@@ -7,7 +7,7 @@
 #include <cstdio>
 
 namespace {
-constexpr float kRowW   = 400.0f;
+constexpr float kRowW   = 480.0f;
 constexpr float kRowH   = 56.0f;
 constexpr float kRowGap = 12.0f;
 
@@ -20,13 +20,10 @@ Rectangle rowRect(int i, int screenW, int screenH) {
 }  // namespace
 
 SettingsScreen::SettingsScreen()
-    : settings{true}, selectedIndex(1), done(false) {}
+    : settings{true, false}, done(false) {}
 
 void SettingsScreen::update(AudioManager& audio) {
-    selectedIndex = 1;
-
-    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)
-        || IsKeyPressed(KEY_ESCAPE)) {
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_ESCAPE)) {
         audio.playMenuClickSound();
         done = true;
         return;
@@ -36,7 +33,16 @@ void SettingsScreen::update(AudioManager& audio) {
     int screenH = GetScreenHeight();
     Vector2 mouse = GetMousePosition();
 
-    Rectangle backRect = rowRect(1, screenW, screenH);
+    // Row 1 — cheat unlock toggle.
+    Rectangle cheatRect = rowRect(1, screenW, screenH);
+    if (CheckCollisionPointRec(mouse, cheatRect)
+        && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        audio.playMenuClickSound();
+        settings.cheatUnlockAll = !settings.cheatUnlockAll;
+    }
+
+    // Row 2 — back.
+    Rectangle backRect = rowRect(2, screenW, screenH);
     if (CheckCollisionPointRec(mouse, backRect)
         && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         audio.playMenuClickSound();
@@ -58,29 +64,32 @@ void SettingsScreen::draw() {
     bool mouseDown = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
 
     char modeBuf[64];
-    std::snprintf(modeBuf, sizeof(modeBuf), "Mode: < %s >", getGameModeLabel());
-    const char* labels[ITEM_COUNT] = { modeBuf, "BACK" };
+    char cheatBuf[96];
+    std::snprintf(modeBuf, sizeof(modeBuf),
+                  "Mode: < %s >", getGameModeLabel());
+    std::snprintf(cheatBuf, sizeof(cheatBuf),
+                  "Story cheat (mở khoá toàn bộ): < %s >",
+                  settings.cheatUnlockAll ? "ON" : "OFF");
+    const char* labels[ITEM_COUNT] = { modeBuf, cheatBuf, "BACK" };
 
     for (int i = 0; i < ITEM_COUNT; i++) {
         Rectangle r = rowRect(i, screenW, screenH);
         UIC::State st;
         if (i == 0) {
             st = UIC::State::Disabled;
-        } else if (i == selectedIndex) {
-            bool pressed = mouseDown && CheckCollisionPointRec(mouse, r);
-            st = pressed ? UIC::State::Pressed : UIC::State::Focused;
+        } else if (CheckCollisionPointRec(mouse, r)) {
+            st = mouseDown ? UIC::State::Pressed : UIC::State::Focused;
         } else {
             st = UIC::State::Rest;
         }
         UIC::drawPrimaryButton(r, labels[i], st);
     }
 
-    UIC::drawHintBar("Enter or click BACK to return, ESC to go back",
+    UIC::drawHintBar("Click vào dòng để chỉnh · Enter / ESC để quay lại",
                      screenW, screenH);
 }
 
 void SettingsScreen::reset() {
-    selectedIndex = 1;
     done = false;
 }
 
