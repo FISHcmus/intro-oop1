@@ -77,6 +77,7 @@ set(SOURCES
     src/ParticleSystem.cpp
     src/StoryMode.cpp
     src/StoryContent.cpp
+    src/StorySigil.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})

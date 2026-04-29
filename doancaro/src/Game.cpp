@@ -3,6 +3,7 @@
 #include "Theme.h"
 #include "UIComponents.h"
 #include "StoryContent.h"
+#include "StorySigil.h"
 #include <climits>
 #include <cstdlib>
 #include <ctime>
@@ -12,12 +13,53 @@
 static const int SCREEN_WIDTH = 1000;
 static const int SCREEN_HEIGHT = 700;
 
+namespace {
+
+// Immediate-mode navigation button row. Draws up to 3 buttons centred at
+// (screenW/2, yCenter) and returns the index of the one clicked this frame
+// (-1 if none). Click only registers when `enabled` is true.
+struct NavBtn {
+    const char* label;
+    bool        enabled;
+};
+
+int drawNavRow(int screenW, int yCenter, const NavBtn* btns, int count) {
+    constexpr int kBtnW   = 220;
+    constexpr int kBtnH   = 48;
+    constexpr int kBtnGap = 18;
+
+    int totalW = count * kBtnW + (count - 1) * kBtnGap;
+    int x = (screenW - totalW) / 2;
+    int y = yCenter - kBtnH / 2;
+
+    int clicked = -1;
+    Vector2 mp = GetMousePosition();
+    for (int i = 0; i < count; ++i) {
+        Rectangle r = { static_cast<float>(x), static_cast<float>(y),
+                        static_cast<float>(kBtnW), static_cast<float>(kBtnH) };
+        UIC::State s = UIC::State::Rest;
+        if (!btns[i].enabled) {
+            s = UIC::State::Disabled;
+        } else if (CheckCollisionPointRec(mp, r)) {
+            s = IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? UIC::State::Pressed
+                                                     : UIC::State::Focused;
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) clicked = i;
+        }
+        UIC::drawPrimaryButton(r, btns[i].label, s);
+        x += kBtnW + kBtnGap;
+    }
+    return clicked;
+}
+
+}  // namespace
+
 Game::Game()
     : state(GameState::Menu), settingsReturnState(GameState::Menu),
       player1(nullptr), player2(nullptr), currentPlayer(nullptr),
       cursorRow(Board::SIZE / 2), cursorCol(Board::SIZE / 2),
       vsAI(true), aiDepth(3),
       inStoryMode(false),
+      storySigilLastFillTime(-1.0f),
       playTime(0.0f),
       toastMessage{}, toastTimer(0.0f),
       showDebugPanel(false),
@@ -360,10 +402,40 @@ void Game::drawPlaying() {
 }
 
 void Game::drawGameOver() {
-    // Draw the final board state with win line highlight
+    // Draw the final board state with win line highlight. In Story Mode this
+    // pass also runs drawStoryHUD → sigil + radial wash + caption, which IS
+    // the announcement. The generic ink-band banner below would cover them.
     drawPlaying();
 
-    // Overlay message — use cached winLine from when game ended
+    if (inStoryMode) {
+        // Story Mode: skip the generic banner — the sigil already announces
+        // win/loss. Show two nav buttons above it (mid-set: "Trận sau",
+        // set-decided: "Tiếp" routes to the SetWin/SetLose narrative panel).
+        // Buttons sit at h-150 to clear the sigil apex (~h-81).
+        bool setDecided = (storyMode.subBeat == StoryMode::SubBeat::SetWin ||
+                           storyMode.subBeat == StoryMode::SubBeat::SetLose);
+        NavBtn btns[2] = {
+            { "Menu", true },
+            { "Next", true },
+        };
+        int clicked = drawNavRow(GetScreenWidth(), GetScreenHeight() - 150,
+                                 btns, 2);
+        if (clicked == 0) {
+            audioManager.playMenuClickSound();
+            exitStoryToMenu();
+            menuScreen.reset();
+        } else if (clicked == 1) {
+            audioManager.playMenuClickSound();
+            if (setDecided) {
+                state = GameState::StoryBeat;
+            } else {
+                startNewGame();
+            }
+        }
+        return;
+    }
+
+    // Free-play / vs-AI / vs-human: keep the original ink-band banner.
     if (!winLine.empty()) {
         CellState winner = board.getCell(winLine[0].row, winLine[0].col);
         const char* winnerName = (winner == player1->getMark())
@@ -384,6 +456,14 @@ void Game::startNewGame() {
     aiThinking.store(false);
     aiResult = {-1, -1};
 
+    if (inStoryMode) {
+        storyMode.onMatchStart();
+        // New match starts fresh — drop the stale pulse/wash/caption from
+        // the previous match-end. The sigil keeps its filled orbs visible
+        // (matchOutcomes is set-scoped, only resets on SetIntro advance).
+        storySigilLastFillTime = -1.0f;
+    }
+
     delete player1;
     delete player2;
 
@@ -403,6 +483,18 @@ void Game::startNewGame() {
     cursorRow = Board::SIZE / 2;
     cursorCol = Board::SIZE / 2;
     state = GameState::Playing;
+}
+
+void Game::startStoryMatch() {
+    vsAI = true;
+    aiDepth = storyMode.getCurrentDifficulty();
+    startNewGame();
+}
+
+void Game::exitStoryToMenu() {
+    inStoryMode = false;
+    storyMode.reset();
+    state = GameState::Menu;
 }
 
 void Game::switchTurn() {
@@ -564,9 +656,7 @@ const char* linhVatNameFor(StoryMode::SetId id) {
 void Game::updateStoryIntro() {
     if (IsKeyPressed(KEY_ESCAPE)) {
         audioManager.playMenuClickSound();
-        inStoryMode = false;
-        storyMode.reset();
-        state = GameState::Menu;
+        exitStoryToMenu();
         return;
     }
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
@@ -599,15 +689,39 @@ void Game::drawStoryIntro() {
     };
     UIC::drawComicPanel(cp, w / 2, 110);
 
+    NavBtn btns[3] = {
+        { "Prev", storyMode.introPageIdx > 0 },
+        { "Skip", true },
+        { "Next", true },
+    };
+    int clicked = drawNavRow(w, h - 110, btns, 3);
+    if (clicked == 0) {
+        audioManager.playMenuClickSound();
+        if (storyMode.introPageIdx > 0) --storyMode.introPageIdx;
+    } else if (clicked == 1) {
+        // Skip: jump straight into Set1 match. Chain advance() twice —
+        // IntroMonologue→SetIntro then SetIntro→MatchPlaying — and start
+        // the match immediately so the player skips ALL narrative panels.
+        audioManager.playMenuClickSound();
+        storyMode.introPageIdx = StoryContent::kIntroPageCount - 1;
+        storyMode.advance();   // → SetIntro
+        storyMode.advance();   // → MatchPlaying
+        startStoryMatch();
+    } else if (clicked == 2) {
+        audioManager.playMenuClickSound();
+        storyMode.advance();
+        if (storyMode.subBeat == StoryMode::SubBeat::SetIntro) {
+            state = GameState::StoryBeat;
+        }
+    }
+
     UIC::drawHintBar("ENTER tiếp · ESC về menu", w, h);
 }
 
 void Game::updateStoryBeat() {
     if (IsKeyPressed(KEY_ESCAPE)) {
         audioManager.playMenuClickSound();
-        inStoryMode = false;
-        storyMode.reset();
-        state = GameState::Menu;
+        exitStoryToMenu();
         return;
     }
 
@@ -616,9 +730,7 @@ void Game::updateStoryBeat() {
 
         // Epilogue is a leaf — Enter exits to Menu without advancing.
         if (storyMode.subBeat == StoryMode::SubBeat::Epilogue) {
-            inStoryMode = false;
-            storyMode.reset();
-            state = GameState::Menu;
+            exitStoryToMenu();
             return;
         }
 
@@ -626,9 +738,7 @@ void Game::updateStoryBeat() {
 
         // After advance: route GameState by the new subBeat.
         if (storyMode.subBeat == StoryMode::SubBeat::MatchPlaying) {
-            vsAI = true;
-            aiDepth = storyMode.getCurrentDifficulty();
-            startNewGame();
+            startStoryMatch();
         }
         // Otherwise stay on StoryBeat — next render shows the new panel.
     }
@@ -697,6 +807,22 @@ void Game::drawStoryBeat() {
     }
 
     UIC::drawComicPanel(cp, w / 2, 110);
+
+    // Epilogue is a leaf — only Menu is shown; all other beats add Next.
+    int btnCount = (storyMode.subBeat == StoryMode::SubBeat::Epilogue) ? 1 : 2;
+    NavBtn btns[2] = { { "Menu", true }, { "Next", true } };
+    int clicked = drawNavRow(w, h - 110, btns, btnCount);
+    if (clicked == 0) {
+        audioManager.playMenuClickSound();
+        exitStoryToMenu();
+    } else if (clicked == 1) {
+        audioManager.playMenuClickSound();
+        storyMode.advance();
+        if (storyMode.subBeat == StoryMode::SubBeat::MatchPlaying) {
+            startStoryMatch();
+        }
+    }
+
     UIC::drawHintBar(hint, w, h);
 }
 
@@ -838,13 +964,58 @@ void Game::drawStoryHUD() {
                   label(StoryMode::LinhVat::Ga,   gaBuf,   sizeof(gaBuf)),
                   label(StoryMode::LinhVat::Ngua, nguaBuf, sizeof(nguaBuf)));
 
+    // Bottom-RIGHT — bottom-left is reserved for camera buttons (Renderer).
     int sw = Fonts::measure(Fonts::body, strip, 14);
-    int sx = 16;
-    int sy = GetScreenHeight() - 56;
+    int sx = GetScreenWidth() - sw - 24;
+    int sy = GetScreenHeight() - 30;  // align with camera-button row baseline
     DrawRectangle(sx - 8, sy - 4, sw + 16, 22,
                   Theme::withAlpha(Theme::palette.ink_sumi, 170));
     Fonts::draw(Fonts::body, strip, sx, sy, 14,
                 Theme::withAlpha(Theme::palette.son_bone, 230));
+
+    // Middle-bottom: tam-thai sigil. Three orbs track best-of-3 outcomes;
+    // pulses + radial screen-wash + caption all key off storySigilLastFillTime
+    // captured at onMatchEnd.
+    StorySigil::Layout sigil{};
+    sigil.centerX = GetScreenWidth() / 2;
+    sigil.bottomY = GetScreenHeight() - 12;
+    auto now = static_cast<float>(GetTime());
+
+    // Wash and caption durations from StorySigil.cpp's anon namespace —
+    // duplicated here to skip work after they expire (otherwise snprintf
+    // formats every frame even when drawCaption returns early).
+    constexpr float kWashDur    = 0.7f;
+    constexpr float kCaptionDur = 1.5f;
+
+    bool sigilActive = (storySigilLastFillTime > 0.0f &&
+                        storyMode.matchesPlayedInSet > 0);
+    float sigilT = sigilActive ? (now - storySigilLastFillTime) : 0.0f;
+    StoryMode::OrbState last = sigilActive
+        ? storyMode.matchOutcomes[storyMode.matchesPlayedInSet - 1]
+        : StoryMode::OrbState::Pending;
+
+    if (sigilActive && sigilT <= kWashDur) {
+        Color washColor = (last == StoryMode::OrbState::Won)
+                              ? Color{110, 220, 130, 255}
+                              : Color{220,  80,  80, 255};
+        // Wash centered on the triangle centroid (1/3 above bottomY).
+        int washY = sigil.bottomY -
+                    static_cast<int>(static_cast<float>(sigil.sideLen) * 0.866f / 3.0f);
+        StorySigil::drawScreenWash(sigil.centerX, washY,
+                                   GetScreenWidth(), GetScreenHeight(),
+                                   washColor, storySigilLastFillTime, now);
+    }
+
+    StorySigil::draw(sigil, storyMode.matchOutcomes, now,
+                     storySigilLastFillTime);
+
+    if (sigilActive && sigilT <= kCaptionDur) {
+        char cap[40];
+        std::snprintf(cap, sizeof(cap), "%s TRẬN %d",
+                      last == StoryMode::OrbState::Won ? "THẮNG" : "BẠI",
+                      storyMode.matchesPlayedInSet);
+        StorySigil::drawCaption(sigil, cap, storySigilLastFillTime, now);
+    }
 }
 
 void Game::buildSaveData(SaveData& data) {
@@ -960,7 +1131,12 @@ void Game::applyMove(Move move) {
             state = GameState::GameOver;
             if (aiWon)            audioManager.playLoseSound();
             else if (playerWon)   audioManager.playWinSound();
-            if (inStoryMode)      storyMode.onMatchEnd(playerWon);
+            if (inStoryMode) {
+                storyMode.onMatchEnd(playerWon);
+                // Capture fill timestamp NOW so the sigil pulse, radial
+                // screen-wash, and caption all share one t0.
+                storySigilLastFillTime = static_cast<float>(GetTime());
+            }
         } else {
             switchTurn();
 

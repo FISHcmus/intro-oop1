@@ -11,6 +11,8 @@ void State::reset() {
     currentSet = SetId::Set1;
     matchWinsInSet = 0;
     matchLossesInSet = 0;
+    matchesPlayedInSet = 0;
+    for (auto& orb : matchOutcomes) orb = OrbState::Pending;
     voiCharges = -1;
     gaCharges = -1;
     nguaCharges = -1;
@@ -29,7 +31,9 @@ int State::getCurrentDifficulty() const {
 }
 
 int State::matchesToWin() const {
-    return (currentSet == SetId::FinalBoss) ? 1 : 2;
+    // Best-of-3 in EVERY set including FinalBoss. The narrative beats the
+    // sigil orbs visualize use this same threshold (2 wins or 2 losses).
+    return 2;
 }
 
 bool State::isLastSetMatch() const {
@@ -62,8 +66,12 @@ void State::advance() {
 
         case SubBeat::SetIntro:
             // Caller transitions GameState to Playing on this subBeat change.
+            // Reset all set-level state so the sigil starts at three Pending
+            // orbs and the boss cheat clock starts fresh.
             matchWinsInSet = 0;
             matchLossesInSet = 0;
+            matchesPlayedInSet = 0;
+            for (auto& orb : matchOutcomes) orb = OrbState::Pending;
             bossPlayerMoveCounter = 0;
             subBeat = SubBeat::MatchPlaying;
             break;
@@ -103,7 +111,22 @@ void State::advance() {
     }
 }
 
+void State::onMatchStart() {
+    // Per-match transient state. Set-level counters survive between
+    // best-of-3 matches; only ephemeral effects clear here.
+    bossPlayerMoveCounter = 0;
+    gaActiveTurns = 0;
+}
+
 bool State::onMatchEnd(bool playerWon) {
+    // Record the chronological outcome for the StorySigil before tallying,
+    // so the orb index lines up with matchesPlayedInSet (0,1,2).
+    if (matchesPlayedInSet < 3) {
+        matchOutcomes[matchesPlayedInSet] =
+            playerWon ? OrbState::Won : OrbState::Lost;
+        ++matchesPlayedInSet;
+    }
+
     int needed = matchesToWin();
     if (playerWon) ++matchWinsInSet;
     else           ++matchLossesInSet;

@@ -61,6 +61,11 @@ private:
     StoryMode::State storyMode;
     bool inStoryMode;
 
+    // Timestamp (GetTime()) of the most recent sigil orb fill — drives the
+    // pulse, screen-wash, and caption animations in drawStoryHUD. -1 = no
+    // fill yet (or new match in progress; reset on every onMatchStart).
+    float storySigilLastFillTime;
+
     // Play time tracking
     float playTime;
 
@@ -108,6 +113,8 @@ private:
 
     // Helpers
     void startNewGame();
+    void startStoryMatch();
+    void exitStoryToMenu();
     void switchTurn();
     void handleInput();
     void handleMouseInput();

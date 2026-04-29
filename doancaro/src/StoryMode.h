@@ -4,8 +4,8 @@
 // class drives advance() / onMatchEnd() / useXxx() calls; the screen funcs
 // inspect this state to decide what to draw.
 //
-// Best-of-3 within Set1/Set2/Set3 (first to 2 wins or 2 losses decides).
-// FinalBoss is a single decisive match.
+// Best-of-3 in EVERY set (Set1/Set2/Set3/FinalBoss). First to 2 wins or
+// 2 losses decides. The 3rd-orb slot stays Pending if a 2-0 sweeps the set.
 
 namespace StoryMode {
 
@@ -23,6 +23,10 @@ enum class SubBeat {
 
 enum class LinhVat { Voi = 0, Ga = 1, Ngua = 2 };
 
+// Per-match outcome record for the StorySigil. Fills chronologically:
+// matchOutcomes[0] = first match in this set, [1] = second, [2] = third.
+enum class OrbState { Pending, Won, Lost };
+
 class State {
 public:
     State();
@@ -36,6 +40,11 @@ public:
     // Best-of-3 within currentSet
     int matchWinsInSet;
     int matchLossesInSet;
+
+    // Chronological per-match outcomes for the StorySigil. Index 0 = first
+    // match played in this set. Reset on every set entry.
+    OrbState matchOutcomes[3];
+    int      matchesPlayedInSet;   // how many slots in matchOutcomes are filled
 
     // Linh vật charges. -1 = locked (not yet unlocked). >=0 = remaining uses.
     int voiCharges;
@@ -58,7 +67,14 @@ public:
     // Caller (Game) transitions GameState afterwards based on new subBeat.
     void advance();
 
-    // Called by Game when a match completes. Updates wins/losses counters.
+    // Called by Game right before each new match in a set (including the
+    // first). Resets per-match transient state (boss cheat counter, ga turns).
+    // Does NOT reset set-level counters — those live with onSetStart logic
+    // inside advance()'s SetIntro case.
+    void onMatchStart();
+
+    // Called by Game when a match completes. Updates wins/losses counters
+    // AND records the outcome in matchOutcomes[matchesPlayedInSet].
     // Returns true if the set is now decided (caller should route to
     // StoryBeat with the new SetWin/SetLose subBeat); returns false when
     // another match in the set is needed (caller should startNewGame again).

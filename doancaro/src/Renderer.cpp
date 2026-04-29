@@ -337,15 +337,16 @@ void Renderer::init(int width, int height) {
     btnZoomOut     = {bx + 3 * (BTN_SIZE + BTN_PAD), by, BTN_SIZE, BTN_SIZE};
     btnReset       = {bx + 4 * (BTN_SIZE + BTN_PAD), by, BTN_SIZE + 20, BTN_SIZE};
 
-    // Save/Load buttons — top-left
-    btnSave = {BTN_PAD, BTN_PAD, 60, BTN_SIZE};
-    btnLoad = {BTN_PAD + 60 + BTN_PAD, BTN_PAD, 60, BTN_SIZE};
-
-    // Menu/Settings/Restart buttons — top-right
+    // Top-LEFT corner is reserved for the Story-mode SET badge (drawStoryHUD).
+    // ALL six game-action buttons cluster top-RIGHT in one chain, anchored to
+    // the right edge and growing leftward so the row reads:
+    //   ... [Undo][Restart][Save][Load][Menu][Settings] | edge
     btnSettings = {static_cast<float>(width) - BTN_PAD - 80, BTN_PAD, 80, BTN_SIZE};
-    btnMenu = {static_cast<float>(width) - BTN_PAD - 80 - BTN_PAD - 60, BTN_PAD, 60, BTN_SIZE};
-    btnRestart = {static_cast<float>(width) - BTN_PAD - 80 - BTN_PAD - 60 - BTN_PAD - 70, BTN_PAD, 70, BTN_SIZE};
-    btnUndo = {btnRestart.x - BTN_PAD - 60, BTN_PAD, 60, BTN_SIZE};
+    btnMenu     = {btnSettings.x - BTN_PAD - 60,             BTN_PAD, 60, BTN_SIZE};
+    btnLoad     = {btnMenu.x     - BTN_PAD - 60,             BTN_PAD, 60, BTN_SIZE};
+    btnSave     = {btnLoad.x     - BTN_PAD - 60,             BTN_PAD, 60, BTN_SIZE};
+    btnRestart  = {btnSave.x     - BTN_PAD - 70,             BTN_PAD, 70, BTN_SIZE};
+    btnUndo     = {btnRestart.x  - BTN_PAD - 60,             BTN_PAD, 60, BTN_SIZE};
 
     // Try GLB runes first; fall back to sphere stones with per-cell PNG
     // textures only when the runes can't load. Wrapping the fallback path in
