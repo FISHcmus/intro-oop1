@@ -86,6 +86,10 @@ private:
     // Debug panel
     bool showDebugPanel;
 
+    // Set by ESC/Exit in update steps. The run loop checks this between
+    // update and draw so we never draw on a destroyed GL context.
+    bool quitRequested;
+
     // Move history for undo
     struct MoveRecord {
         Move move;

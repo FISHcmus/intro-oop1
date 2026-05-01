@@ -131,6 +131,7 @@ Game::Game()
       playTime(0.0f),
       toastMessage{}, toastTimer(0.0f),
       showDebugPanel(false),
+      quitRequested(false),
       aiThinking(false), aiResult{-1, -1} {
     loadSettings();
 }
@@ -153,7 +154,7 @@ void Game::run() {
     audioManager.init();
     MenuScreen::preload();
 
-    while (!WindowShouldClose()) {
+    while (!WindowShouldClose() && !quitRequested) {
         // Settings/Save/Load fall through on purpose: they keep whatever's
         // already playing so a quick visit doesn't cut the current track.
         // Story narration screens use menu music — they're between matches.
@@ -186,6 +187,8 @@ void Game::run() {
             case GameState::StoryIntro:     updateStoryIntro();     break;
             case GameState::StoryBeat:      updateStoryBeat();      break;
         }
+
+        if (quitRequested) break;
 
         // Draw
         BeginDrawing();
@@ -233,7 +236,7 @@ void Game::updateMenu() {
 
     if (IsKeyPressed(KEY_ESCAPE)) {
         audioManager.playMenuClickSound();
-        CloseWindow();
+        quitRequested = true;
         return;
     }
     menuScreen.update(audioManager);
@@ -270,7 +273,7 @@ void Game::updateMenu() {
             menuScreen.reset();
             break;
         case MenuChoice::Exit:
-            CloseWindow();
+            quitRequested = true;
             break;
         default:
             break;
@@ -309,7 +312,6 @@ void Game::updatePlaying() {
     if (renderer.updateCamera()) {
         audioManager.playMenuClickSound();
     }
-    renderer.uploadPendingTextures();
     renderer.updateParticles(GetFrameTime());
 
     // Check if AI finished thinking
@@ -1239,7 +1241,11 @@ void Game::buildSaveData(SaveData& data) {
     data.header.timestamp = static_cast<int64_t>(std::time(nullptr));
     data.header.playTime = playTime;
     data.header.moveCount = board.getMoveCount();
-    data.header.gameMode = vsAI ? 1 : 0;
+
+    SaveGameMode mode = inStoryMode ? SaveGameMode::Story
+                      : (vsAI       ? SaveGameMode::PvAI
+                                    : SaveGameMode::PvP);
+    data.header.gameMode = static_cast<int>(mode);
     data.header.aiDepth = aiDepth;
     data.header.currentTurn = (currentPlayer == player1) ? 1 : 2;
     data.header.p1Wins = player1->getWins();
@@ -1248,6 +1254,22 @@ void Game::buildSaveData(SaveData& data) {
     data.header.p2Moves = player2->getMovesMade();
     std::strncpy(data.header.p1Name, player1->getName().c_str(), 31);
     std::strncpy(data.header.p2Name, player2->getName().c_str(), 31);
+
+    if (inStoryMode) {
+        data.header.storySetId        = static_cast<int>(storyMode.currentSet);
+        data.header.storyMatchWins    = storyMode.matchWinsInSet;
+        data.header.storyMatchLosses  = storyMode.matchLossesInSet;
+        data.header.storyVoiCharges   = storyMode.voiCharges;
+        data.header.storyGaCharges    = storyMode.gaCharges;
+        data.header.storyNguaCharges  = storyMode.nguaCharges;
+    } else {
+        data.header.storySetId        = -1;
+        data.header.storyMatchWins    = 0;
+        data.header.storyMatchLosses  = 0;
+        data.header.storyVoiCharges   = -1;
+        data.header.storyGaCharges    = -1;
+        data.header.storyNguaCharges  = -1;
+    }
 
     for (int r = 0; r < Board::SIZE; r++) {
         for (int c = 0; c < Board::SIZE; c++) {
@@ -1280,10 +1302,11 @@ void Game::performLoad(int slot) {
         return;
     }
 
-    // Restore settings
-    vsAI = (data.header.gameMode == 1);
-    aiDepth = data.header.aiDepth;
-    playTime = data.header.playTime;
+    auto mode = static_cast<SaveGameMode>(data.header.gameMode);
+    vsAI        = (mode == SaveGameMode::PvAI || mode == SaveGameMode::Story);
+    inStoryMode = (mode == SaveGameMode::Story);
+    aiDepth     = data.header.aiDepth;
+    playTime    = data.header.playTime;
 
     // Recreate players
     delete player1;
@@ -1308,6 +1331,19 @@ void Game::performLoad(int slot) {
 
     currentPlayer = (data.header.currentTurn == 1) ? player1 : player2;
     winLine.clear();
+
+    if (inStoryMode) {
+        storyMode.restore(static_cast<StoryMode::SetId>(data.header.storySetId),
+                          data.header.storyMatchWins,
+                          data.header.storyMatchLosses,
+                          data.header.storyVoiCharges,
+                          data.header.storyGaCharges,
+                          data.header.storyNguaCharges);
+        storySigilLastFillTime = -1.0f;
+    } else {
+        storyMode.reset();
+    }
+
     state = GameState::Playing;
 
     const char* slotName = (slot == 0) ? "Autosave" : "Slot";

@@ -4,8 +4,6 @@
 #include "Board.h"
 #include "ParticleSystem.h"
 #include "raylib.h"
-#include <atomic>
-#include <thread>
 #include <vector>
 
 class Renderer {
@@ -34,7 +32,6 @@ public:
     // Returns true on the frame a left-click first lands on any camera UI
     // button (rotate/zoom/reset). Caller plays a click SFX in response.
     bool updateCamera();
-    void uploadPendingTextures();  // call each frame to upload bg-loaded images to GPU
 
     // Camera UI buttons (draw after EndMode3D, in 2D overlay)
     void drawCameraControls();
@@ -125,31 +122,12 @@ private:
     Model boardModel;
     bool boardModelLoaded;
 
-    // Piece models (sphere mesh + procedural wood textures)
-    Model pieceModelLight;  // PlayerX — light maple wood
-    Model pieceModelDark;   // PlayerO — dark walnut wood
-    bool pieceModelsLoaded;
-
-    // Sơn/Thủy talisman GLBs override the sphere fallback when loaded.
+    // Sơn/Thủy talisman GLB pieces.
     Model pieceModelSon;    // PlayerX — fire rune
     Model pieceModelThuy;   // PlayerO — water rune
     float pieceScaleSon;    // bbox-derived fit-to-cell scalar
     float pieceScaleThuy;
     bool  pieceGLBLoaded;
-
-    // Per-position unique textures (each piece has distinct wood grain)
-    Texture2D pieceTexLight[Board::SIZE][Board::SIZE];
-    Texture2D pieceTexDark[Board::SIZE][Board::SIZE];
-    Texture2D defaultTexLight;  // fallback while async loading
-    Texture2D defaultTexDark;
-    bool pieceTexReady[Board::SIZE][Board::SIZE];
-
-    // Async texture loading
-    Image pieceImgLight[Board::SIZE][Board::SIZE];
-    Image pieceImgDark[Board::SIZE][Board::SIZE];
-    std::atomic<int> imagesLoaded;  // count of images loaded by bg thread
-    std::thread texLoaderThread;
-    int texUploadIndex;  // next index to upload to GPU
 
     // Glossy Phong wet-coat shader — applied to pieces, board, and the
     // floating-island rock. Single shader keeps highlight direction and

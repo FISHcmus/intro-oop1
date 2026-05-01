@@ -1,0 +1,5 @@
+if(EXISTS "C:/Users/nhanc/nhannht-projects/intro-oop1/doancaro/vs2022/CaroTests-b12d07c_tests.cmake")
+  include("C:/Users/nhanc/nhannht-projects/intro-oop1/doancaro/vs2022/CaroTests-b12d07c_tests.cmake")
+else()
+  add_test(CaroTests_NOT_BUILT-b12d07c CaroTests_NOT_BUILT-b12d07c)
+endif()

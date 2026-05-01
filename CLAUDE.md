@@ -116,7 +116,11 @@ intro-oop1/
 
 ### How to Build (MANDATORY — read before touching CMake)
 
-**Canonical build directory is `cmake-build-debug/` at the intro-oop1 ROOT, NOT inside `doancaro/`.** CLion creates and manages this directory; any rebuild Claude does must target the same path so CLion's Run ▶ button picks up the latest binary.
+Build directory differs by platform:
+- **Linux + CLion:** `intro-oop1/cmake-build-debug/` (top-level, CLion-managed) — described in this section.
+- **Windows + Visual Studio "Open Folder" (CMake mode):** `intro-oop1/doancaro/out/build/x64-Debug/` — VS-managed. Binaries: `CaroGame.exe`, `CaroGallery.exe`, `CaroTests.exe`. Build via VS "Build All" or `cmake --build doancaro\out\build\x64-Debug --target CaroGame`. Run via VS F5 (set Startup Item) or PowerShell `cd doancaro\out\build\x64-Debug; .\CaroGame.exe` (cwd must be the build dir for relative asset paths to resolve). The `.clangd` file at the project root tells clangd this is the compile-database location so Serena's LSP works.
+
+**Linux canonical build directory is `cmake-build-debug/` at the intro-oop1 ROOT, NOT inside `doancaro/`.** CLion creates and manages this directory; any rebuild Claude does must target the same path so CLion's Run ▶ button picks up the latest binary.
 
 ```
 intro-oop1/
@@ -174,49 +178,36 @@ Building `CaroGame` or `CaroGallery` triggers `cmake -E copy_directory doancaro/
 
 ## Code Editing Tools (MANDATORY)
 
-**CRITICAL: For ALL code files, you MUST use Serena MCP and JetBrains MCP tools instead of built-in Read/Edit/Grep/Write. Built-in tools are ONLY for non-code files (markdown, PDFs, JSON config, etc.).**
+For ALL code files (.cpp, .h, .hpp), use Serena (and JetBrains on Linux) — NEVER built-in `Read`/`Edit`/`Write`. Built-in tools are only for non-code files (.md, .json, .clangd, .yml, PDFs, etc.). The detailed rules — which Serena tool for which scenario, the symbolic-vs-file-based editing split, the "Read FORBIDDEN for code discovery" rule, 0-based line numbers — are owned by Serena's own manual, loaded via the session protocol below.
 
-The projectPath for all JetBrains calls is `/home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1`.
+### Session protocol — FIRST thing, every time
 
-Serena uses LSP backend (clangd). JetBrains backend not supported on CLion — see https://github.com/oraios/serena/issues/1193.
+At the start of every fresh session AND every time work resumes after `/compact`, run these in order before any other tool call:
 
-### When to use which tool
+1. **`mcp__serena-oop1__initial_instructions`** — loads Serena's tool-usage rules. Idempotent; cheap; the only authoritative source for "use Serena, not Edit".
+2. **`mcp__serena-oop1__list_memories`** — surface what Serena already knows about this project.
+3. **Read any memory whose name looks relevant** to the task ahead (e.g. before AI work, read `caro/ai/*`; before save-format work, read `caro/save_format/*`).
+4. **While working**, when you learn something non-obvious about the codebase that a future session will benefit from, write it via `write_memory`. When an existing memory is wrong or stale, update it via `edit_memory` or remove it via `delete_memory`. Memories are an accumulating asset — let them grow.
 
-| Action | Tool | NOT this |
-|---|---|---|
-| See what's in a code file | `mcp__serena-oop1__get_symbols_overview` | `Read` |
-| Read a specific function/class body | `mcp__serena-oop1__find_symbol` with `include_body=true` | `Read` |
-| Read a full code file (rare, avoid) | `mcp__jetbrains__get_file_text_by_path` | `Read` |
-| Search code for a pattern | `mcp__serena-oop1__search_for_pattern` or `mcp__jetbrains__search_in_files_by_text` | `Grep` |
-| Find files by name | `mcp__jetbrains__find_files_by_name_keyword` or `mcp__serena-oop1__find_file` | `Glob` |
-| Replace text in a code file | `mcp__jetbrains__replace_text_in_file` | `Edit` |
-| Add code after a symbol | `mcp__serena-oop1__insert_after_symbol` | `Edit` |
-| Add code before a symbol | `mcp__serena-oop1__insert_before_symbol` | `Edit` |
-| Rename a symbol project-wide | `mcp__serena-oop1__rename_symbol` or `mcp__jetbrains__rename_refactoring` | `Edit` with replace_all |
-| Check for errors/warnings | `mcp__jetbrains__get_file_problems` | `Bash` g++ |
-| Find who references a symbol | `mcp__serena-oop1__find_referencing_symbols` | `Grep` |
-| Create a new code file | `mcp__jetbrains__create_new_file` | `Write` |
-| Format a file | `mcp__jetbrains__reformat_file` | nothing |
+Skipping step 1 is the most common cause of regressions in this project (built-in `Edit` calls on .cpp files, repeating mistakes Serena already memoized, missing project-specific quirks).
 
-### Serena (`mcp__serena-oop1__*`) — Semantic Code Analysis
+### Platform routing — Linux dev box vs Windows submission box
 
-**Exploring code (token-efficient, start here):**
-1. `get_symbols_overview` — get file structure without reading full source
-2. `find_symbol` with `include_body=true` — read only the symbol you need
-3. `find_referencing_symbols` — find all usages of a symbol
-4. `search_for_pattern` — regex search across codebase
-5. Fall back to full file read only when necessary
+This repo syncs between two machines and the tooling differs:
 
-**Editing code (use JetBrains for all text replacement):**
-1. `find_symbol` to locate the symbol and understand the code
-2. `mcp__jetbrains__replace_text_in_file` for ALL code edits (replacements, rewrites, fixes)
-3. `insert_before_symbol` / `insert_after_symbol` ONLY for inserting new code blocks (not replacing)
-4. `rename_symbol` for renaming across codebase
-5. **DO NOT use `replace_symbol_body`** — it is unreliable. Always use JetBrains `replace_text_in_file` instead.
+| Machine | Project root | IDE | JetBrains MCP | Serena MCP | Primary edit tool |
+|---|---|---|---|---|---|
+| Linux dev box | `/home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1` | CLion | yes | yes | `mcp__jetbrains__replace_text_in_file` |
+| Windows submission box | `C:\Users\nhanc\nhannht-projects\intro-oop1` | Visual Studio 2022 | **no** | yes | `mcp__serena-oop1__replace_symbol_body` / `replace_content` |
 
-**Project knowledge:** `write_memory`, `read_memory`, `list_memories`
+Project-specific quirks Serena's manual won't tell you (because they're deployment facts, not Serena's behavior):
 
-### JetBrains (`mcp__jetbrains__*`) — IDE Operations
+- **Tool prefix.** This project's Serena server is registered as `serena-oop1`, so all tool names start with `mcp__serena-oop1__*` (not the generic `mcp__serena__*`).
+- **No `search_for_pattern` tool.** This Serena deployment doesn't expose one — use `Grep` (built-in) for content search. That's the one built-in code-search tool that's still allowed because Serena has no equivalent.
+- **`replace_symbol_body` reliability.** Linux + JetBrains backend: historically unreliable; prefer `mcp__jetbrains__replace_text_in_file`. Windows (no JetBrains): `replace_symbol_body` IS the primary symbol-edit tool and is reliable.
+- **clangd config.** `.clangd` at the project root points clangd at `doancaro/out/build/x64-Debug/` (Windows) or `cmake-build-debug/` (Linux). Without it, Serena's LSP-backed tools (`find_referencing_symbols`, full type resolution) silently degrade. Do not delete `.clangd`.
+
+### JetBrains MCP (Linux only) — quick reference
 
 Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1"`.
 
@@ -228,7 +219,7 @@ Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro
 | Open file in editor | `open_file_in_editor` |
 | Auto-format code | `reformat_file` |
 | Safe rename refactoring | `rename_refactoring` |
-| Edit/replace code in file (primary editing tool) | `replace_text_in_file` |
+| Edit/replace code in file | `replace_text_in_file` |
 | Create new file | `create_new_file` |
 | Search by text/regex | `search_in_files_by_text`, `search_in_files_by_regex` |
 | Find files by name/glob | `find_files_by_name_keyword`, `find_files_by_glob` |
@@ -236,32 +227,27 @@ Always pass `projectPath="/home/larvartar/nhannht-projects/hcmus/semester2/intro
 
 ### Build Rule (MANDATORY)
 
-**NEVER use `mcp__jetbrains__build_project` to build.** It returns `{"isSuccess": true/false, "problems": [{"message": "The project has limited build diagnostics functionality. Build messages cannot be collected."}]}` — pass/fail only, no compiler messages, no file/line info. Useless for debugging.
+**NEVER use `mcp__jetbrains__build_project` to build.** Returns pass/fail with no compiler messages — useless for debugging.
 
-**ALWAYS build via CLI:**
+**ALWAYS build via CLI.**
+
+Linux:
 ```bash
 cmake --build /home/larvartar/nhannht-projects/hcmus/semester2/intro-oop1/cmake-build-debug --target <target> 2>&1 | tail -50
 ```
-Gives full stderr with file:line errors, warnings, linker output — everything needed to debug.
 
-**IDE MCP is for DIAGNOSIS, not building:**
-- `get_file_problems` — per-file errors/warnings from CLion inspection (no build needed)
-- `get_diagnostic_info` — toolchain / CMake setup health check
-- `get_compiler_info` — compiler version and flags
+Windows (need VS Dev Shell first if `cstdint` etc. fail):
+```powershell
+& "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -SkipAutomaticLocation
+& "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build doancaro\out\build\x64-Debug --target <target>
+```
 
-Exception: `execute_run_configuration` is fine for launching a built exe (Run ▶). It's not a build tool.
+IDE MCP is for DIAGNOSIS, not building:
+- `get_file_problems` (Linux/JetBrains) or `mcp__serena-oop1__get_diagnostics_for_file` (any platform) — per-file errors/warnings, no build needed
+- `get_diagnostic_info` (Linux/JetBrains) — toolchain / CMake setup health
+- `get_compiler_info` (Linux/JetBrains) — compiler version and flags
 
-### Decision flowchart
-
-1. **Need to understand a code file?** → `get_symbols_overview` first, then `find_symbol` with `include_body=true`
-2. **Need to edit a function/class?** → `find_symbol` to read, then `mcp__jetbrains__replace_text_in_file` to rewrite
-3. **Need to add new code?** → `insert_after_symbol` or `insert_before_symbol`
-4. **Need to rename?** → `rename_symbol` (Serena) or `rename_refactoring` (JetBrains)
-5. **Need to find usages?** → `find_referencing_symbols`
-6. **Need to search?** → `search_for_pattern` (Serena) or `search_in_files_by_text` (JetBrains)
-7. **Need to check per-file errors?** → `get_file_problems` (no build, fast)
-8. **Need to build?** → CLI: `cmake --build cmake-build-debug --target <target>` (see Build Rule above — NEVER use `build_project` MCP)
-9. **Non-code file?** → Use built-in Read/Edit/Write tools
+Exception: `execute_run_configuration` is fine for launching a built exe (Run ▶) — it's not a build tool.
 
 ## raylib Gotchas
 - **GLB material mapping (single-material only)**: For GLBs with `materialCount == 1`, raylib prepends a blank default; bump with `model.meshMaterial[i] = 1;` for every mesh. For multi-material GLBs (`materialCount >= 2`) raylib already maps correctly — applying the bump shifts mappings off-by-one and breaks rendering. Always check `model.materialCount` before deciding.
@@ -376,13 +362,13 @@ Every homework file (lý thuyết + thực hành) MUST follow this exact layout.
 ## Quality Checklist (after every code change)
 
 1. `g++ -std=c++14` — must compile clean
-2. `mcp__jetbrains__get_file_problems` with `errorsOnly: false` — zero warnings
+2. Diagnostics — zero warnings. Linux: `mcp__jetbrains__get_file_problems` with `errorsOnly: false`. Windows: `mcp__serena-oop1__get_diagnostics_for_file`.
 3. `lizard file.cpp` — all functions CCN < 15 (installed via `uv tool install lizard`)
 4. Test all edge cases via piped input: `echo "input" | ./program`
 
 ## Code Quality
 
-After writing or editing any code, ALWAYS run `mcp__jetbrains__get_file_problems` to check for errors and warnings. Fix all issues before considering the task done.
+After writing or editing any code, ALWAYS check diagnostics. Linux: `mcp__jetbrains__get_file_problems`. Windows or platform-agnostic: `mcp__serena-oop1__get_diagnostics_for_file`. Fix all issues before considering the task done.
 
 **Inline diagnostics:** When JetBrains diagnostics appear in `<new-diagnostics>` tags during edits, NEVER ignore them. Fix every diagnostic immediately — even info-level hints. No exceptions.
 

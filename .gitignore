@@ -8,3 +8,28 @@ week1/25310023
 
 # Machine-specific MCP server config (hardcoded absolute paths)
 .mcp.json
+
+# VS 2022 generated solution build artifacts (keep .sln + .vcxproj, drop the rest)
+doancaro/vs2022/CMakeFiles/
+doancaro/vs2022/CMakeCache.txt
+doancaro/vs2022/cmake_install.cmake
+doancaro/vs2022/CTestTestfile.cmake
+doancaro/vs2022/_deps/
+doancaro/vs2022/x64/
+doancaro/vs2022/Debug/
+doancaro/vs2022/Release/
+doancaro/vs2022/RelWithDebInfo/
+doancaro/vs2022/MinSizeRel/
+doancaro/vs2022/.vs/
+doancaro/vs2022/**/*.dir/
+doancaro/vs2022/**/*.tlog/
+doancaro/vs2022/**/*.filters
+doancaro/vs2022/**/*.user
+
+# VS Open Folder mode (CMake/Ninja) build dir — daily dev
+doancaro/out/
+doancaro/.vs/
+doancaro/CMakeSettings.json
+
+# Serena MCP runtime cache (per-machine)
+.serena/cache/

@@ -177,22 +177,26 @@ void SaveLoadScreen::drawSlotCard(int slot, int x, int y, int width, int height,
         std::strftime(dateBuf, sizeof(dateBuf), "%Y-%m-%d %H:%M", tm);
         Fonts::draw(Fonts::body, dateBuf, x + 80, y + 32, 14, LIGHTGRAY);
 
-        // Info line
+        // Info line — mode (PvP / Free Play / Story) + " Set N" for Story + difficulty for AI saves
         char infoBuf[128];
         int mins = static_cast<int>(headers[slot].playTime) / 60;
         int secs = static_cast<int>(headers[slot].playTime) % 60;
-        const char* modeStr = (headers[slot].gameMode == 1) ? "PvAI" : "PvP";
-        const char* diffStr = "";
-        if (headers[slot].gameMode == 1) {
-            switch (headers[slot].aiDepth) {
-                case 1: diffStr = " Easy"; break;
-                case 2: diffStr = " Normal"; break;
-                case 3: diffStr = " Hard"; break;
-                default: diffStr = ""; break;
+        const char* modeStr = gameModeLabel(headers[slot].gameMode);
+        char tail[32] = {0};
+        const char* diff = difficultyLabel(headers[slot].aiDepth);
+        const bool isAi = headers[slot].gameMode == static_cast<int>(SaveGameMode::PvAI)
+                       || headers[slot].gameMode == static_cast<int>(SaveGameMode::Story);
+        if (isAi) {
+            if (headers[slot].gameMode == static_cast<int>(SaveGameMode::Story)
+                && headers[slot].storySetId >= 0) {
+                std::snprintf(tail, sizeof(tail), " Set %d %s",
+                              headers[slot].storySetId + 1, diff);
+            } else {
+                std::snprintf(tail, sizeof(tail), " %s", diff);
             }
         }
         std::snprintf(infoBuf, sizeof(infoBuf), "%d moves  |  %02d:%02d  |  %s%s",
-                      headers[slot].moveCount, mins, secs, modeStr, diffStr);
+                      headers[slot].moveCount, mins, secs, modeStr, tail);
         Fonts::draw(Fonts::body, infoBuf, x + 80, y + 52, 14, DARKGRAY);
 
         // Delete confirm text

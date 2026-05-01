@@ -15,14 +15,20 @@ static const float kBtnGap     = 12.0f;
 static const float kFirstYFrac = 0.30f;
 
 // One-shot mapping from menu index to choice. Keep in sync with the items
-// initializer in MenuScreen's constructor.
-static const MenuChoice kChoiceFor[5] = {
+// initializer in MenuScreen's constructor. Multiplayer is intentionally
+// unimplemented — it's rendered Disabled and excluded from selection.
+static const MenuChoice kChoiceFor[6] = {
     MenuChoice::NewGame,
     MenuChoice::StoryMode,
     MenuChoice::LoadGame,
+    MenuChoice::Multiplayer,
     MenuChoice::Settings,
     MenuChoice::Exit,
 };
+
+static bool isDisabled(int i) {
+    return kChoiceFor[i] == MenuChoice::Multiplayer;
+}
 
 // Animated menu background: frame sequence baked from menu-background.mp4
 // at build-time via ffmpeg. We pre-load every frame into VRAM so draw is
@@ -95,7 +101,8 @@ static void drawMenuBackground(int w, int h) {
 }
 
 MenuScreen::MenuScreen() : selectedIndex(0), choice(MenuChoice::None),
-    items{"PLAY WITH AI", "STORY MODE", "PLAY VIA INTERNET", "SETTINGS", "EXIT"} {}
+    items{"PLAY WITH AI", "STORY MODE", "LOAD GAME",
+          "PLAY VIA INTERNET", "SETTINGS", "EXIT"} {}
 
 void MenuScreen::preload() {
     ensureMenuBg();  // file-scope static — no instance state needed
@@ -114,13 +121,22 @@ void MenuScreen::shutdown() {
 }
 
 void MenuScreen::update(AudioManager& audio) {
+    // Bounded skip-disabled loops: if every item somehow becomes disabled
+    // we don't want to spin forever. ITEM_COUNT iterations is the worst
+    // case for finding the next enabled item from any starting index.
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
-        selectedIndex = (selectedIndex - 1 + ITEM_COUNT) % ITEM_COUNT;
+        for (int n = 0; n < ITEM_COUNT; ++n) {
+            selectedIndex = (selectedIndex - 1 + ITEM_COUNT) % ITEM_COUNT;
+            if (!isDisabled(selectedIndex)) break;
+        }
     }
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
-        selectedIndex = (selectedIndex + 1) % ITEM_COUNT;
+        for (int n = 0; n < ITEM_COUNT; ++n) {
+            selectedIndex = (selectedIndex + 1) % ITEM_COUNT;
+            if (!isDisabled(selectedIndex)) break;
+        }
     }
-    if (IsKeyPressed(KEY_ENTER)) {
+    if (IsKeyPressed(KEY_ENTER) && !isDisabled(selectedIndex)) {
         audio.playMenuClickSound();
         choice = kChoiceFor[selectedIndex];
     }
@@ -131,6 +147,7 @@ void MenuScreen::update(AudioManager& audio) {
     bool mouseMoved = UI::mouseMoved();
 
     for (int i = 0; i < ITEM_COUNT; i++) {
+        if (isDisabled(i)) continue;
         Rectangle r = itemRect(i, screenW, screenH);
         if (CheckCollisionPointRec(mouse, r)) {
             if (mouseMoved) selectedIndex = i;
@@ -154,7 +171,9 @@ void MenuScreen::draw() {
     for (int i = 0; i < ITEM_COUNT; i++) {
         Rectangle r = itemRect(i, w, h);
         UIC::State st;
-        if (i == selectedIndex) {
+        if (isDisabled(i)) {
+            st = UIC::State::Disabled;
+        } else if (i == selectedIndex) {
             // Pressed only when mouse is over AND held — keyboard nav stays
             // on Focused so the +2px offset doesn't shimmer on Up/Down.
             bool pressed = mouseDown && CheckCollisionPointRec(mouse, r);

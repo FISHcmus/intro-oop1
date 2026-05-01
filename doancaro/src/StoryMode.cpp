@@ -195,4 +195,32 @@ void State::jumpToSet(SetId target) {
     currentSet = target;
 }
 
+void State::restore(SetId setId, int wins, int losses,
+                    int voi, int ga, int ngua) {
+    reset();
+
+    if (wins   < 0) wins   = 0;
+    if (losses < 0) losses = 0;
+    if (wins   > kMatchesPerSet) wins   = kMatchesPerSet;
+    if (losses > kMatchesPerSet) losses = kMatchesPerSet;
+    int played = wins + losses;
+    if (played > kMatchesPerSet) played = kMatchesPerSet;
+
+    subBeat            = SubBeat::MatchPlaying;
+    currentSet         = setId;
+    matchWinsInSet     = wins;
+    matchLossesInSet   = losses;
+    matchesPlayedInSet = played;
+
+    for (int i = 0; i < kMatchesPerSet; ++i) {
+        if (i < wins)        matchOutcomes[i] = OrbState::Won;
+        else if (i < played) matchOutcomes[i] = OrbState::Lost;
+        else                 matchOutcomes[i] = OrbState::Pending;
+    }
+
+    voiCharges  = voi;
+    gaCharges   = ga;
+    nguaCharges = ngua;
+}
+
 }  // namespace StoryMode

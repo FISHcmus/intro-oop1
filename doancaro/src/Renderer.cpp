@@ -276,7 +276,6 @@ Renderer::Renderer()
       winLineStart(0.0f), showingWinLine(false),
       winParticlesEmitted(false),
       boardModel({}), boardModelLoaded(false),
-      pieceModelLight({}), pieceModelDark({}), pieceModelsLoaded(false),
       pieceModelSon({}), pieceModelThuy({}),
       pieceScaleSon(1.0f), pieceScaleThuy(1.0f), pieceGLBLoaded(false),
       glossShader({}), glossShaderLoaded(false), glossViewPosLoc(0),
@@ -348,10 +347,6 @@ void Renderer::init(int width, int height) {
     btnRestart  = {btnSave.x     - BTN_PAD - 70,             BTN_PAD, 70, BTN_SIZE};
     btnUndo     = {btnRestart.x  - BTN_PAD - 60,             BTN_PAD, 60, BTN_SIZE};
 
-    // Try GLB runes first; fall back to sphere stones with per-cell PNG
-    // textures only when the runes can't load. Wrapping the fallback path in
-    // a single `if` skips a 450-PNG disk scan + ~450 unused 1024² uploads
-    // when the runes are present.
     {
         auto fitScale = [](const Model& m) -> float {
             constexpr float kCellFit = 0.7f;
@@ -379,48 +374,6 @@ void Renderer::init(int width, int height) {
             pieceModelSon  = {};
             pieceModelThuy = {};
         }
-    }
-
-    if (!pieceGLBLoaded) {
-        Image defLight = GenImageColor(4, 4, {210, 180, 140, 255});
-        defaultTexLight = LoadTextureFromImage(defLight);
-        UnloadImage(defLight);
-        Image defDark = GenImageColor(4, 4, {100, 65, 40, 255});
-        defaultTexDark = LoadTextureFromImage(defDark);
-        UnloadImage(defDark);
-
-        for (int r = 0; r < Board::SIZE; r++) {
-            for (int c = 0; c < Board::SIZE; c++) {
-                pieceTexLight[r][c] = defaultTexLight;
-                pieceTexDark[r][c] = defaultTexDark;
-                pieceTexReady[r][c] = false;
-            }
-        }
-
-        imagesLoaded.store(0);
-        texUploadIndex = 0;
-        texLoaderThread = std::thread([this]() {
-            char path[128];
-            for (int r = 0; r < Board::SIZE; r++) {
-                for (int c = 0; c < Board::SIZE; c++) {
-                    std::snprintf(path, sizeof(path), "assets/pieces/light_%d_%d.png", r, c);
-                    pieceImgLight[r][c] = LoadImage(path);
-                    std::snprintf(path, sizeof(path), "assets/pieces/dark_%d_%d.png", r, c);
-                    pieceImgDark[r][c] = LoadImage(path);
-                    imagesLoaded.fetch_add(1);
-                }
-            }
-        });
-
-        Mesh stoneMesh = GenMeshSphere(0.35f, 16, 16);
-        pieceModelLight = LoadModelFromMesh(stoneMesh);
-        pieceModelLight.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = defaultTexLight;
-
-        Mesh stoneMesh2 = GenMeshSphere(0.35f, 16, 16);
-        pieceModelDark = LoadModelFromMesh(stoneMesh2);
-        pieceModelDark.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = defaultTexDark;
-
-        pieceModelsLoaded = true;
     }
 
     glossShader = LoadShaderFromMemory(glossVS, glossFS);
@@ -483,10 +436,6 @@ void Renderer::init(int width, int height) {
         cloudModelLoaded = true;
     }
 
-    if (pieceModelsLoaded) {
-        pieceModelLight.materials[0].shader = glossShader;
-        pieceModelDark.materials[0].shader  = glossShader;
-    }
     if (pieceGLBLoaded) {
         // raylib's default shader renders GLB textures flat — gloss adds the
         // ambient + directional shading the carved rune detail needs.
@@ -582,33 +531,10 @@ void Renderer::init(int width, int height) {
 
 }
 
-void Renderer::uploadPendingTextures() {
-    int loaded = imagesLoaded.load();
-    int total = Board::SIZE * Board::SIZE;
-    // Upload up to 10 textures per frame to avoid stutter
-    for (int i = 0; i < 10 && texUploadIndex < loaded && texUploadIndex < total; i++, texUploadIndex++) {
-        int r = texUploadIndex / Board::SIZE;
-        int c = texUploadIndex % Board::SIZE;
-        pieceTexLight[r][c] = LoadTextureFromImage(pieceImgLight[r][c]);
-        UnloadImage(pieceImgLight[r][c]);
-        pieceTexDark[r][c] = LoadTextureFromImage(pieceImgDark[r][c]);
-        UnloadImage(pieceImgDark[r][c]);
-        pieceTexReady[r][c] = true;
-    }
-}
-
 void Renderer::shutdown() {
-    // Wait for texture loader thread
-    if (texLoaderThread.joinable()) texLoaderThread.join();
-
     if (boardModelLoaded) {
         UnloadModel(boardModel);
         boardModelLoaded = false;
-    }
-    if (pieceModelsLoaded) {
-        UnloadModel(pieceModelLight);
-        UnloadModel(pieceModelDark);
-        pieceModelsLoaded = false;
     }
     if (pieceGLBLoaded) {
         UnloadModel(pieceModelSon);
@@ -1290,8 +1216,8 @@ void Renderer::drawPiece3D(int row, int col, CellState state, float anim) {
     // --- Draw the piece ---
     float s = scaleFactor;
     if (pieceGLBLoaded) {
-        // GLB runes are authored upright; the sphere fallback's Y-squash
-        // would deform them, so animate scale uniformly here.
+        // GLB runes are authored upright; squashY would deform them, so
+        // skip the placement squash on the rune scale.
         float modelScale = (state == CellState::PlayerX)
                                ? pieceScaleSon : pieceScaleThuy;
         Vector3 pos = {x, y + 0.05f * s, z};
@@ -1310,27 +1236,16 @@ void Renderer::drawPiece3D(int row, int col, CellState state, float anim) {
         float yaw = static_cast<float>(
             (row * kYawSeedRow + col * kYawSeedCol + kYawSeedBias) % 360);
         DrawModelEx(model, pos, {0.0f, 1.0f, 0.0f}, yaw, scaleVec, WHITE);
-    } else if (pieceModelsLoaded) {
-        Vector3 pos = {x, y + 0.15f * s, z};
-        Vector3 scaleVec = {s * squashX, s * 0.5f * squashY, s * squashX};
-        Model& model = (state == CellState::PlayerX) ? pieceModelLight : pieceModelDark;
-        // Swap to per-position unique texture
-        Texture2D& tex = (state == CellState::PlayerX)
-                             ? pieceTexLight[row][col]
-                             : pieceTexDark[row][col];
-        model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = tex;
-        DrawModelEx(model, pos, {0.0f, 1.0f, 0.0f}, 0.0f, scaleVec, WHITE);
     } else {
+        // Emergency fallback if GLB load failed. Plain B/W cylinders.
         if (state == CellState::PlayerX) {
             float radius = 0.3f * s * squashX;
             float height = 0.4f * s * squashY;
-            DrawCylinder({x, y, z}, 0.0f, radius, height, 8, {50, 120, 220, 255});
-            DrawCylinderWires({x, y, z}, 0.0f, radius, height, 8, {30, 80, 180, 255});
+            DrawCylinder({x, y, z}, 0.0f, radius, height, 8, WHITE);
         } else if (state == CellState::PlayerO) {
             float radius = 0.35f * s * squashX;
             float height = 0.2f * s * squashY;
-            DrawCylinder({x, y, z}, radius, radius, height, 16, {220, 60, 60, 255});
-            DrawCylinderWires({x, y, z}, radius, radius, height, 16, {180, 30, 30, 255});
+            DrawCylinder({x, y, z}, radius, radius, height, 16, BLACK);
         }
     }
 }

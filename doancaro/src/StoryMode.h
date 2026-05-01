@@ -9,6 +9,10 @@
 
 namespace StoryMode {
 
+// Best-of-3 within every set. Bound shared by matchOutcomes[] and the
+// reconstruction loop in State::restore.
+static constexpr int kMatchesPerSet = 3;
+
 enum class SetId { Set1 = 0, Set2 = 1, Set3 = 2, FinalBoss = 3 };
 
 enum class SubBeat {
@@ -43,7 +47,7 @@ public:
 
     // Chronological per-match outcomes for the StorySigil. Index 0 = first
     // match played in this set. Reset on every set entry.
-    OrbState matchOutcomes[3];
+    OrbState matchOutcomes[kMatchesPerSet];
     int      matchesPlayedInSet;   // how many slots in matchOutcomes are filled
 
     // Linh vật charges. -1 = locked (not yet unlocked). >=0 = remaining uses.
@@ -72,6 +76,13 @@ public:
     // points subBeat at IntroMonologue (so the global monologue still plays
     // first). Caller transitions GameState to StoryIntro.
     void jumpToSet(SetId target);
+
+    // Resume a saved Story Mode match mid-set. Sets subBeat to MatchPlaying
+    // (skips narration), restores per-set counters and linh-vật charges,
+    // and packs matchOutcomes[] in win-first order. Win-first packing is
+    // an approximation — exact match chronology is not persisted.
+    void restore(SetId setId, int wins, int losses,
+                 int voi, int ga, int ngua);
 
     // Called by Game right before each new match in a set (including the
     // first). Resets per-match transient state (boss cheat counter, ga turns).
