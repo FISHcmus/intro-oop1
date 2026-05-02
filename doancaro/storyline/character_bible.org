@@ -1,0 +1,452 @@
+#+title: Character & Place Visual Bible — Caro: Sơn Tinh vs Thủy Tinh
+#+date: 2026-05-02
+#+author: nhannht
+
+* Purpose
+
+Locked visual descriptions for AI image generation. Re-prompt across
+sets, scenes, and storyboards using these exact attributes so cast and
+locations stay coherent. Source of truth derived from
+=storyline_final.org=. Where the storyline is ambiguous, this file
+commits to a specific choice and that choice does not move again.
+
+When prompting an image model, paste the relevant *Prompt Stub* (last
+section) verbatim and append the scene-specific direction.
+
+* Global Visual Rules
+
+** Palette anchors (lift from Theme.h tokens)
+- =son_jade= jade green                — Sơn Tinh signature
+- =son_bone= warm bone-ivory           — Sơn Tinh armor / Cô Sử Tiên reveal robe
+- =thuy_cyan= storm cyan / pale glacial — Thủy Tinh signature
+- =thuy_pearl= pearl-white wet sheen   — Thủy Tinh trim / sash
+- =ink_sumi= sumi-ink black            — Cô Sử Tiên ink, calligraphy, contour line
+- =gold_foil= burnished gold leaf      — Lạc Long Quân court robe, all divine trim accent
+
+** Lineage cues (every character carries one)
+The four are family. Each carries a *single physical trace of Lạc Long
+Quân* so a viewer can read them as kin without dialogue:
+- *Cô Sử Tiên*: faint pearl-iridescent scales on the inside of both wrists (only visible when sleeves slide back).
+- *Sơn Tinh*: bark-grained skin patches on the outer forearm, elbow to wrist.
+- *Thủy Tinh*: pearl-iridescent scales scattered along cheekbones and outer shoulders; webbing between fingers.
+- *Lạc Long Quân (origin form)*: full pearl-iridescent scaling of the forearms, calves, and jawline; vertically slit pupils.
+
+** Twin-mirror rule (Sơn Tinh ↔ Thủy Tinh)
+Per storyline line 8: "Sơn và Thủy vốn là một". They MUST share:
+- *Same height* (tall, ~190 cm equivalent, identical silhouette).
+- *Same age in appearance* (mid-twenties, frozen divine maturity).
+- *Same body frame* (lean-muscular warrior — Sơn slightly thicker, Thủy slightly leaner, but silhouette interchangeable in low-detail).
+- *Same warrior's stance baseline* (weight on rear foot, weapon held low and forward).
+- *Mirror forehead mark*: each has a single small gem at center forehead — Sơn's is rough jade cabochon, Thủy's is smooth cyan pearl.
+- *Mirror weapon length*: glaive vs trident, both ~2 m haft.
+The differences are *element, color, surface texture* — never proportion.
+
+** Pronoun / register on captions
+- Cô Sử Tiên: voice arc =tôi= → =ta= matches her costume arc (modern → divine). Match the pronoun to the costume in any caption.
+- Sơn Tinh & Thủy Tinh: address each other as =ngươi= (rival deity register), never =anh/em/mày=.
+- Lạc Long Quân: addressed as =Ngài= (capitalised). Never depicted speaking — he is geography.
+
+* Cô Sử Tiên / Đại Sử Tiên / Mỵ Nương — The Grand Historian Immortal
+
+The framing narrator. Daughter of Lạc Long Quân. The contested
+princess of the original Sơn-Thủy myth. Has chronicled this land for
+~4000 years and breaks her vow at the end of the intro monologue.
+
+** Identity register
+- *Modern guise* (=tôi=): unremarkable Saigonese woman in her late twenties, leather notebook in hand, plain commuter.
+- *Divine reveal* (=ta=): the princess of Hùng Vương's court, jade-pendant, brush at hip, eight-trigram circle drawn at her feet.
+- The transition is *physical*: modern clothes peel back like wet paper as classical robes underdraw through.
+
+** Physical
+- *Skin*: pale, even, like aged rice paper held to lamplight. Faintly cool undertone.
+- *Hair*: jet black, glossy, waist-length when down; *single silver-white streak at the right temple* (immortal-age mark, do not move it). Worn in classical búi tóc (low chignon at the nape) with an *ivory bone hairpin (trâm) carved as a brushtip*.
+- *Eyes*: dark almond, slightly downturned at outer corner — observer's gaze. No visible makeup.
+- *Build*: slender, mid-height (~165 cm), late twenties, frozen at maturity.
+- *Distinctive*: pearl-iridescent scales on inner wrists (lineage cue, sleeve-hidden); a thin scar across the pad of her right index finger from her own brush — chronicler's mark.
+
+** Wardrobe
+*Modern guise*:
+- Cream-ivory áo dài (modern simple cut), plain ivory wide-leg trousers.
+- Soft tan leather satchel.
+- A single small jade pendant at the throat (the only constant across both registers).
+- No jewelry on hands. No makeup. Hair half-down, low ponytail.
+
+*Divine reveal*:
+- Layered áo tứ thân.
+  - Outer panel: bone-ivory (=son_bone=) silk, embroidered with =ink_sumi= calligraphy along the hem (Hán-Nôm characters from her own chronicle).
+  - Inner robe: indigo-chàm blue.
+  - Sash: ink-black silk, brushwork pattern, with the eight bát-quái trigrams along the trailing tail.
+- Jade pendant moves from throat to hang from a longer cord, level with the diaphragm.
+- Hairpin replaced with a *gold-foil-tipped phoenix trâm*.
+- Brush (bút lông) hung at the right hip on a cord.
+- Bare feet on dry stone (she stands inside her own gieo-quẻ circle).
+
+** Tools and motifs (always nearby)
+- Brush, inkstone (nghiên), folded silk-paper chronicle.
+- Eight-trigram (bát quái) circle inscribed in chalk, ash, or rice on the ground around her feet during the gieo-quẻ moment.
+- Vow-break visual: brush laid down across the ink stone, tip pointing away from her — single most important closing image.
+
+** Default expression / pose
+Composed, eyes lowered to a page or to the middle distance. Never
+smiles. Never raises her voice. Even at the divine reveal her face is
+*still*; only the costume changes.
+
+** Color palette
+=son_bone= dominant, =ink_sumi= contour, =son_jade= pendant accent,
+=gold_foil= reserved for the divine-reveal hairpin only.
+
+* Lạc Long Quân — The Dragon Lord (Cha)
+
+Primordial god. Already dispersed into the land at story-start. Bones
+→ Trường Sơn range. Blood → đất đỏ miền cao (Central Highlands red
+basalt). Breath → southerly nồm wind on the East Sea. He does *not*
+appear alive in present-day scenes; only in flashback / origin
+imagery, or as landscape with anthropomorphic suggestion.
+
+** Origin form (pre-dispersal — flashback only)
+- *Skin*: deep weathered bronze, sun-on-sea hue.
+- *Hair*: jet black at root fading to *deep cobalt at the tips* (sea-touched), worn loose past the waist, full black beard streaked with the same cobalt.
+- *Eyes*: amber-gold, *vertically slit pupils* (dragon nature). Visible from across a frame.
+- *Build*: towering, broad-shouldered, ~210 cm equivalent; primordial scale — dwarfs his daughter and the twin spirits.
+- *Lineage features*: pearl-iridescent scales scaling up forearms, calves, jawline. Subtle dragon antler-stubs emerging from temples (not full antlers — *small, just-visible*).
+
+** Wardrobe (origin form)
+- Indigo-black classical court robe to the floor.
+- Embroidered *nine dragons in =gold_foil= thread*, coiling up from the hem.
+- Sash of đất-đỏ red (the highland soil red, not bright crimson — oxide red).
+- *Bare feet*; he is rooted to the land, never depicted in shoes.
+- A single =gold_foil= circlet at the brow, no other jewelry.
+
+** Dispersed form (present-day landscape imagery)
+When the story refers to him as he is now, depict the landscape with
+anthropomorphic suggestion:
+- *Trường Sơn ridgeline at dusk* read as a sleeping dragon's spine.
+- *Đất-đỏ highlands* — basalt-red soil, coffee terraces, weathered laterite.
+- *Nồm wind on the East Sea* — south-blowing wind hatched as visible currents over green-blue water; small fishing junks leaning before it.
+Never put a face on the landscape — the suggestion must stay subtle.
+
+** Symbol motif
+Cửu Long — nine-coiled dragon, gold on indigo. This same nine-count
+echoes in Voi-9-ngà / Gà-9-cựa / Ngựa-9-hồng-mao and in Thủy Tinh's
+final-boss nine-headed form. Nine is the family number.
+
+** Color palette
+Indigo-black, =gold_foil=, đất-đỏ red, bronze. Never use =son_jade= or
+=thuy_cyan= on him directly — those are his children's signatures.
+
+* Sơn Tinh — Mountain Spirit (Player Character, Story Mode)
+
+Đại tinh linh of mountain, dry earth, deep-rooting trees. Won the
+gieo-quẻ. Won Mỵ Nương. Has held the land for 4000 years against the
+sea. The user controls him in Story Mode — so he is the on-screen
+hero.
+
+** Physical
+- *Skin*: warm honey-brown, sun-on-stone.
+- *Hair*: dark earth-brown (NOT pure black — the brown reads against Thủy Tinh's silver-blue), tied in a *high warrior's topknot* with a band of dark leather; hair falls to mid-back when loose.
+- *Eyes*: =son_jade= green — direct palette quote. Round-set, steady.
+- *Build*: tall (~190 cm), broad shoulders, mountain-builder physique. Mid-twenties.
+- *Distinctive features*:
+  - Single *rough jade cabochon* set at center forehead (lineage mark).
+  - Bark-grained skin patches running from elbow to wrist on outer forearms (only fully visible when sleeves are pushed back or in combat).
+
+** Wardrobe baseline
+- Tunic: =son_jade= deep jade-green silk-linen, mid-thigh length, side-slit.
+- Armor: =son_bone= bone-ivory plate over chest and shoulders, plates shaped like *cliff-edge stratification* (visible horizontal layers in the surface).
+- Shoulder pauldrons echo cliff-edge silhouette.
+- Belt: dark leather with a *Voi-chín-ngà ivory medallion* at the buckle — small carved nine-tusk elephant face.
+- Gauntlets: mountain-stone gray, knuckle plates rough-faced.
+- *No helm*. The topknot silhouette is non-negotiable.
+- =gold_foil= trim along the collar edge only.
+- Boots: tall dark leather, mountain-climber tread.
+
+** Weapon
+Long-handled glaive (đại đao) ~2 m, single-edged blade carved from
+*cliff-grain jade* — visible mineral striations in the blade surface.
+Haft of dark hardwood wrapped in earth-red cord at the grip.
+
+** Mount (Set 2 only)
+*Voi chín ngà* — a war-elephant with nine ivory tusks (3 standard pair
+plus 3 supernumerary pairs in fan layout below the standard). White
+hide, gold-leaf foreheaad ornament, red-and-gold ceremonial blanket.
+
+** Symbol motif
+Triple-stack triangular peaks (mountain silhouette, three peaks
+nesting), =gold_foil= rendered. Appears on his sash, banner, and
+in-game stone glyph.
+
+** Stance / expression
+Centered, weight low, glaive held diagonal across the body. Brow
+heavy, mouth a hard line. *Almost never smiles.* Set-1 art may show a
+faint half-smile after winning Voi 9-ngà; not before.
+
+** Color palette
+=son_jade= dominant, =son_bone= secondary, =gold_foil= trim, dark
+leather and earth-red as ground tones.
+
+* Thủy Tinh — Water Spirit (Antagonist)
+
+Đại tinh linh of water, rising tide, storm. Lost the gieo-quẻ. Has
+besieged the land for 4000 years. Reveals true 9-headed form at the
+final boss fight. Mirror-twin of Sơn Tinh — same silhouette, opposite
+element.
+
+** Physical (humanoid form)
+- *Skin*: storm-pale, cool gray-white with a faint cyan undertone. Not corpse-pale — *radiant*, like wet pearl in moonlight.
+- *Hair*: silver-blue, almost white, *unbound and constantly drifting* as if caught in an underwater current; reaches past the waist; wild.
+- *Eyes*: =thuy_cyan= luminescent. In rage form the whites disappear and the entire eye glows cyan.
+- *Build*: identical silhouette to Sơn Tinh — same height (~190 cm), mid-twenties — but slightly leaner, longer-limbed, predatory line.
+- *Distinctive features*:
+  - Single *smooth cyan pearl* set at center forehead (mirror to Sơn's jade).
+  - *Pearl-iridescent scales* scattered along cheekbones and outer shoulders.
+  - *Faint gill-slits* (3 short parallel marks) along the sides of the neck.
+  - *Webbing* between fingers, extending halfway up.
+
+** Wardrobe baseline
+- Inner robe: deep =thuy_cyan= storm-silk, knee-length, front overlap, NO armor — he relies on water itself as defense.
+- Sash: =thuy_pearl= pearl-white silk wrapped wet against the body so the silhouette is sculpted.
+- Outer overlay coat: dark indigo-black, open-cut, *coral-lattice openwork pattern* along the lapels and sleeve cuffs.
+- *Barefoot* — like his father, he refuses shoes; the floor is wet wherever he stands.
+- =silver_foil= (NOT gold) trim and conch-shell bracers at both wrists.
+- Wet hair, wet sash, wet floor — water sheen is part of the visual signature in every frame.
+
+** Weapon
+Three-pronged trident (đinh ba) ~2 m, haft of *drowned coral* (black
+with red veining), prongs of black-iron. Seawater runs constantly down
+the haft and never dries — there should be a small puddle visible at
+his feet in every still frame.
+
+** Final boss form (Set 4 only)
+Massive *nine-headed sea-monster*:
+- Body: octopus, 8 thick tentacles, deep-abyssal black with =thuy_cyan= bioluminescent veining.
+- *Nine dragon heads* on long serpentine necks rising from the central mantle.
+  - Each head a different abyssal hue (deep-sea black, volcanic vent red, glacial cyan, methane-yellow, etc.) but ALL heads share Thủy Tinh's =thuy_cyan= eye-glow as the unifying mark.
+- Scale: a single tentacle as long as a city block. Backdrop is deep ocean trench, faint bioluminescence, no surface visible.
+- Echo of the family number 9 — links visually to Lạc Long Quân's Cửu Long motif.
+
+** Symbol motif
+Nine-pointed spiral / typhoon-eye, =thuy_pearl= or silver foil. Appears
+on his banner, conch-bracers, and in-game stone glyph.
+
+** Stance / expression
+Loose-shouldered, weight forward, trident held one-handed and low —
+indolent, predatory. Faint smirk that never reaches the eyes. In rage,
+the smirk drops and the cyan eye-glow burns through.
+
+** Color palette
+=thuy_cyan= dominant, =thuy_pearl= trim, indigo-black, silver foil,
+abyssal black and drowned-coral red on the trident.
+
+* Linh Vật — The Three Sacred Beasts (set-win unlocks)
+
+Brief locked descriptions — these appear on the unlock screens after
+Set 1, 2, 3 wins.
+
+** Voi chín ngà (Set 1 win)
+- White war-elephant, nine tusks (one standard pair + four supernumerary pairs fanning down/outward).
+- =gold_foil= forehead ornament; red-and-gold ceremonial saddle blanket.
+- Eyes warm amber.
+- Backdrop: red-soil highlands at dusk, terraced rice fields below.
+
+** Gà chín cựa (Set 2 win)
+- Mountain rooster, white plumage with =gold_foil= neck hackles.
+- *Nine spurs* on each leg arranged in three rows.
+- Comb deep red.
+- Eyes pale gold.
+- Backdrop: misty Bắc-Bộ peaks at dawn, the bird crowing from a granite outcrop.
+
+** Ngựa chín hồng mao (Set 3 win)
+- Tall warhorse, dark slate body.
+- *Nine streaks of red mane* (literally nine separate hairs of pure red lacquer-color woven through the otherwise dark mane).
+- Tail dark with a single red stripe.
+- Eyes pale fire-gold.
+- Backdrop: sky over Mt. Sóc, Phù Đổng plain below; faint hoofprint embers fading into clouds.
+
+* Places — Locked Locations
+
+** Modern Saigon (Cô Sử Tiên's everyday)
+Old-style coffee shop on a corner of District 3 — peeling pastel-blue
+shutters, vintage tile floor, low wooden stools, a glass jar of cà phê
+sữa đá filters on the counter. Honda scooters parked at the curb. Wet
+season air, low overcast. Cô Sử Tiên at a corner table with notebook
+and a single brown-glass demitasse.
+
+** Hùng Vương court (gieo-quẻ moment)
+Stone hall on terraced hillside, columns wrapped in vermilion lacquer,
+=gold_foil= incised dragons on lintels. Eight-trigram bát quái circle
+chalked on dark stone floor, lit by oil lamps. Roof eaves visible at
+top of frame; rain sheeting just outside.
+
+** Trường Sơn range (Lạc Long Quân's bones)
+Layered ridgelines fading to mist, dusk light, the ridge silhouette
+read as a sleeping dragon's spine. Foreground forest of pine and
+hardwood. Cool indigo-and-violet sky.
+
+** Đất-đỏ miền cao (Lạc Long Quân's blood)
+Central Highlands. Red basalt soil churned by recent rain. Coffee
+terraces stepping down a hill. Single weathered laterite shrine in the
+mid-ground. Late golden-hour warm light, color saturated.
+
+** Sài Gòn flooded (Set 1)
+Knee-deep brown floodwater filling Lê Lợi street, neon shop signs
+reflected on the surface, motorbikes pushing through, dark monsoon
+sky, rain falling at a slant. Ambient color cool, but the neon picks
+out warm reds and yellows on the water.
+
+** Long An long-mạch site (Set 2)
+Open rice-plain crossroads, an ancient stone marker (đá thần) at the
+center. Storm wall on the horizon. Sơn Tinh on Voi-chín-ngà charging
+across foreground; tide of Thủy Tinh's water-soldiers rising on
+opposite side. Sky yellow-green pre-tornado palette.
+
+** Sài Gòn purge (Set 3)
+Apocalyptic. The skyline (Bitexco, Landmark 81 silhouettes) half
+under a vertical wall of seawater rising from the south. Foreground
+rooftops with Sơn Tinh standing alone. Sky split: dark storm above,
+=thuy_cyan= bioluminescent ocean below, no horizon line.
+
+** Final boss arena (Set 4)
+Deep ocean trench. No surface visible at top of frame. Bioluminescent
+plankton drifting. Thủy Tinh's nine-headed octopus form filling
+two-thirds of the frame; Sơn Tinh tiny in the foreground, glaive
+raised, lit only by his own jade glow and =thuy_cyan= reflected from
+the monster.
+
+** East Sea / nồm wind (Lạc Long Quân's breath)
+Open green-blue sea at noon, *visible wind currents hatched across the
+surface* moving south-to-north. Small wooden fishing junks leaning
+before the wind, sails full. Thin cirrus high overhead.
+
+* Prompt Stubs (paste verbatim, append scene direction)
+
+Phrase each in a way an image model can parse cleanly. Always include
+the lineage cue and the palette anchor.
+
+** Cô Sử Tiên (modern guise)
+#+begin_src text
+Vietnamese woman, late twenties, pale skin, jet-black waist-length hair
+with a single silver-white streak at the right temple, low ponytail,
+dark almond eyes slightly downturned at the outer corner, plain
+cream-ivory áo dài, ivory wide-leg trousers, jade pendant at throat,
+soft tan leather satchel, leather notebook in hand, composed neutral
+expression, photorealistic, soft overcast Saigon light.
+#+end_src
+
+** Cô Sử Tiên (divine reveal)
+#+begin_src text
+Vietnamese immortal princess, late twenties appearance, pale skin,
+faint pearl-iridescent scales on inner wrists, jet-black waist-length
+hair with single silver-white streak at right temple, classical búi
+tóc chignon held by gold-foil-tipped phoenix hairpin, layered áo tứ
+thân: bone-ivory outer panel embroidered with sumi-ink Hán-Nôm
+calligraphy, indigo-chàm inner robe, ink-black silk sash with eight
+bát-quái trigrams trailing, jade pendant on long cord, calligraphy
+brush hung at right hip, bare feet, standing inside a chalked
+eight-trigram circle, classical Vietnamese court setting, oil-lamp
+light, ink-painting realism, palette son_bone + ink_sumi + son_jade
+accent + gold_foil reserved for hairpin only.
+#+end_src
+
+** Lạc Long Quân (origin form)
+#+begin_src text
+Primordial Vietnamese dragon-king, towering ~210 cm broad-shouldered
+divine being, deep weathered bronze skin, jet-black waist-length hair
+fading to deep cobalt at tips, full black beard streaked cobalt, amber
+gold eyes with vertically slit pupils, small dragon antler-stubs at
+temples, pearl-iridescent scales along forearms calves and jawline,
+indigo-black floor-length court robe with nine gold-thread dragons
+coiling from hem, đất-đỏ red oxide sash, gold circlet at brow, bare
+feet rooted to dark stone, classical pre-historic Vietnamese palace
+backdrop, dramatic chiaroscuro, palette indigo-black + gold_foil +
+oxide red + bronze.
+#+end_src
+
+** Lạc Long Quân (dispersed form)
+#+begin_src text
+Trường Sơn mountain ridgeline at dusk read as a sleeping dragon's
+spine, layered ridges fading to indigo mist, no human figure, faint
+suggestion of dragon scales in the rock face only on close inspection,
+foreground pine forest, cool indigo and violet sky, painterly realism,
+no caption text in image.
+#+end_src
+
+** Sơn Tinh
+#+begin_src text
+Vietnamese mountain spirit warrior, divine, mid-twenties, ~190 cm tall
+broad-shouldered, warm honey-brown skin, dark earth-brown hair in high
+warrior's topknot bound by dark leather, jade-green eyes, single rough
+jade cabochon at center forehead, bark-grained skin patches on outer
+forearms elbow to wrist, deep jade-green silk-linen tunic mid-thigh
+length, bone-ivory cliff-stratified plate armor over chest and
+shoulders, cliff-edge silhouette pauldrons, dark leather belt with
+carved nine-tusk elephant ivory medallion, mountain-stone gauntlets,
+tall dark leather boots, gold-foil collar trim only, holding two-meter
+glaive with cliff-grain jade blade and earth-red corded grip,
+centered low stance weapon held diagonal, heavy brow hard mouth, no
+helm, palette son_jade + son_bone + gold_foil trim, mountain ridgeline
+backdrop.
+#+end_src
+
+** Thủy Tinh (humanoid form)
+#+begin_src text
+Vietnamese water spirit warrior, divine, mid-twenties, ~190 cm tall
+lean predatory frame mirroring Sơn Tinh silhouette, storm-pale gray-
+white skin with cool cyan undertone, silver-blue waist-length unbound
+hair drifting as if underwater, glowing thuy_cyan eyes, single smooth
+cyan pearl at center forehead mirroring Sơn Tinh's jade, pearl-
+iridescent scales along cheekbones and outer shoulders, faint gill-
+slits on neck sides, webbed fingers, deep thuy_cyan storm-silk inner
+robe knee-length no armor, pearl-white wet-sculpted sash, dark indigo
+open-cut overlay coat with coral-lattice openwork on lapels and cuffs,
+barefoot on wet ground with visible puddle, silver-foil trim and
+conch-shell wrist bracers, holding two-meter trident drowned-coral
+haft black-iron prongs seawater running down haft, loose-shouldered
+weight forward indolent stance faint cold smirk, palette thuy_cyan +
+thuy_pearl + indigo-black + silver foil, storm-cloud backdrop, wet
+sheen on every surface.
+#+end_src
+
+** Thủy Tinh (final boss form)
+#+begin_src text
+Massive nine-headed sea monster, deep-ocean trench setting, octopus
+body with eight thick abyssal-black tentacles veined with thuy_cyan
+bioluminescence, nine long serpentine dragon-heads rising from central
+mantle each a different abyssal color (deep-sea black, volcanic-vent
+red, glacial cyan, methane yellow, sulfur green, twilight purple,
+abyssal indigo, drowned-coral red, pearl-white) but all nine sharing
+identical thuy_cyan glowing eye-pairs as unifying mark, scale of
+single tentacle as long as a city block, faint drifting bioluminescent
+plankton, no surface visible at top of frame, tiny Sơn Tinh figure in
+foreground holding glaive raised lit only by his own jade-green glow
+and the cyan reflection from the monster, dramatic underwater god-ray
+lighting from above, cinematic.
+#+end_src
+
+** Voi chín ngà
+#+begin_src text
+Mythical Vietnamese war-elephant, white hide, nine ivory tusks (one
+standard pair plus four supernumerary pairs fanning down and outward),
+gold-foil forehead ornament, red-and-gold ceremonial saddle blanket
+with classical Vietnamese motifs, warm amber eyes, standing on red-
+basalt highland soil at dusk, terraced rice fields below, painterly
+realism.
+#+end_src
+
+** Gà chín cựa
+#+begin_src text
+Mythical Vietnamese mountain rooster, white plumage with gold-foil
+neck hackles, deep red comb, pale gold eyes, nine spurs on each leg
+arranged in three rows of three, perched on weathered granite outcrop
+in misty Bắc-Bộ peaks at dawn, mid-crow pose head thrown back,
+painterly realism.
+#+end_src
+
+** Ngựa chín hồng mao
+#+begin_src text
+Mythical Vietnamese warhorse, tall warrior-mount, dark slate body,
+mane mostly dark with exactly nine separate strands of pure lacquer-red
+hair woven through, tail dark with single red stripe, pale fire-gold
+eyes, mid-gallop pose with hoofprints fading to embers behind it,
+backdrop sky over Mt. Sóc with Phù Đổng plain below, painterly
+realism.
+#+end_src
