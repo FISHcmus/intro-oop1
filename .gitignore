@@ -1,6 +1,8 @@
 .venv/
 .idea/
 build/
+cmake-build-*/
+compile_commands.json
 
 # Compiled binaries (no extension)
 week1/25310023
@@ -31,6 +33,22 @@ doancaro/vs2022/**/*.user
 doancaro/out/
 doancaro/.vs/
 doancaro/CMakeSettings.json
+doancaro/build-release/
+doancaro/server/caro-room-server
+doancaro/saves/
+
+# Local packaging / submission artifacts
+submission/
+CaroGame.zip
+
+# App/runtime scratch files
+*.bak
+**/.~lock.*#
+no current target
+server exited unexpectedly
+
+# Local helper scripts
+.cdp-mcp-local.sh
 
 # Serena MCP runtime cache (per-machine)
 .serena/cache/
