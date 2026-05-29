@@ -2,140 +2,157 @@
 
 namespace StoryContent {
 
-// Intro monologue — 13 paragraphs grouped into 6 thematic pages.
+// Intro monologue — 8 pages, paced for the ComicPanel layout.
 const char* const kIntroPages[kIntroPageCount] = {
 
-    // Page 1 — modern persona
-    "Tôi là Đại Sử Tiên — phần đông người ta biết đến ta qua một cái tên "
-    "khác là Mỵ Nương.\n\n"
-    "Mỗi sớm, tôi vẫn đi một chuyến xe quen, ghé một hàng cà phê cũ nơi "
-    "góc phố — cái quán ấy đã mở rồi đóng, đóng rồi lại mở, ba bận trong "
-    "ba mươi năm. Trông bề ngoài, tôi cũng chẳng khác chi muôn vạn kẻ "
-    "đang sinh tồn trên dải đất hình chữ S này. Có điều, trong tôi giấu "
-    "một điều mà người đời khó lòng tưởng tượng nổi.",
+    // Page 1 — the mask
+    "Tôi là Đại Sử Tiên. Người đời, nếu còn nhớ, thì nhớ bằng một cái "
+    "tên vừa đẹp vừa nhiều tai vạ: Mỵ Nương.\n\n"
+    "Bây giờ tôi sống như một người đàn bà đã qua tuổi trẻ ở Sài Gòn. "
+    "Sáng ngồi trong một quán cà phê nhỏ, nghe tiếng muỗng chạm thành "
+    "ly, nghe mùi hạt rang quyện với mùi nhựa đường sau cơn mưa đêm. "
+    "Ngoài cửa kính, người ta chen nhau đi làm, ai cũng vội. Cái vội "
+    "của người sống từng ngày thường làm tôi thấy thương.",
 
-    // Page 2 — origin (father)
-    "Dù ai cũng biết đến tên ta qua những câu chuyện thần thoại trong "
-    "sách giáo khoa lớp một, song chẳng mấy ai thật sự biết ta là ai. "
-    "Ta là đứa con gái duy nhất của vị thần mà các ngươi quen gọi Lạc "
-    "Long Quân, mà ta gọi là Cha. Ta đã ở đây từ trước Âu Cơ, từ trước "
-    "trăm trứng, từ trước cả khi câu chuyện về cõi này được kể lần đầu.\n\n"
-    "Cha ta không chết theo cái nghĩa mà người đời hằng hiểu. Ngài là "
-    "vị cổ thần khai thiên lập địa lên vùng đất này. Đến khi công việc "
-    "đã thành, Ngài mới tan vào lòng đất. Xương Ngài hoá thành dãy "
-    "Trường Sơn. Máu Ngài thấm xuống đất đỏ miền cao. Hơi thở Ngài "
-    "ngưng tụ thành ngọn gió nồm thổi mãi trên biển Đông. Ngài không "
-    "mất đi — Ngài chính là tất cả những gì các ngươi đang đứng trên đó.",
+    // Page 2 — ordinary life above an old fault line
+    "Họ đâu cần biết dưới lớp nhựa, lớp cống, lớp móng nhà kia còn "
+    "chôn những chuyện cũ gì. Có biết cũng chẳng ích gì. Người ta còn "
+    "bận tiền trọ, bận bữa cơm, bận một đứa con sốt giữa mùa mưa.\n\n"
+    "Chỉ có tôi, hễ đến những ngày nước chưa dâng mà miệng cống đã "
+    "run, lại nghe trong lòng đất một tiếng thở dài rất cũ. Những lúc "
+    "ấy, tôi nhớ ra mình đã sống lâu hơn nhiều triều đại.",
 
-    // Page 3 — the lie
-    "Suốt mấy nghìn năm, tôi tồn tại dưới nhiều nhân dạng — kẻ chép sử, "
-    "người chứng kiến. Ta chẳng bao giờ can thiệp vào dòng chảy lịch sử. "
-    "Ấy là điều tôi hằng tự nhủ.",
+    // Page 3 — father as geography
+    "Ta là con gái của người mà đời sau gọi là Lạc Long Quân. Với các "
+    "ngươi, đó là chuyện thần thoại. Với ta, ấy là chuyện nhà.\n\n"
+    "Ngài không chết như người ta chết. Khi việc mở cõi đã xong, Ngài "
+    "gửi thân vào đất: lưng thành núi, máu thành phù sa, hơi thở thành "
+    "gió nồm. Từ bấy đến nay, thiên hạ đi trên Người mà không biết.",
 
-    // Page 4 — twin spirits, primal split
-    "Có hai vị đại tinh linh được sinh ra trong khoảnh khắc Cha tôi tan "
-    "vào đất. Sơn Tinh — hiện thân của núi, của đất khô và rễ cây bám "
-    "sâu. Thủy Tinh — hiện thân của nước, của triều dâng và bão cuốn. "
-    "Mỗi viên đá Sơn Tinh đặt xuống là một mảnh đất được định hình. "
-    "Mỗi con sóng Thủy Tinh dấy lên là một vùng đất bị nhấn chìm.\n\n"
-    "Có một điều ít kẻ hay: thuở hỗn mang trước khi trời đất phân định, "
-    "Sơn và Thủy vốn là một — chưa từng phân biệt đất với nước, núi với "
-    "biển. Đến khi Cha tôi hy sinh thân mình mà định hình vũ trụ, sự "
-    "hoá thân của Ngài xé toạc cả hai ra thành hai thực thể riêng biệt. "
-    "Từ đó, Sơn và Thủy mang trong mình vết thương của sự phân ly — "
-    "tương khắc, song chẳng thể tồn tại mà thiếu nhau.",
+    // Page 4 — chronicler's lie
+    "Bốn nghìn năm, tôi đổi tên như người ta thay áo cũ. Lúc làm kẻ "
+    "chép sử, lúc làm người đứng xem, lúc chỉ là một cái bóng đi ngang "
+    "một triều đại rồi mất trước khi nó đổ.\n\n"
+    "Tôi tự bảo mình vô can. Người ta khổ, người ta chết, người ta "
+    "trôi, còn tôi chỉ viết. Cái \"chỉ viết\" ấy nghe hiền lành, mà "
+    "thực ra rất độc. Lời nói dối nào lập đi lập lại đủ lâu cũng thành "
+    "chỗ trú cho lương tâm.",
 
-    // Page 5 — gieo quẻ, contest, Sơn wins
-    "Cả hai đến tìm ta, đòi quyền cai quản cõi này. Đây là một quyết "
-    "định khó khăn. Ta lập đàn gieo quẻ bát quái, lấy kết quả thuận "
-    "theo ý trời. Trời phán rằng:\n\n"
-    "  \"Trong hai ngươi, kẻ mà cõi này đã chọn — Voi chín ngà, Gà chín "
-    "cựa, Ngựa chín hồng mao sẽ tự tìm đến tay người ấy. Ta chỉ chờ xem.\"\n\n"
-    "Sơn Tinh dễ dàng kiếm đủ cả ba. Còn Thủy Tinh, vì lòng chấp mê bất "
-    "ngộ, đưa quân đến cướp lễ vật. Trận giao chiến long trời lở đất, "
-    "xé toạc bầu trời. Cuối cùng, Sơn Tinh thắng. Ta trao quyền cai "
-    "quản sự ấm no của cõi này cho người ấy.",
+    // Page 5 — primal split
+    "Ngày Cha rã mình vào đất, từ một vết thương sinh ra hai thứ sức "
+    "mạnh. Một đằng là đất, là rễ, là cái bền bỉ lầm lì của núi. Một "
+    "đằng là nước, là triều, là cái hăng hái tàn nhẫn của biển. Người "
+    "đời gọi họ là Sơn Tinh và Thủy Tinh.\n\n"
+    "Nói cho đúng, họ vốn không phải hai. Họ bị tách ra. Mà cái gì bị "
+    "xé làm đôi thì chẳng đau. Có điều, có nỗi đau chảy thành lũ.",
 
-    // Page 6 — eternal war, present, vow break
-    "Song Thủy Tinh chưa bao giờ ngưng sân hận. Suốt bốn nghìn năm, mỗi "
-    "độ mưa bão, y lại dấy quân lên, nhấn cả cõi này chìm trong biển "
-    "nước. Cuộc binh đao ấy chưa từng tận. Chỉ tạm dừng mà thôi.\n\n"
-    "Và bây giờ, mùa mưa bão lại đến.\n\n"
-    "Sơn Tinh. Ta không ghi chép nữa.",
+    // Page 6 — judgment
+    "Hai người tìm đến ta thuở ấy. Thiên hạ kể là đến cầu hôn. Kể như "
+    "thế cũng phải, nhưng chưa đủ. Họ còn đến để hỏi xem cõi này nên "
+    "thuộc về ai: kẻ biết đắp đất cho người ta ở, hay kẻ muốn kéo hết "
+    "thảy về chỗ nước sâu.\n\n"
+    "Ta bày quẻ, bày sính lễ, bày luôn cả sự thiên vị mà khi ấy chính "
+    "ta cũng không dám gọi tên. Voi chín ngà, gà chín cựa, ngựa chín "
+    "hồng mao. Ta cứ ngỡ mình chỉ thay trời nói hộ một câu.",
+
+    // Page 7 — first war, hidden guilt
+    "Sơn Tinh đến trước. Thủy Tinh đến sau. Chỉ chậm một khắc thôi. Ở "
+    "đời, lắm khi một khắc đã đủ cho một người nên thân, mà cũng đủ "
+    "cho một kẻ hóa dữ.\n\n"
+    "Từ hôm ấy, năm nào nước cũng kéo về. Nước dâng đến đâu, núi lại "
+    "đội lên đến đấy. Người đời bảo thế là thắng. Ta thì biết: có "
+    "những cái thắng giữ được đất mà không chôn nổi một mối hờn. Mối "
+    "hờn ấy sống dai như cỏ dại ven sông.",
+
+    // Page 8 — present-day threat, vow break
+    "Năm nay khác. Y không chỉ muốn cướp lại một người đàn bà đã thành "
+    "chuyện cũ. Y đang lần theo long mạch dưới lòng đất, như kẻ tìm "
+    "đúng chỗ đau mà xoáy ngón tay vào.\n\n"
+    "Nếu vết thương đầu tiên bị mở lại, không chỉ một mùa lũ đâu. Cả "
+    "xứ sở này sẽ quên mất cách đứng. Sơn Tinh, lần này ta không viết "
+    "nữa. Ta theo ngươi.",
 };
 
 // ---- Per-set narration ----
 
 const SetText kSet1 = {
-    "MƯA GIÔNG",
+    "MƯA TRÁI MÙA",
     "SET 1 · DỄ",
-    "Mưa giông lại kéo đến, nhưng không giống như những lần trước. Thủy "
-    "Tinh tạo ra một cơn mưa lớn kéo dài hàng tháng trời ở vùng đất Sài "
-    "Gòn. Hắn chưa bao giờ làm thế trước đây — chắc hẳn là có điều gì "
-    "đó đáng ngờ.",
+    "Mưa chưa tới mà nước đã ngoi lên ở miệng cống. Người bán vé số ôm "
+    "xấp vé chạy trú dưới mái hiên. Người đi làm kéo ống quần lên, lội "
+    "qua một vũng nước mới một giờ trước còn là mặt đường. Thủy Tinh "
+    "chưa đánh lớn. Y mới chỉ thử chân đất của thành phố, xem chỗ nào "
+    "mềm nhất.",
 
-    "Thủy Tinh đã bị đánh bại, nhưng đấy không phải là trận đánh cuối "
-    "cùng. Hắn đang âm mưu phá huỷ Long Mạch — nhờ có nó mà suốt hàng "
-    "nghìn năm nay đất nước này luôn được phù hộ vượt qua mọi thiên "
-    "tai. Nếu hắn phá huỷ được Long Mạch, hắn sẽ làm những thứ không "
-    "ai có thể tưởng tượng được.",
+    "Ngươi chặn được đợt đầu. Nhưng trong lúc người ta còn mừng vì nước "
+    "rút, y đã nghe ra nhịp của long mạch miền Nam. Lần sau, y không "
+    "đánh vào phố xá nữa. Y sẽ đánh vào cái chỗ khiến đất còn là đất. "
+    "Mà một khi đất đã quên mình, người sống trên đó cũng khó mà đứng "
+    "thẳng.",
 
-    "Thủy Tinh nhanh chóng chiếm lĩnh toàn bộ Việt Nam.",
+    "Nước vào nhà nhanh như một tin dữ. Đèn tắt, bếp nguội, trẻ con "
+    "khóc ngằn ngặt. Thành phố tưởng mình mạnh lắm, hóa ra cũng chỉ là "
+    "một chỗ ở tạm bợ trước mặt nước.",
 };
 
 const SetText kSet2 = {
-    "CUỒNG PHONG",
+    "VẾT NỨT LONG MẠCH",
     "SET 2 · VỪA",
-    "Hắn đang ra sức tấn công Long Mạch ở Long An. Với một cơn lốc xoáy "
-    "khổng lồ cùng hàng triệu binh lính đến từ biển sâu. Chúng ta phải "
-    "chặn hắn bằng mọi giá. Sơn Tinh, hãy cưỡi Voi chín ngà đi nghênh "
-    "chiến.",
+    "Long An là một mắt xương của Cha. Chỗ ấy đất mỏng, ký ức dồn dày. "
+    "Thủy Tinh khoan nước vào đó ngày đêm, như kẻ cố bới một nấm mồ "
+    "cho bật nắp. Sơn Tinh, cưỡi Voi chín ngà mà đi. Trận này không "
+    "phải giữ một thửa ruộng hay một con đường. Trận này là giữ cho xứ "
+    "sở còn nhớ nó vốn đứng trên đất, chứ không phải trên một cơn lũ "
+    "chậm.",
 
-    "Dù chúng ta đã đẩy lùi được đạo quân của Thủy Tinh, hắn đã thành "
-    "công trong việc làm tổn thương Long Mạch, và sẽ huy động toàn bộ "
-    "đạo quân cho trận đánh cuối cùng. May thay, phần Long Mạch cuối "
-    "cùng hy sinh chính nó để đánh thức linh vật thứ hai: Gà chín cựa.",
+    "Ngươi giữ được long mạch, nhưng không giữ được nó nguyên lành. Vết "
+    "nứt đã há miệng rồi. Nước chưa vào ngay, nhưng cái lạnh của nó đã "
+    "thấm. Cũng từ chỗ rạn ấy, Gà chín cựa cất tiếng. Bình minh còn "
+    "khuya, song ít nhất đêm nay đã biết sợ.",
 
-    "Sơn Tinh ngã xuống trong cuộc chiến huyền thoại bảo vệ Long Mạch. "
-    "Cả thiên hạ chìm trong biển nước.",
+    "Long mạch vỡ. Từ vết vỡ ấy, nước kéo đi ràn rạt như đàn chó đã "
+    "quen mùi máu. Bờ bãi, xóm làng, ruộng vườn rồi sẽ thành một thứ "
+    "bùn không tên.",
 };
 
 const SetText kSet3 = {
-    "CƠN BÃO TẬN THẾ",
+    "BIỂN DỰNG THÀNH",
     "SET 3 · KHÓ",
-    "Hàng triệu quái vật đến từ biển khơi đang dồn cuộc tổng lực cuối "
-    "cùng để thanh tẩy vùng đất Sài Gòn. Đó chính là mục đích cuối "
-    "cùng của Thủy Tinh — y muốn san phẳng mọi thứ, muốn tất cả phải "
-    "chìm xuống biển sâu. Và khi mọi thứ đã được thanh tẩy, y sẽ tạo "
-    "ra một thế giới mới nơi mà y là vua của thiên hạ.",
+    "Bây giờ y bỏ hẳn cái lối quấy phá từng nơi. Y dựng cả mặt biển "
+    "lên, định ép Sài Gòn làm chứng cho một điều rất cũ mà cũng rất ác: "
+    "thứ gì sinh từ nước thì rốt cuộc phải trả về nước. Nếu thành phố "
+    "này cúi đầu, nhiều nơi khác sẽ quỳ theo. Người ta sợ không phải "
+    "vì nước sâu, mà vì thấy mình bỗng bé nhỏ và vô ích.",
 
-    "Từ dưới biển sâu, Thủy Tinh xuất hiện. Y mạnh đến nỗi chỉ một cú "
-    "vẫy tay, cả một quận đã bị nhấn chìm trong biển nước. Cùng lúc "
-    "đó, trên trời cao, Ngựa chín hồng mao giáng thế giúp ngươi đánh "
-    "bại boss cuối cùng.",
+    "Ngươi bẻ gãy được bức tường nước. Thế là đủ để Thủy Tinh phải tự "
+    "bước ra, không nấp sau mưa gió nữa. Ngựa chín hồng mao đã hạ vó "
+    "trên tầng mây. Trận sau không còn là chống lũ. Là thanh toán một "
+    "món nợ đã kéo qua mấy nghìn năm.",
 
-    "Sơn Tinh đã ngã xuống, kéo theo hệ quả là cả thiên hạ chìm xuống "
-    "biển sâu.",
+    "Biển dựng thành. Thành hóa mồ. Từ đêm ấy, bản đồ chỉ còn là thứ "
+    "giấy chép lại một chỗ ở đã mất.",
 };
 
 const SetText kFinalBoss = {
-    "CHÂN HÌNH THUỶ TINH",
+    "CHÂN HÌNH CỬU THỦ",
     "BOSS · TỬ ĐẤU",
-    "Thuỷ Tinh hiện nguyên hình — một con quái vật khổng lồ với chín "
-    "đầu rồng mọc trên thân bạch tuộc. Y thách thức trực tiếp ngươi "
-    "trong trận chiến cuối cùng. Y có quyền năng riêng: cứ bốn nước "
-    "ngươi đặt xuống, y xé toạc bốn quân của ngươi khỏi bàn cờ. Đừng "
-    "quên — ngươi vẫn còn linh vật trong tay.",
+    "Y hiện nguyên hình. Không còn mưa gió làm màn, không còn quân lính "
+    "làm đệm. Chỉ còn một khối giận dữ đội nước mà đứng, chín cái đầu "
+    "thay nhau ngẩng lên như chín mùa lũ chưa chịu chết. Y không cần "
+    "thắng một ván cờ. Y cần xé bỏ cái phán quyết năm xưa, kéo đất "
+    "liền trở lại chỗ bùn mặn đầu tiên.\n\n"
+    "Cứ bốn nước ngươi đi, y lại giật bốn quân xuống vực. Y vẫn thế: "
+    "đã không được thì phá cho hả. Nhưng ngươi nhớ lấy, linh vật không "
+    "đến để làm trò lạ. Chúng đến vì đất này chưa muốn chết chìm.",
 
-    "Thuỷ Tinh lại bị hạ nhục, như hàng nghìn lần trong lịch sử. Nhưng "
-    "lần này, y trở nên suy yếu đến mức cơ thể y hoà tan vào làm một "
-    "với biển khơi. Sẽ mất hàng chục năm để y phục hồi như ban đầu. "
-    "Ít nhất vùng đất này có thể yên ổn thêm một khoảng thời gian.",
+    "Thủy Tinh gào lên. Tiếng gào nghe như cả mặt biển bị cào rách. Rồi "
+    "thân y rã dần trong nước mặn, không hẳn là bị giết, chỉ là không "
+    "gượng nổi mãi một mối hờn quá nặng. Y sẽ còn trở lại. Những giống "
+    "hận như y khó mà tuyệt được. Nhưng đêm nay, y phải lui.",
 
-    "Người ta nói cái thiện sẽ chiến thắng cái ác. Tôi, như một đại sử "
-    "gia đã sống hàng nghìn năm, không tin vào điều đó. Cái ác luôn "
-    "chiến thắng cái thiện. Và công sức hàng nghìn năm xây dựng nên "
-    "nền văn minh này đã tiêu vong.",
+    "Phán quyết cũ đứt rồi. Đất trả cho nước. Tên họ, bờ bãi, mái nhà, "
+    "tiếng ru con, mùa gặt, trang sử, hết thảy bị dìm lùi về cái buổi "
+    "con người còn lóp ngóp học đứng trên bùn.",
 };
 
 // ASCII art block for FinalBoss intro — drawn in ComicPanel.plot.
@@ -165,49 +182,49 @@ const char* const kThuyTinhBossArt =
 // ---- Linh vật unlock lore ----
 
 const char* const kVoiUnlockLine =
-    "Voi chín ngà vốn là một trong ba lễ vật Hùng Vương đặt ra thuở "
-    "trước. Khi đã về tay Sơn Tinh, nó lui ẩn vào lòng đất, mất tích "
-    "hàng nghìn năm — người đời sau chỉ còn nghe tên trong sử sách.\n\n"
-    "Đến năm Hai Bà Trưng thua trận tại sông Hát, máu Trưng Trắc thấm "
-    "vào thân con bạch tượng mà Bà đã cưỡi. Xác con voi trở thành nơi "
-    "để Thần thú Voi Chín Ngà tái sinh. Sử sách ghi lại rằng voi thần "
-    "đã bảo vệ bộ lạc của Hai Bà khỏi nạn thảm sát của giặc phương "
-    "Bắc.\n\n"
-    "Nó cho ngươi sức mạnh của ký ức — hoàn tác năm nước cờ đã đặt. "
-    "Khi thắng thua đã định, voi không can dự.";
+    "Voi chín ngà là một trong ba lễ vật vua Hùng đòi thuở kén rể. Khi "
+    "về với Sơn Tinh, nó lặn vào lòng đất như một khúc núi biết đi, "
+    "mất hút đến nỗi người sau chỉ còn biết nhắc tên trong sách.\n\n"
+    "Đến ngày Hai Bà Trưng cùng đường ở sông Hát, máu Trưng Trắc thấm "
+    "xuống xác bạch tượng. Từ chỗ máu ấy, thần thú thức dậy. Người xưa "
+    "nói voi thần đã che cho tàn quân khỏi một cuộc giết sạch.\n\n"
+    "Nó cho ngươi lùi lại năm nước đã đặt. Nhưng khi ván cờ đã ngã "
+    "ngũ, voi đứng ngoài. Thần vật cũng có cái lề của nó.";
 
 const char* const kGaUnlockLine =
-    "Gà chín cựa cũng là một lễ vật xưa của Hùng Vương. Sau khi về tay "
-    "Sơn Tinh, nó biến mất vào sương mây núi Bắc, mất tích hàng trăm "
-    "năm.\n\n"
-    "Đến đời An Dương Vương xây thành Cổ Loa, đêm đêm tường thành cứ "
-    "dựng lên rồi sụp xuống. Trên núi Thất Diệu, một con yêu kê đầu "
-    "trắng được cho là đã sống nghìn năm, mỗi đêm gáy ba tiếng, đất "
-    "trời rung chuyển — chính là Gà chín cựa đã hoá yêu trong cô tịch "
-    "của núi sâu. Nhờ Thần Kim Quy chỉ đường, vua đến chân núi mà cảm "
-    "hoá, không giết. Gà cúi đầu, hứa rằng đến ngày giặc trời giặc đất "
-    "kéo đến, sẽ trở về một lần.\n\n"
-    "Lần ấy là bây giờ. Tiếng gáy của nó làm đối phương loạn trí, một "
-    "lượt đi không theo lẽ thường. Ngươi gọi được ba bận.";
+    "Gà chín cựa cũng là lễ vật cũ của vua Hùng. Về tay Sơn Tinh xong, "
+    "nó bỏ vào núi Bắc, lâu dần thành chuyện nửa thực nửa ngoa.\n\n"
+    "Đến đời An Dương Vương đắp Cổ Loa, đêm nào thành xây lên cũng sụp "
+    "xuống. Trên núi Thất Diệu có con yêu kê đầu trắng sống đã nghìn "
+    "năm, mỗi lần gáy là đất trời chuyển động. Người ta bảo ấy chính là "
+    "Gà chín cựa, ở lâu trong núi mà sinh cô độc đến hóa dữ. Nhờ Thần "
+    "Kim Quy chỉ lối, vua không giết, chỉ cảm hóa. Gà cúi đầu, hẹn khi "
+    "nào giặc trời giặc đất kéo đến sẽ trở ra một lần.\n\n"
+    "Lần ấy là lúc này. Tiếng gáy của nó làm đối phương rối trí, một "
+    "lượt đi bỗng chệch khỏi lẽ thường. Ngươi gọi được ba bận.";
 
 const char* const kNguaUnlockLine =
-    "Ngựa chín hồng mao là lễ vật cuối cùng trong ba thứ Hùng Vương "
-    "đặt ra thuở trước. Sau khi Sơn Tinh ngự về, nó hoá vào gió nồm, "
-    "lưu lạc bốn phương tám hướng.\n\n"
-    "Đến đời giặc Ân kéo xuống nước Nam, một đứa bé ba tuổi vùng Phù "
-    "Đổng vươn vai thành tráng sĩ. Vua trao ngựa sắt, roi sắt — song "
-    "ít ai hay rằng dưới lớp sắt ấy là chính Ngựa chín hồng mao, mượn "
-    "thân kim khí để xuôi gió đánh giặc. Khi giặc đã tan, sắt rơi rụng "
-    "theo bước chân, ngựa cùng tráng sĩ phi thẳng về trời. Đến nay, "
-    "dấu chân nó vẫn còn in trên đỉnh núi Sóc.\n\n"
-    "Nay ngươi gọi đến nó một lần. Nếu ngươi ngã xuống, ngựa kéo ngươi "
-    "về năm lượt trước, cho ngươi đứng dậy mà đánh tiếp. Một bận, "
-    "không hai.";
+    "Ngựa chín hồng mao là món lễ vật cuối cùng. Về với Sơn Tinh rồi, "
+    "nó tan vào gió nồm, hết ải này sang bến khác, chẳng chịu ở yên "
+    "đâu.\n\n"
+    "Đến đời giặc Ân kéo xuống, cậu bé Phù Đổng vươn vai thành tráng "
+    "sĩ. Vua trao ngựa sắt, roi sắt; nhưng dưới lớp sắt lạnh ấy chính "
+    "là Ngựa chín hồng mao mượn thân kim khí mà xuống trận. Giặc tan, "
+    "ngựa cùng người phi thẳng về trời. Đến nay, dấu chân còn nằm trên "
+    "núi Sóc.\n\n"
+    "Nó chỉ đến với ngươi một lần. Nếu ngươi ngã, nó kéo ngươi lùi năm "
+    "lượt để đứng dậy đánh tiếp. Chỉ một lần thôi. Việc sống lại, nếu "
+    "dễ quá, thì hóa rẻ.";
 
 const char* const kEpilogueLine =
-    "Ngươi đã giữ vững giang sơn. Ta ghi vào sử sách.\n\n"
-    "Mùa mưa bão này tạm dừng. Thủy Tinh sẽ trở lại — y luôn trở lại. "
-    "Nhưng đến lúc ấy, ngươi đã có ba linh vật bên mình, và ta vẫn còn "
-    "ở đây, chép tiếp.";
+    "Tôi từng tưởng chép sử là đứng ngoài lịch sử. Nghĩ thế cho nhàn "
+    "thân, mà cũng cho nhẹ tội. Nhưng không viết cũng là một cách "
+    "viết. Im lặng cũng là một cách theo phe.\n\n"
+    "Đêm nay, tôi theo phe đất còn người ở. Theo phe những mái nhà vừa "
+    "thoát nước, những bếp lửa chưa tắt, những đứa trẻ còn ngủ được "
+    "một giấc yên. Mùa mưa sau nếu y lại về, tôi không trốn sau ngòi "
+    "bút nữa.\n\n"
+    "Ngươi giữ giang sơn. Còn tôi, từ trang sử này trở đi, xin giữ cùng "
+    "ngươi phần lời thề mà đất đã chịu thay người giữ bấy lâu.";
 
 }  // namespace StoryContent

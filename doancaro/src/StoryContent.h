@@ -2,13 +2,13 @@
 
 // Compile-time storyline text — Vietnamese with diacritics, rendered through
 // Fonts::mono (Vietnamese Extended range loaded at init).
-// Source: doancaro/storyline/storyline_final.org
+// Source: doancaro/storyline/storyline_final.md
 
 namespace StoryContent {
 
 // Intro monologue — paginated by paragraph block. Each page is one
 // ComicPanel body. Page count is fixed; index 0..kIntroPageCount-1.
-constexpr int kIntroPageCount = 6;
+constexpr int kIntroPageCount = 8;
 extern const char* const kIntroPages[kIntroPageCount];
 
 // Set narration. Each set has one intro line, one win line, one lose line.

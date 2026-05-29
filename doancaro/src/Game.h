@@ -15,6 +15,8 @@
 #include "AudioManager.h"
 #include "FileManager.h"
 #include "StoryMode.h"
+#include "StoryContent.h"
+#include <array>
 #include <thread>
 #include <atomic>
 
@@ -112,6 +114,12 @@ private:
     CellState localNetworkMark;
     bool waitingForNetworkAck;
 
+    // Story HUD assets
+    Texture2D storyVoiIcon;
+    Texture2D storyGaIcon;
+    Texture2D storyNguaIcon;
+    std::array<Texture2D, StoryContent::kIntroPageCount> storyIntroImages;
+
     // Game loop phases
     void updateMenu();
     void updateSettings();
@@ -158,6 +166,8 @@ private:
     void buildSaveData(SaveData& data);
     void saveSettings() const;
     void loadSettings();
+    void loadStoryAssets();
+    void unloadStoryAssets();
 
     // Called when a SetWin beat is dismissed (advance() runs). Bumps the
     // persisted storyMaxUnlocked so the picker shows the next set as

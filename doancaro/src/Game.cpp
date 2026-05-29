@@ -4,6 +4,7 @@
 #include "UIComponents.h"
 #include "StoryContent.h"
 #include "StorySigil.h"
+#include <algorithm>
 #include <climits>
 #include <cstdlib>
 #include <ctime>
@@ -60,14 +61,15 @@ struct BeastCard {
     const char* name;
     const char* hint;
     const char* chargeText;
+    const Texture2D* icon;
     bool        clickable;
     bool        vivid;
 };
 
 int drawBeastCardRow(int rightX, int bottomY,
                      const BeastCard cards[3], bool interactive) {
-    constexpr int kCardW = 120;
-    constexpr int kCardH = 76;
+    constexpr int kCardW = 126;
+    constexpr int kCardH = 98;
     constexpr int kGap   = 8;
     int totalW = 3 * kCardW + 2 * kGap;
     int leftX  = rightX - totalW;
@@ -110,12 +112,82 @@ int drawBeastCardRow(int rightX, int bottomY,
                     x0 + kCardW - chW - 8, y0 + 8,
                     12.0f, Theme::withAlpha(Theme::palette.gold_foil, chargeA));
 
-        Fonts::drawCentered(Fonts::bold, cards[i].name, cx, y0 + 28,
-                            16.0f, Theme::withAlpha(Theme::palette.son_bone, nameA));
-        Fonts::drawCentered(Fonts::body, cards[i].hint, cx, y0 + 52,
-                            12.0f, Theme::withAlpha(Theme::palette.son_bone, hintA));
+        if (cards[i].icon && cards[i].icon->id != 0) {
+            constexpr float kIconSize = 40.0f;
+            Rectangle src = { 0.0f, 0.0f,
+                              static_cast<float>(cards[i].icon->width),
+                              static_cast<float>(cards[i].icon->height) };
+            Rectangle dst = { static_cast<float>(cx) - kIconSize * 0.5f,
+                              static_cast<float>(y0 + 22),
+                              kIconSize, kIconSize };
+            DrawTexturePro(*cards[i].icon, src, dst, {0.0f, 0.0f}, 0.0f,
+                           Theme::withAlpha(WHITE, cards[i].vivid ? 255 : 150));
+        }
+
+        Fonts::drawCentered(Fonts::bold, cards[i].name, cx, y0 + 63,
+                            15.0f, Theme::withAlpha(Theme::palette.son_bone, nameA));
+        Fonts::drawCentered(Fonts::body, cards[i].hint, cx, y0 + 79,
+                            11.0f, Theme::withAlpha(Theme::palette.son_bone, hintA));
     }
     return clicked;
+}
+
+void loadTextureIfPresent(Texture2D& tex, const char* path) {
+    tex = {};
+    if (!FileExists(path)) return;
+
+    tex = LoadTexture(path);
+    if (tex.id != 0) {
+        SetTextureFilter(tex, TEXTURE_FILTER_BILINEAR);
+    }
+}
+
+void unloadTextureSafe(Texture2D& tex) {
+    if (tex.id != 0) {
+        UnloadTexture(tex);
+        tex = {};
+    }
+}
+
+void drawStoryIllustrationFrame(const Texture2D* tex, int xCenter, int yTop,
+                                int frameW, int frameH) {
+    Rectangle outer = {
+        static_cast<float>(xCenter - frameW / 2),
+        static_cast<float>(yTop),
+        static_cast<float>(frameW),
+        static_cast<float>(frameH)
+    };
+    DrawRectangleRounded(outer, 0.06f, 8,
+                         Theme::withAlpha(Theme::palette.ink_sumi, 220));
+    DrawRectangleRoundedLinesEx(outer, 0.06f, 8, 2.0f,
+                                Theme::withAlpha(Theme::palette.gold_foil, 210));
+
+    Rectangle inner = {
+        outer.x + 8.0f, outer.y + 8.0f,
+        outer.width - 16.0f, outer.height - 16.0f
+    };
+    DrawRectangleRounded(inner, 0.05f, 6,
+                         Theme::withAlpha(Theme::palette.slate_fog, 235));
+
+    if (!tex || tex->id == 0) return;
+
+    float availW = inner.width - 10.0f;
+    float availH = inner.height - 10.0f;
+    float scale = std::min(availW / static_cast<float>(tex->width),
+                           availH / static_cast<float>(tex->height));
+    float drawW = static_cast<float>(tex->width) * scale;
+    float drawH = static_cast<float>(tex->height) * scale;
+
+    Rectangle src = { 0.0f, 0.0f,
+                      static_cast<float>(tex->width),
+                      static_cast<float>(tex->height) };
+    Rectangle dst = {
+        inner.x + (inner.width - drawW) * 0.5f,
+        inner.y + (inner.height - drawH) * 0.5f,
+        drawW,
+        drawH
+    };
+    DrawTexturePro(*tex, src, dst, {0.0f, 0.0f}, 0.0f, WHITE);
 }
 
 }  // namespace
@@ -135,12 +207,15 @@ Game::Game()
       aiThinking(false), aiResult{-1, -1},
       networkMatchActive(false),
       localNetworkMark(CellState::Empty),
-      waitingForNetworkAck(false) {
+      waitingForNetworkAck(false),
+      storyVoiIcon{}, storyGaIcon{}, storyNguaIcon{},
+      storyIntroImages{} {
     loadSettings();
 }
 
 Game::~Game() {
     if (aiThread.joinable()) aiThread.join();
+    unloadStoryAssets();
     delete player1;
     delete player2;
 }
@@ -156,6 +231,7 @@ void Game::run() {
     Fonts::init();
     audioManager.init();
     MenuScreen::preload();
+    loadStoryAssets();
 
     while (!WindowShouldClose() && !quitRequested) {
         // Settings/Save/Load fall through on purpose: they keep whatever's
@@ -231,10 +307,51 @@ void Game::run() {
     delete player2; player2 = nullptr;
 
     audioManager.shutdown();
+    unloadStoryAssets();
     Fonts::cleanup();
     renderer.shutdown();
     MenuScreen::shutdown();
     CloseWindow();
+}
+
+void Game::loadStoryAssets() {
+    loadTextureIfPresent(storyVoiIcon,
+                         "assets/images/story/voi-chin-nga-hud-icon-v1.png");
+    loadTextureIfPresent(storyGaIcon,
+                         "assets/images/story/ga-chin-cua-hud-icon-v1.png");
+    loadTextureIfPresent(storyNguaIcon,
+                         "assets/images/story/ngua-chin-hong-mao-hud-icon-v1.png");
+
+    char path[128];
+    for (int i = 0; i < StoryContent::kIntroPageCount; ++i) {
+        std::snprintf(path, sizeof(path),
+                      "assets/images/story/intro/intro-page-%02d-wuxia-v4.png", i + 1);
+        loadTextureIfPresent(storyIntroImages[i], path);
+        if (storyIntroImages[i].id == 0) {
+            std::snprintf(path, sizeof(path),
+                      "assets/images/story/intro/intro-page-%02d-wuxia-v3.png", i + 1);
+            loadTextureIfPresent(storyIntroImages[i], path);
+        }
+        if (storyIntroImages[i].id == 0) {
+            std::snprintf(path, sizeof(path),
+                      "assets/images/story/intro/intro-page-%02d-v2.png", i + 1);
+            loadTextureIfPresent(storyIntroImages[i], path);
+        }
+        if (storyIntroImages[i].id == 0) {
+            std::snprintf(path, sizeof(path),
+                          "assets/images/story/intro/intro-page-%02d.png", i + 1);
+            loadTextureIfPresent(storyIntroImages[i], path);
+        }
+    }
+}
+
+void Game::unloadStoryAssets() {
+    unloadTextureSafe(storyVoiIcon);
+    unloadTextureSafe(storyGaIcon);
+    unloadTextureSafe(storyNguaIcon);
+    for (Texture2D& tex : storyIntroImages) {
+        unloadTextureSafe(tex);
+    }
 }
 
 void Game::updateMenu() {
@@ -1148,6 +1265,18 @@ void Game::drawStoryIntro() {
     std::snprintf(tag, sizeof(tag), "TRANG %d/%d",
                   storyMode.introPageIdx + 1, StoryContent::kIntroPageCount);
 
+    int panelY = 110;
+    const Texture2D* introArt = nullptr;
+    if (storyMode.introPageIdx >= 0
+        && storyMode.introPageIdx < StoryContent::kIntroPageCount
+        && storyIntroImages[storyMode.introPageIdx].id != 0) {
+        introArt = &storyIntroImages[storyMode.introPageIdx];
+    }
+    if (introArt) {
+        drawStoryIllustrationFrame(introArt, w / 2, 92, 540, 210);
+        panelY = 318;
+    }
+
     UIC::ComicPanel cp = {
         "MỞ ĐẦU",
         tag,
@@ -1155,7 +1284,7 @@ void Game::drawStoryIntro() {
         StoryContent::kIntroPages[storyMode.introPageIdx],
         62
     };
-    UIC::drawComicPanel(cp, w / 2, 110);
+    UIC::drawComicPanel(cp, w / 2, panelY);
 
     NavBtn btns[3] = {
         { "Prev", storyMode.introPageIdx > 0 },
@@ -1447,12 +1576,15 @@ void Game::drawStoryHUD() {
     BeastCard cards[3] = {
         { "1", "VOI",  "Hoàn 5 nước",
           chargeStr(voiC, nullptr, voiBuf, sizeof(voiBuf)),
+          &storyVoiIcon,
           voiC > 0, voiC > 0 },
         { "2", "GÀ",   "AI loạn 1 lượt",
           chargeStr(gaC, nullptr, gaBuf, sizeof(gaBuf)),
+          &storyGaIcon,
           gaC > 0, gaC > 0 },
         { "3", "NGỰA", "Hồi sinh tự động",
           chargeStr(nguaC, "Sẵn sàng", nullptr, 0),
+          &storyNguaIcon,
           false, nguaC > 0 },
     };
 
