@@ -15,8 +15,7 @@ static const float kBtnGap     = 12.0f;
 static const float kFirstYFrac = 0.30f;
 
 // One-shot mapping from menu index to choice. Keep in sync with the items
-// initializer in MenuScreen's constructor. Multiplayer is intentionally
-// unimplemented — it's rendered Disabled and excluded from selection.
+// initializer in MenuScreen's constructor.
 static const MenuChoice kChoiceFor[6] = {
     MenuChoice::NewGame,
     MenuChoice::StoryMode,
@@ -27,12 +26,13 @@ static const MenuChoice kChoiceFor[6] = {
 };
 
 static bool isDisabled(int i) {
-    return kChoiceFor[i] == MenuChoice::Multiplayer;
+    (void)i;
+    return false;
 }
 
 // Animated menu background: frame sequence baked from menu-background.mp4
 // at build-time via ffmpeg. We pre-load every frame into VRAM so draw is
-// just an index pick — no runtime decode, no disk I/O after preload.
+// just an index pick - no runtime decode, no disk I/O after preload.
 // Falls back to the single still PNG if frames are missing, then a gradient.
 static const float            kBgFrameFps     = 24.0f;
 static const int              kBgMaxFrames    = 1024;  // sanity cap
@@ -102,10 +102,10 @@ static void drawMenuBackground(int w, int h) {
 
 MenuScreen::MenuScreen() : selectedIndex(0), choice(MenuChoice::None),
     items{"PLAY WITH AI", "STORY MODE", "LOAD GAME",
-          "PLAY VIA INTERNET", "SETTINGS", "EXIT"} {}
+          "MULTIPLAYER", "SETTINGS", "EXIT"} {}
 
 void MenuScreen::preload() {
-    ensureMenuBg();  // file-scope static — no instance state needed
+    ensureMenuBg();  // file-scope static - no instance state needed
 }
 
 void MenuScreen::shutdown() {
@@ -174,7 +174,7 @@ void MenuScreen::draw() {
         if (isDisabled(i)) {
             st = UIC::State::Disabled;
         } else if (i == selectedIndex) {
-            // Pressed only when mouse is over AND held — keyboard nav stays
+            // Pressed only when mouse is over AND held - keyboard nav stays
             // on Focused so the +2px offset doesn't shimmer on Up/Down.
             bool pressed = mouseDown && CheckCollisionPointRec(mouse, r);
             st = pressed ? UIC::State::Pressed : UIC::State::Focused;

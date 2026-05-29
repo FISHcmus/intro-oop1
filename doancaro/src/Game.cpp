@@ -54,7 +54,7 @@ int drawNavRow(int screenW, int yCenter, const NavBtn* btns, int count) {
 // Linh-vật trigger card. `vivid` lifts the card out of the dimmed look
 // reserved for locked / spent beasts; `clickable` gates click registration
 // on top of `interactive` (set by caller for the current GameState).
-// Ngựa is always !clickable — it auto-fires on match loss.
+// Ngựa is always !clickable - it auto-fires on match loss.
 struct BeastCard {
     const char* hotkey;
     const char* name;
@@ -132,7 +132,10 @@ Game::Game()
       toastMessage{}, toastTimer(0.0f),
       showDebugPanel(false),
       quitRequested(false),
-      aiThinking(false), aiResult{-1, -1} {
+      aiThinking(false), aiResult{-1, -1},
+      networkMatchActive(false),
+      localNetworkMark(CellState::Empty),
+      waitingForNetworkAck(false) {
     loadSettings();
 }
 
@@ -145,7 +148,7 @@ Game::~Game() {
 void Game::run() {
     std::srand(static_cast<unsigned>(std::time(nullptr)));
 
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Caro Game — OOP1 Project");
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Caro Game - OOP1 Project");
     SetTargetFPS(60);
     SetExitKey(0);  // Disable ESC auto-close; we handle ESC ourselves
 
@@ -157,9 +160,10 @@ void Game::run() {
     while (!WindowShouldClose() && !quitRequested) {
         // Settings/Save/Load fall through on purpose: they keep whatever's
         // already playing so a quick visit doesn't cut the current track.
-        // Story narration screens use menu music — they're between matches.
+        // Story narration screens use menu music - they're between matches.
         switch (state) {
             case GameState::Menu:
+            case GameState::Multiplayer:
             case GameState::StoryPickSet:
             case GameState::StoryIntro:
             case GameState::StoryBeat:
@@ -179,6 +183,7 @@ void Game::run() {
             case GameState::Menu:           updateMenu();           break;
             case GameState::Settings:       updateSettings();       break;
             case GameState::PickDifficulty: updateDifficulty();     break;
+            case GameState::Multiplayer:    updateMultiplayer();    break;
             case GameState::Playing:        updatePlaying();        break;
             case GameState::GameOver:       updateGameOver();       break;
             case GameState::SaveScreen: // fallthrough
@@ -195,7 +200,7 @@ void Game::run() {
         ClearBackground(Theme::palette.sky_horizon);
 
         // 3-stop ink-wash sky behind the in-game 3D scene. Inline shader does
-        // smoothstep-interpolation between sky_top / sky_mid / sky_horizon —
+        // smoothstep-interpolation between sky_top / sky_mid / sky_horizon -
         // no Mach-band seam at the midline. Menu/Settings have their own
         // animated wuxia-storm BG, so only Playing/GameOver get the sky.
         if (state == GameState::Playing || state == GameState::GameOver) {
@@ -206,6 +211,7 @@ void Game::run() {
             case GameState::Menu:           drawMenu();           break;
             case GameState::Settings:       drawSettings();       break;
             case GameState::PickDifficulty: drawDifficulty();     break;
+            case GameState::Multiplayer:    drawMultiplayer();    break;
             case GameState::Playing:        drawPlaying();        break;
             case GameState::GameOver:       drawGameOver();       break;
             case GameState::SaveScreen: // fallthrough
@@ -253,7 +259,7 @@ void Game::updateMenu() {
             }
             break;
         case MenuChoice::StoryMode:
-            // Picker is the entry hub — read storyMaxUnlocked + cheat flag,
+            // Picker is the entry hub - read storyMaxUnlocked + cheat flag,
             // then user picks which set to play. Reset story state on the
             // picker click, not here, so backing out (ESC → Menu) doesn't
             // leak partial state.
@@ -263,6 +269,11 @@ void Game::updateMenu() {
         case MenuChoice::LoadGame:
             saveLoadScreen.open(SlotScreenMode::Load);
             state = GameState::LoadScreen;
+            menuScreen.reset();
+            break;
+        case MenuChoice::Multiplayer:
+            multiplayerScreen.reset();
+            state = GameState::Multiplayer;
             menuScreen.reset();
             break;
         case MenuChoice::Settings:
@@ -305,6 +316,88 @@ void Game::updateDifficulty() {
     }
 }
 
+void Game::updateMultiplayer() {
+    handleNetworkEvents();
+
+    multiplayerScreen.update(audioManager);
+    MultiplayerAction action = multiplayerScreen.consumeAction();
+    switch (action.type) {
+        case MultiplayerActionType::BackToMenu:
+            networkSession.shutdown();
+            multiplayerScreen.reset();
+            state = GameState::Menu;
+            menuScreen.reset();
+            break;
+        case MultiplayerActionType::CancelWaiting:
+            networkSession.shutdown();
+            multiplayerScreen.reset();
+            break;
+        case MultiplayerActionType::StartLanHost:
+            if (!networkSession.startLanHost(action.port, action.playerName)) {
+                multiplayerScreen.setStatusMessage("Failed to host LAN game");
+                break;
+            }
+            multiplayerScreen.setWaitingView("HOST LAN GAME",
+                                             "Waiting for LAN player...", "");
+            break;
+        case MultiplayerActionType::StartLanJoin:
+            if (!networkSession.startLanJoin(action.address, action.port,
+                                             action.playerName)) {
+                multiplayerScreen.setStatusMessage("Failed to join LAN host");
+                break;
+            }
+            multiplayerScreen.setWaitingView("JOIN LAN GAME",
+                                             "Connecting to host...", "");
+            break;
+        case MultiplayerActionType::StartOnlineHost:
+            {
+                ServerConfig::Endpoint endpoint =
+                    ServerConfig::resolveOnlineEndpoint(action.endpointPreset);
+                if (!ServerConfig::endpointConfigured(endpoint)) {
+                    multiplayerScreen.setStatusMessage(
+                        "Online server not configured",
+                        "Set CARO_SERVER_HOST or build with CARO_PRODUCTION_SERVER_HOST");
+                    break;
+                }
+                if (!networkSession.startOnlineHost(endpoint.host, endpoint.port,
+                                                action.playerName)) {
+                    multiplayerScreen.setStatusMessage("Failed to reach online server");
+                    break;
+                }
+                multiplayerScreen.setWaitingView(
+                    "ONLINE ROOM", "Creating room...",
+                    ServerConfig::advancedSelectorEnabled()
+                        ? ServerConfig::presetSummary(action.endpointPreset)
+                        : "");
+            }
+            break;
+        case MultiplayerActionType::StartOnlineJoin:
+            {
+                ServerConfig::Endpoint endpoint =
+                    ServerConfig::resolveOnlineEndpoint(action.endpointPreset);
+                if (!ServerConfig::endpointConfigured(endpoint)) {
+                    multiplayerScreen.setStatusMessage(
+                        "Online server not configured",
+                        "Set CARO_SERVER_HOST or build with CARO_PRODUCTION_SERVER_HOST");
+                    break;
+                }
+                if (!networkSession.startOnlineJoin(endpoint.host, endpoint.port,
+                                                    action.roomCode, action.playerName)) {
+                    multiplayerScreen.setStatusMessage("Failed to join online room");
+                    break;
+                }
+                multiplayerScreen.setWaitingView(
+                    "ONLINE ROOM", "Joining room...",
+                    ServerConfig::advancedSelectorEnabled()
+                        ? ServerConfig::presetSummary(action.endpointPreset)
+                        : "");
+            }
+            break;
+        case MultiplayerActionType::None:
+            break;
+    }
+}
+
 void Game::updatePlaying() {
     playTime += GetFrameTime();
     if (toastTimer > 0.0f) toastTimer -= GetFrameTime();
@@ -313,6 +406,7 @@ void Game::updatePlaying() {
         audioManager.playMenuClickSound();
     }
     renderer.updateParticles(GetFrameTime());
+    if (networkMatchActive) handleNetworkEvents();
 
     // Check if AI finished thinking
     if (aiThinking.load() == false && aiResult.row >= 0) {
@@ -325,9 +419,10 @@ void Game::updatePlaying() {
     if (aiThinking.load()) return;
 
     handleInput();
+    if (state != GameState::Playing) return;
 
     // If current player is AI, spawn thread
-    if (dynamic_cast<AIPlayer*>(currentPlayer) != nullptr) {
+    if (!networkMatchActive && dynamic_cast<AIPlayer*>(currentPlayer) != nullptr) {
         if (inStoryMode && storyMode.consumeGaTurn()) {
             auto cands = board.getCandidateMoves();
             if (!cands.empty()) {
@@ -353,6 +448,15 @@ void Game::updatePlaying() {
 
 void Game::updateGameOver() {
     renderer.updateParticles(GetFrameTime());
+
+    if (networkMatchActive) {
+        handleNetworkEvents();
+        if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_ESCAPE)) {
+            audioManager.playMenuClickSound();
+            leaveNetworkSession();
+        }
+        return;
+    }
 
     if (IsKeyPressed(KEY_ENTER)) {
         audioManager.playMenuClickSound();
@@ -394,6 +498,10 @@ void Game::drawDifficulty() {
     difficultyScreen.draw();
 }
 
+void Game::drawMultiplayer() {
+    multiplayerScreen.draw();
+}
+
 void Game::drawPlaying() {
     CellState turnMark = currentPlayer->getMark();
     renderer.drawBoard(board, cursorRow, cursorCol, turnMark);
@@ -407,10 +515,19 @@ void Game::drawPlaying() {
     bool isP1Turn = (currentPlayer == player1);
     gameScreen.drawHUD(*player1, *player2, isP1Turn, board.getMoveCount());
 
+    if (networkMatchActive) {
+        const char* banner = waitingForNetworkAck ? "Syncing move..."
+            : ((currentPlayer->getMark() == localNetworkMark)
+                   ? "Your turn"
+                   : "Opponent's turn");
+        Fonts::draw(Fonts::body, banner, GetScreenWidth() - 198, 232, 14.0f,
+                    Theme::palette.gold_foil);
+    }
+
     // Camera control buttons (2D overlay)
     renderer.drawCameraControls();
 
-    // AI thinking indicator — below HUD panel
+    // AI thinking indicator - below HUD panel
     if (aiThinking.load()) {
         float pulse = (sinf(static_cast<float>(GetTime()) * 3.0f) + 1.0f) * 0.5f;
         auto alpha = static_cast<unsigned char>(140 + pulse * 115);
@@ -427,12 +544,12 @@ void Game::drawPlaying() {
     }
 
     // Save/Load buttons
-    if (renderer.drawSaveButton()) {
+    if (!networkMatchActive && renderer.drawSaveButton()) {
         audioManager.playMenuClickSound();
         saveLoadScreen.open(SlotScreenMode::Save);
         state = GameState::SaveScreen;
     }
-    if (renderer.drawLoadButton()) {
+    if (!networkMatchActive && renderer.drawLoadButton()) {
         audioManager.playMenuClickSound();
         saveLoadScreen.open(SlotScreenMode::Load);
         state = GameState::LoadScreen;
@@ -444,8 +561,12 @@ void Game::drawPlaying() {
         if (aiThread.joinable()) aiThread.join();
         aiThinking.store(false);
         aiResult = {-1, -1};
-        menuScreen.reset();
-        state = GameState::Menu;
+        if (networkMatchActive) {
+            leaveNetworkSession("Left multiplayer match");
+        } else {
+            menuScreen.reset();
+            state = GameState::Menu;
+        }
     }
     if (renderer.drawSettingsButton()) {
         audioManager.playMenuClickSound();
@@ -455,19 +576,19 @@ void Game::drawPlaying() {
         state = GameState::Settings;
     }
 
-    // Undo button — hidden in Story Mode (Voi card is the only undo path).
-    if (!inStoryMode && renderer.drawUndoButton()) {
+    // Undo button - hidden in Story Mode (Voi card is the only undo path).
+    if (!networkMatchActive && !inStoryMode && renderer.drawUndoButton()) {
         audioManager.playMenuClickSound();
         undoLastMove();
     }
 
     // Restart button
-    if (renderer.drawRestartButton()) {
+    if (!networkMatchActive && renderer.drawRestartButton()) {
         audioManager.playMenuClickSound();
         startNewGame();
     }
 
-    // Story-mode overlays — linh vật charges + set score
+    // Story-mode overlays - linh vật charges + set score
     if (inStoryMode) drawStoryHUD();
 
     // Debug panel
@@ -484,7 +605,7 @@ void Game::drawGameOver() {
     drawPlaying();
 
     if (inStoryMode) {
-        // Story Mode: skip the generic banner — the sigil already announces
+        // Story Mode: skip the generic banner - the sigil already announces
         // win/loss. Show two nav buttons above it (mid-set: "Trận sau",
         // set-decided: "Tiếp" routes to the SetWin/SetLose narrative panel).
         // Buttons sit at h-150 to clear the sigil apex (~h-81).
@@ -518,10 +639,161 @@ void Game::drawGameOver() {
                                      ? player1->getName().c_str()
                                      : player2->getName().c_str();
         char msg[128];
-        std::snprintf(msg, sizeof(msg), "%s wins! Enter=New Game, ESC=Menu", winnerName);
+        std::snprintf(msg, sizeof(msg), "%s wins! %s", winnerName,
+                      networkMatchActive ? "Enter=Menu, ESC=Menu"
+                                         : "Enter=New Game, ESC=Menu");
         gameScreen.drawMessage(msg);
     } else {
-        gameScreen.drawMessage("Draw! Enter=New Game, ESC=Menu");
+        gameScreen.drawMessage(networkMatchActive
+                                   ? "Draw! Enter=Menu, ESC=Menu"
+                                   : "Draw! Enter=New Game, ESC=Menu");
+    }
+}
+
+void Game::startNetworkMatch(const NetEvent& event) {
+    audioManager.stopGameOverSounds();
+    if (aiThread.joinable()) aiThread.join();
+    aiThinking.store(false);
+    aiResult = {-1, -1};
+
+    inStoryMode = false;
+    networkMatchActive = true;
+    localNetworkMark = event.mark;
+    waitingForNetworkAck = false;
+
+    delete player1;
+    delete player2;
+    player1 = new Player(event.player1Name.empty() ? "Player 1"
+                                                   : event.player1Name,
+                         CellState::PlayerX);
+    player2 = new Player(event.player2Name.empty() ? "Player 2"
+                                                   : event.player2Name,
+                         CellState::PlayerO);
+
+    board.reset();
+    winLine.clear();
+    moveHistory.clear();
+    playTime = 0.0f;
+    renderer.resetAnimations();
+    currentPlayer = player1;
+    cursorRow = Board::SIZE / 2;
+    cursorCol = Board::SIZE / 2;
+    state = GameState::Playing;
+}
+
+void Game::leaveNetworkSession(const char* toast) {
+    networkSession.shutdown();
+    networkMatchActive = false;
+    localNetworkMark = CellState::Empty;
+    waitingForNetworkAck = false;
+    if (toast && toast[0] != '\0') {
+        std::snprintf(toastMessage, sizeof(toastMessage), "%s", toast);
+        toastTimer = 2.5f;
+    }
+    menuScreen.reset();
+    state = GameState::Menu;
+}
+
+bool Game::canLocalHumanMove() const {
+    if (currentPlayer == nullptr) return false;
+    if (dynamic_cast<AIPlayer*>(currentPlayer) != nullptr) return false;
+    if (networkMatchActive) {
+        if (currentPlayer->getMark() != localNetworkMark) return false;
+        if (waitingForNetworkAck) return false;
+    }
+    return true;
+}
+
+void Game::submitHumanMove(Move move) {
+    if (!canLocalHumanMove()) return;
+
+    if (!networkMatchActive) {
+        applyMove(move);
+        return;
+    }
+
+    if (networkSession.localAppliesMoves()) {
+        int before = board.getMoveCount();
+        CellState mark = currentPlayer->getMark();
+        applyMove(move);
+        if (board.getMoveCount() == before + 1) {
+            networkSession.sendAppliedMove(mark, move);
+        }
+        return;
+    }
+
+    waitingForNetworkAck = true;
+    networkSession.sendMoveRequest(move);
+}
+
+void Game::handleNetworkEvents() {
+    std::vector<NetEvent> events = networkSession.pollEvents();
+    for (const NetEvent& event : events) {
+        switch (event.type) {
+            case NetEventType::RoomCode:
+                multiplayerScreen.setRoomCode(event.roomCode);
+                multiplayerScreen.setStatusMessage("Waiting for online opponent...",
+                                                   "Room code: " + event.roomCode);
+                break;
+            case NetEventType::Waiting:
+                multiplayerScreen.setStatusMessage(event.text);
+                break;
+            case NetEventType::Info:
+                if (state == GameState::Multiplayer) {
+                    multiplayerScreen.setStatusMessage(event.text);
+                } else {
+                    std::snprintf(toastMessage, sizeof(toastMessage), "%s",
+                                  event.text.c_str());
+                    toastTimer = 2.0f;
+                }
+                break;
+            case NetEventType::MatchStarted:
+                startNetworkMatch(event);
+                break;
+            case NetEventType::MoveRequest:
+                if (!networkMatchActive || !networkSession.localAppliesMoves()) break;
+                if (state != GameState::Playing) break;
+                if (currentPlayer == nullptr ||
+                    currentPlayer->getMark() != event.mark ||
+                    !board.isEmpty(event.move.row, event.move.col)) {
+                    break;
+                }
+                {
+                    int before = board.getMoveCount();
+                    applyMove(event.move);
+                    if (board.getMoveCount() == before + 1) {
+                        networkSession.sendAppliedMove(event.mark, event.move);
+                    }
+                }
+                break;
+            case NetEventType::MoveApplied:
+                if (!networkMatchActive) break;
+                if (state != GameState::Playing) break;
+                if (currentPlayer == nullptr ||
+                    currentPlayer->getMark() != event.mark ||
+                    !board.isEmpty(event.move.row, event.move.col)) {
+                    std::snprintf(toastMessage, sizeof(toastMessage),
+                                  "Network move desync detected");
+                    toastTimer = 2.5f;
+                    break;
+                }
+                if (event.mark == localNetworkMark) {
+                    waitingForNetworkAck = false;
+                }
+                applyMove(event.move);
+                break;
+            case NetEventType::PeerDisconnected:
+                leaveNetworkSession(event.text.c_str());
+                break;
+            case NetEventType::Error:
+                if (state == GameState::Multiplayer) {
+                    networkSession.shutdown();
+                    multiplayerScreen.setStatusMessage("Network error", event.text);
+                } else {
+                    leaveNetworkSession(event.text.c_str());
+                }
+                break;
+        }
     }
 }
 
@@ -531,10 +803,13 @@ void Game::startNewGame() {
     if (aiThread.joinable()) aiThread.join();
     aiThinking.store(false);
     aiResult = {-1, -1};
+    networkMatchActive = false;
+    localNetworkMark = CellState::Empty;
+    waitingForNetworkAck = false;
 
     if (inStoryMode) {
         storyMode.onMatchStart();
-        // New match starts fresh — drop the stale pulse/wash/caption from
+        // New match starts fresh - drop the stale pulse/wash/caption from
         // the previous match-end. The sigil keeps its filled orbs visible
         // (matchOutcomes is set-scoped, only resets on SetIntro advance).
         storySigilLastFillTime = -1.0f;
@@ -577,6 +852,10 @@ void Game::switchTurn() {
     currentPlayer = (currentPlayer == player1) ? player2 : player1;
 }
 
+bool Game::isCurrentMatchVsAI() const {
+    return dynamic_cast<AIPlayer*>(player2) != nullptr;
+}
+
 void Game::handleInput() {
     handleKeyboardInput();
     handleMouseInput();
@@ -589,8 +868,8 @@ void Game::handleMouseInput() {
         if (renderer.isPointOnUI(mousePos)) return;
         int row, col;
         if (renderer.screenToBoard(mousePos, row, col)) {
-            if (board.isEmpty(row, col) && dynamic_cast<AIPlayer*>(currentPlayer) == nullptr) {
-                applyMove({row, col});
+            if (board.isEmpty(row, col) && canLocalHumanMove()) {
+                submitHumanMove({row, col});
             }
         }
     }
@@ -613,9 +892,8 @@ void Game::handleKeyboardInput() {
 
     // Place piece with Enter
     if (IsKeyPressed(KEY_ENTER)) {
-        if (dynamic_cast<AIPlayer*>(currentPlayer) == nullptr
-            && board.isEmpty(cursorRow, cursorCol)) {
-            applyMove({cursorRow, cursorCol});
+        if (canLocalHumanMove() && board.isEmpty(cursorRow, cursorCol)) {
+            submitHumanMove({cursorRow, cursorCol});
         }
     }
 
@@ -625,8 +903,12 @@ void Game::handleKeyboardInput() {
         if (aiThread.joinable()) aiThread.join();
         aiThinking.store(false);
         aiResult = {-1, -1};
-        menuScreen.reset();
-        state = GameState::Menu;
+        if (networkMatchActive) {
+            leaveNetworkSession("Left multiplayer match");
+        } else {
+            menuScreen.reset();
+            state = GameState::Menu;
+        }
         return;
     }
 
@@ -636,7 +918,8 @@ void Game::handleKeyboardInput() {
     }
 
     // Save/Load shortcuts (Ctrl+S / Ctrl+L)
-    if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
+    if (!networkMatchActive &&
+        (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL))) {
         if (IsKeyPressed(KEY_S)) {
             saveLoadScreen.open(SlotScreenMode::Save);
             state = GameState::SaveScreen;
@@ -649,7 +932,7 @@ void Game::handleKeyboardInput() {
 
     // ---- Story Mode linh vật hotkeys ----
     if (inStoryMode && !aiThinking.load()) {
-        // 1 = Voi 9 ngà — undo 5 player turns (10 board moves in PvAI).
+        // 1 = Voi 9 ngà - undo 5 player turns (10 board moves in PvAI).
         if (IsKeyPressed(KEY_ONE) && storyMode.useVoi()) {
             undoTurns(5);
             std::snprintf(toastMessage, sizeof(toastMessage),
@@ -884,8 +1167,8 @@ void Game::drawStoryIntro() {
         audioManager.playMenuClickSound();
         if (storyMode.introPageIdx > 0) --storyMode.introPageIdx;
     } else if (clicked == 1) {
-        // Skip: jump straight into Set1 match. Chain advance() twice —
-        // IntroMonologue→SetIntro then SetIntro→MatchPlaying — and start
+        // Skip: jump straight into Set1 match. Chain advance() twice -
+        // IntroMonologue→SetIntro then SetIntro→MatchPlaying - and start
         // the match immediately so the player skips ALL narrative panels.
         audioManager.playMenuClickSound();
         storyMode.introPageIdx = StoryContent::kIntroPageCount - 1;
@@ -913,7 +1196,7 @@ void Game::updateStoryBeat() {
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
         audioManager.playMenuClickSound();
 
-        // Epilogue is a leaf — Enter exits to Menu without advancing.
+        // Epilogue is a leaf - Enter exits to Menu without advancing.
         if (storyMode.subBeat == StoryMode::SubBeat::Epilogue) {
             exitStoryToMenu();
             return;
@@ -930,7 +1213,7 @@ void Game::updateStoryBeat() {
         if (storyMode.subBeat == StoryMode::SubBeat::MatchPlaying) {
             startStoryMatch();
         }
-        // Otherwise stay on StoryBeat — next render shows the new panel.
+        // Otherwise stay on StoryBeat - next render shows the new panel.
     }
 }
 
@@ -998,7 +1281,7 @@ void Game::drawStoryBeat() {
 
     UIC::drawComicPanel(cp, w / 2, 110);
 
-    // Epilogue is a leaf — only Menu is shown; all other beats add Next.
+    // Epilogue is a leaf - only Menu is shown; all other beats add Next.
     int btnCount = (storyMode.subBeat == StoryMode::SubBeat::Epilogue) ? 1 : 2;
     NavBtn btns[2] = { { "Menu", true }, { "Next", true } };
     int clicked = drawNavRow(w, h - 110, btns, btnCount);
@@ -1077,7 +1360,7 @@ void Game::drawDebugPanel() {
     Fonts::draw(Fonts::body, buf, tx, ty, 13, {200, 200, 200, 255});
     ty += lineH;
 
-    // TT stats — hit rate = ttHits / ttProbes, cutoff rate = ttCutoffs / ttHits
+    // TT stats - hit rate = ttHits / ttProbes, cutoff rate = ttCutoffs / ttHits
     double hitPct = (dbg.ttProbes > 0)
                     ? (100.0 * static_cast<double>(dbg.ttHits) / static_cast<double>(dbg.ttProbes))
                     : 0.0;
@@ -1199,7 +1482,7 @@ void Game::drawStoryHUD() {
     sigil.bottomY = GetScreenHeight() - 12;
     auto now = static_cast<float>(GetTime());
 
-    // Wash and caption durations from StorySigil.cpp's anon namespace —
+    // Wash and caption durations from StorySigil.cpp's anon namespace -
     // duplicated here to skip work after they expire (otherwise snprintf
     // formats every frame even when drawCaption returns early).
     constexpr float kWashDur    = 0.7f;
@@ -1243,8 +1526,8 @@ void Game::buildSaveData(SaveData& data) {
     data.header.moveCount = board.getMoveCount();
 
     SaveGameMode mode = inStoryMode ? SaveGameMode::Story
-                      : (vsAI       ? SaveGameMode::PvAI
-                                    : SaveGameMode::PvP);
+                      : (isCurrentMatchVsAI() ? SaveGameMode::PvAI
+                                              : SaveGameMode::PvP);
     data.header.gameMode = static_cast<int>(mode);
     data.header.aiDepth = aiDepth;
     data.header.currentTurn = (currentPlayer == player1) ? 1 : 2;
@@ -1365,7 +1648,8 @@ void Game::applyMove(Move move) {
         const bool isDraw    = !hasWinner && board.isFull();
         if (hasWinner || isDraw) {
             // PvAI: AI is player2. The mover's identity decides side.
-            const bool aiWon      = hasWinner && vsAI && currentPlayer == player2;
+            const bool aiWon      = hasWinner && isCurrentMatchVsAI() &&
+                                    currentPlayer == player2;
             const bool playerWon  = hasWinner && !aiWon;
             const bool playerLost = aiWon || isDraw;
 
@@ -1426,7 +1710,7 @@ void Game::undoLastMove() {
     audioManager.stopGameOverSounds();
 
     // In PvAI, undo two moves (AI + player) to get back to player's turn
-    int undoCount = (vsAI && moveHistory.size() >= 2) ? 2 : 1;
+    int undoCount = (isCurrentMatchVsAI() && moveHistory.size() >= 2) ? 2 : 1;
 
     for (int i = 0; i < undoCount && !moveHistory.empty(); i++) {
         auto& rec = moveHistory.back();
@@ -1460,7 +1744,7 @@ void Game::undoTurns(int n) {
 }
 
 void Game::autoSave() {
-    if (player1 == nullptr) return;
+    if (player1 == nullptr || networkMatchActive) return;
     SaveData data{};
     buildSaveData(data);
     FileManager::saveSlot(0, data);

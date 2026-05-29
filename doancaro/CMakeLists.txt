@@ -4,6 +4,10 @@ project(CaroGame LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CARO_PRODUCTION_SERVER_HOST "" CACHE STRING
+    "Configured production multiplayer hostname for online rooms")
+set(CARO_PRODUCTION_SERVER_PORT 34567 CACHE STRING
+    "Configured production multiplayer port for online rooms")
 
 # --- Build speed optimizations ---
 
@@ -15,7 +19,7 @@ if(CCACHE_PROGRAM)
     message(STATUS "ccache found: ${CCACHE_PROGRAM}")
 endif()
 
-# 2. mold linker: 3-8x faster linking (native builds only — mold doesn't support cross-compilation)
+# 2. mold linker: 3-8x faster linking (native builds only - mold doesn't support cross-compilation)
 if(NOT CMAKE_CROSSCOMPILING)
     find_program(MOLD_PROGRAM mold)
     if(MOLD_PROGRAM)
@@ -71,9 +75,12 @@ set(SOURCES
     src/GameScreen.cpp
     src/SettingsScreen.cpp
     src/DifficultyScreen.cpp
+    src/MultiplayerScreen.cpp
     src/SaveLoadScreen.cpp
     src/AudioManager.cpp
     src/FileManager.cpp
+    src/NetworkSession.cpp
+    src/ServerConfig.cpp
     src/ParticleSystem.cpp
     src/StoryMode.cpp
     src/StoryContent.cpp
@@ -83,9 +90,18 @@ set(SOURCES
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_link_libraries(${PROJECT_NAME} CaroUI raylib)
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    $<$<CONFIG:Debug>:CARO_ENABLE_ENDPOINT_OVERRIDE=1>
+    $<$<NOT:$<CONFIG:Debug>>:CARO_ENABLE_ENDPOINT_OVERRIDE=0>
+    CARO_DEFAULT_PRODUCTION_HOST="${CARO_PRODUCTION_SERVER_HOST}"
+    CARO_DEFAULT_PRODUCTION_PORT=${CARO_PRODUCTION_SERVER_PORT}
+)
+if (WIN32)
+    target_link_libraries(${PROJECT_NAME} ws2_32)
+endif()
 
 # 4. Precompiled headers: parse shared headers once
-# Note: raylib.h excluded from PCH — it's found via target include dirs
+# Note: raylib.h excluded from PCH - it's found via target include dirs
 # which PCH doesn't resolve with quoted includes. Use angle-bracket STL only.
 target_precompile_headers(${PROJECT_NAME} PRIVATE
     <vector>
@@ -106,7 +122,7 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 add_executable(CaroGallery tools/gallery_main.cpp)
 target_link_libraries(CaroGallery PRIVATE CaroUI raylib)
 
-# Gallery needs the same fonts CaroUI loads at runtime — copy assets so
+# Gallery needs the same fonts CaroUI loads at runtime - copy assets so
 # the binary can be run from its build dir without setting cwd.
 add_custom_command(TARGET CaroGallery POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

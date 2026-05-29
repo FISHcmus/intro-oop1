@@ -10,6 +10,8 @@
 #include "SettingsScreen.h"
 #include "DifficultyScreen.h"
 #include "SaveLoadScreen.h"
+#include "MultiplayerScreen.h"
+#include "NetworkSession.h"
 #include "AudioManager.h"
 #include "FileManager.h"
 #include "StoryMode.h"
@@ -17,7 +19,7 @@
 #include <atomic>
 
 enum class GameState {
-    Menu, Settings, PickDifficulty, Playing, GameOver,
+    Menu, Settings, PickDifficulty, Multiplayer, Playing, GameOver,
     SaveScreen, LoadScreen,
     StoryPickSet, // campaign-select panel — pick which set to play
     StoryIntro,   // Cô Sử Tiên paginated monologue
@@ -46,9 +48,11 @@ private:
     MenuScreen menuScreen;
     SettingsScreen settingsScreen;
     DifficultyScreen difficultyScreen;
+    MultiplayerScreen multiplayerScreen;
     SaveLoadScreen saveLoadScreen;
     GameScreen gameScreen;
     AudioManager audioManager;
+    NetworkSession networkSession;
 
     // Cursor (for keyboard navigation)
     int cursorRow;
@@ -103,10 +107,16 @@ private:
     std::atomic<bool> aiThinking;
     Move aiResult;
 
+    // Multiplayer state
+    bool networkMatchActive;
+    CellState localNetworkMark;
+    bool waitingForNetworkAck;
+
     // Game loop phases
     void updateMenu();
     void updateSettings();
     void updateDifficulty();
+    void updateMultiplayer();
     void updatePlaying();
     void updateGameOver();
     void updateSaveLoadScreen();
@@ -117,6 +127,7 @@ private:
     void drawMenu();
     void drawSettings();
     void drawDifficulty();
+    void drawMultiplayer();
     void drawPlaying();
     void drawGameOver();
     void drawSaveLoadScreen();
@@ -129,9 +140,15 @@ private:
 
     // Helpers
     void startNewGame();
+    void startNetworkMatch(const NetEvent& event);
+    void leaveNetworkSession(const char* toast = nullptr);
     void startStoryMatch();
     void exitStoryToMenu();
     void switchTurn();
+    bool isCurrentMatchVsAI() const;
+    void submitHumanMove(Move move);
+    void handleNetworkEvents();
+    bool canLocalHumanMove() const;
     void handleInput();
     void handleMouseInput();
     void handleKeyboardInput();
