@@ -81,6 +81,8 @@ private:
     // pulse, screen-wash, and caption animations in drawStoryHUD. -1 = no
     // fill yet (or new match in progress; reset on every onMatchStart).
     float storySigilLastFillTime;
+    float storyPanelScroll;
+    float storyPanelMaxScroll;
 
     // Play time tracking
     float playTime;
@@ -119,6 +121,11 @@ private:
     Texture2D storyGaIcon;
     Texture2D storyNguaIcon;
     std::array<Texture2D, StoryContent::kIntroPageCount> storyIntroImages;
+    std::array<Texture2D, 4> storySetIntroImages;
+    std::array<Texture2D, 4> storySetWinImages;
+    std::array<Texture2D, 4> storySetLoseImages;
+    std::array<Texture2D, 3> storyUnlockImages;
+    Texture2D storyEpilogueImage;
 
     // Game loop phases
     void updateMenu();
@@ -147,6 +154,8 @@ private:
     void drawStoryHUD();
 
     // Helpers
+    void resetStoryPanelScroll();
+    void updateStoryPanelScroll();
     void startNewGame();
     void startNetworkMatch(const NetEvent& event);
     void leaveNetworkSession(const char* toast = nullptr);

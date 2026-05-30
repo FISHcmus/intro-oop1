@@ -16,6 +16,23 @@ static const int SCREEN_HEIGHT = 700;
 
 namespace {
 
+constexpr float kStoryPanelLineStep = 22.0f;
+constexpr float kStoryPanelScrollStep = kStoryPanelLineStep * 2.0f;
+constexpr float kStoryNavCenterFromBottom = 86.0f;
+constexpr float kStoryNavButtonHeight = 48.0f;
+constexpr float kStoryPanelGapToNav = 8.0f;
+constexpr int kStoryPanelWidthCh = 70;
+
+float storyNavRowCenterY(int screenH) {
+    return static_cast<float>(screenH) - kStoryNavCenterFromBottom;
+}
+
+float storyPanelMaxHeightFor(int panelY, int screenH) {
+    float navTop = storyNavRowCenterY(screenH) - kStoryNavButtonHeight * 0.5f;
+    return std::max(kStoryPanelLineStep, navTop - static_cast<float>(panelY)
+                                         - kStoryPanelGapToNav);
+}
+
 // Immediate-mode navigation button row. Draws up to 3 buttons centred at
 // (screenW/2, yCenter) and returns the index of the one clicked this frame
 // (-1 if none). Click only registers when `enabled` is true.
@@ -200,6 +217,7 @@ Game::Game()
       inStoryMode(false),
       storyMaxUnlocked(1), cheatUnlockAll(false),
       storySigilLastFillTime(-1.0f),
+      storyPanelScroll(0.0f), storyPanelMaxScroll(0.0f),
       playTime(0.0f),
       toastMessage{}, toastTimer(0.0f),
       showDebugPanel(false),
@@ -209,7 +227,9 @@ Game::Game()
       localNetworkMark(CellState::Empty),
       waitingForNetworkAck(false),
       storyVoiIcon{}, storyGaIcon{}, storyNguaIcon{},
-      storyIntroImages{} {
+      storyIntroImages{},
+      storySetIntroImages{}, storySetWinImages{}, storySetLoseImages{},
+      storyUnlockImages{}, storyEpilogueImage{} {
     loadSettings();
 }
 
@@ -316,11 +336,23 @@ void Game::run() {
 
 void Game::loadStoryAssets() {
     loadTextureIfPresent(storyVoiIcon,
+                         "assets/images/story/voi-chin-nga-hud-icon-wuxia-v1.png");
+    if (storyVoiIcon.id == 0) {
+    loadTextureIfPresent(storyVoiIcon,
                          "assets/images/story/voi-chin-nga-hud-icon-v1.png");
+    }
+    loadTextureIfPresent(storyGaIcon,
+                         "assets/images/story/ga-chin-cua-hud-icon-wuxia-v1.png");
+    if (storyGaIcon.id == 0) {
     loadTextureIfPresent(storyGaIcon,
                          "assets/images/story/ga-chin-cua-hud-icon-v1.png");
+    }
+    loadTextureIfPresent(storyNguaIcon,
+                         "assets/images/story/ngua-chin-hong-mao-hud-icon-wuxia-v1.png");
+    if (storyNguaIcon.id == 0) {
     loadTextureIfPresent(storyNguaIcon,
                          "assets/images/story/ngua-chin-hong-mao-hud-icon-v1.png");
+    }
 
     char path[128];
     for (int i = 0; i < StoryContent::kIntroPageCount; ++i) {
@@ -343,6 +375,51 @@ void Game::loadStoryAssets() {
             loadTextureIfPresent(storyIntroImages[i], path);
         }
     }
+
+    const char* const setNames[4] = { "set1", "set2", "set3", "finalboss" };
+    for (int i = 0; i < 4; ++i) {
+        std::snprintf(path, sizeof(path),
+                      "assets/images/story/set-intro/%s-wuxia-v1.png", setNames[i]);
+        loadTextureIfPresent(storySetIntroImages[i], path);
+        if (storySetIntroImages[i].id == 0) {
+            std::snprintf(path, sizeof(path),
+                          "assets/images/story/set-intro/%s-v1.png", setNames[i]);
+            loadTextureIfPresent(storySetIntroImages[i], path);
+        }
+
+        std::snprintf(path, sizeof(path),
+                      "assets/images/story/set-win/%s-wuxia-v1.png", setNames[i]);
+        loadTextureIfPresent(storySetWinImages[i], path);
+        if (storySetWinImages[i].id == 0) {
+            std::snprintf(path, sizeof(path),
+                          "assets/images/story/set-win/%s-v1.png", setNames[i]);
+            loadTextureIfPresent(storySetWinImages[i], path);
+        }
+
+        std::snprintf(path, sizeof(path),
+                      "assets/images/story/set-lose/%s-wuxia-v1.png", setNames[i]);
+        loadTextureIfPresent(storySetLoseImages[i], path);
+        if (storySetLoseImages[i].id == 0) {
+            std::snprintf(path, sizeof(path),
+                          "assets/images/story/set-lose/%s-v1.png", setNames[i]);
+            loadTextureIfPresent(storySetLoseImages[i], path);
+        }
+    }
+
+    const char* const unlockNames[3] = { "voi", "ga", "ngua" };
+    for (int i = 0; i < 3; ++i) {
+        std::snprintf(path, sizeof(path),
+                      "assets/images/story/unlock/%s-wuxia-v1.png", unlockNames[i]);
+        loadTextureIfPresent(storyUnlockImages[i], path);
+        if (storyUnlockImages[i].id == 0) {
+            std::snprintf(path, sizeof(path),
+                          "assets/images/story/unlock/%s-v1.png", unlockNames[i]);
+            loadTextureIfPresent(storyUnlockImages[i], path);
+        }
+    }
+
+    loadTextureIfPresent(storyEpilogueImage,
+                         "assets/images/story/epilogue/epilogue-wuxia-v1.png");
 }
 
 void Game::unloadStoryAssets() {
@@ -352,6 +429,19 @@ void Game::unloadStoryAssets() {
     for (Texture2D& tex : storyIntroImages) {
         unloadTextureSafe(tex);
     }
+    for (Texture2D& tex : storySetIntroImages) {
+        unloadTextureSafe(tex);
+    }
+    for (Texture2D& tex : storySetWinImages) {
+        unloadTextureSafe(tex);
+    }
+    for (Texture2D& tex : storySetLoseImages) {
+        unloadTextureSafe(tex);
+    }
+    for (Texture2D& tex : storyUnlockImages) {
+        unloadTextureSafe(tex);
+    }
+    unloadTextureSafe(storyEpilogueImage);
 }
 
 void Game::updateMenu() {
@@ -956,13 +1046,33 @@ void Game::startNewGame() {
 void Game::startStoryMatch() {
     vsAI = true;
     aiDepth = storyMode.getCurrentDifficulty();
+    resetStoryPanelScroll();
     startNewGame();
 }
 
 void Game::exitStoryToMenu() {
     inStoryMode = false;
     storyMode.reset();
+    resetStoryPanelScroll();
     state = GameState::Menu;
+}
+
+void Game::resetStoryPanelScroll() {
+    storyPanelScroll = 0.0f;
+    storyPanelMaxScroll = 0.0f;
+}
+
+void Game::updateStoryPanelScroll() {
+    float next = storyPanelScroll;
+    float wheel = GetMouseWheelMove();
+    if (wheel != 0.0f) next -= wheel * kStoryPanelScrollStep;
+    if (IsKeyPressed(KEY_W) || IsKeyPressed(KEY_UP)) next -= kStoryPanelLineStep;
+    if (IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN)) next += kStoryPanelLineStep;
+    if (IsKeyPressed(KEY_PAGE_UP)) next -= kStoryPanelScrollStep * 2.0f;
+    if (IsKeyPressed(KEY_PAGE_DOWN)) next += kStoryPanelScrollStep * 2.0f;
+    if (IsKeyPressed(KEY_HOME)) next = 0.0f;
+    if (IsKeyPressed(KEY_END)) next = storyPanelMaxScroll;
+    storyPanelScroll = std::max(0.0f, std::min(next, storyPanelMaxScroll));
 }
 
 void Game::switchTurn() {
@@ -1127,6 +1237,20 @@ const char* linhVatNameFor(StoryMode::SetId id) {
     return "";
 }
 
+int storySetIndex(StoryMode::SetId id) {
+    return static_cast<int>(id);
+}
+
+int storyUnlockIndex(StoryMode::SetId id) {
+    switch (id) {
+        case StoryMode::SetId::Set1: return 0;
+        case StoryMode::SetId::Set2: return 1;
+        case StoryMode::SetId::Set3: return 2;
+        case StoryMode::SetId::FinalBoss: return -1;
+    }
+    return -1;
+}
+
 }  // namespace
 
 void Game::updateStoryPickSet() {
@@ -1185,6 +1309,7 @@ void Game::drawStoryPickSet() {
             inStoryMode = true;
             storyMode.jumpToSet(static_cast<StoryMode::SetId>(i));
             storySigilLastFillTime = -1.0f;
+            resetStoryPanelScroll();
             state = GameState::StoryIntro;
             return;
         }
@@ -1239,6 +1364,8 @@ void Game::drawStoryPickSet() {
 }
 
 void Game::updateStoryIntro() {
+    updateStoryPanelScroll();
+
     if (IsKeyPressed(KEY_ESCAPE)) {
         audioManager.playMenuClickSound();
         exitStoryToMenu();
@@ -1247,6 +1374,7 @@ void Game::updateStoryIntro() {
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
         audioManager.playMenuClickSound();
         storyMode.advance();
+        resetStoryPanelScroll();
         if (storyMode.subBeat == StoryMode::SubBeat::SetIntro) {
             state = GameState::StoryBeat;
         }
@@ -1282,40 +1410,54 @@ void Game::drawStoryIntro() {
         tag,
         nullptr,
         StoryContent::kIntroPages[storyMode.introPageIdx],
-        62
+        kStoryPanelWidthCh
     };
-    UIC::drawComicPanel(cp, w / 2, panelY);
+    float panelMaxScroll = 0.0f;
+    UIC::drawComicPanel(cp, w / 2, panelY,
+                        storyPanelMaxHeightFor(panelY, h),
+                        storyPanelScroll, &panelMaxScroll);
+    storyPanelMaxScroll = panelMaxScroll;
+    if (storyPanelScroll > storyPanelMaxScroll) {
+        storyPanelScroll = storyPanelMaxScroll;
+    }
 
     NavBtn btns[3] = {
         { "Prev", storyMode.introPageIdx > 0 },
         { "Skip", true },
         { "Next", true },
     };
-    int clicked = drawNavRow(w, h - 110, btns, 3);
+    int clicked = drawNavRow(w, static_cast<int>(storyNavRowCenterY(h)), btns, 3);
     if (clicked == 0) {
         audioManager.playMenuClickSound();
-        if (storyMode.introPageIdx > 0) --storyMode.introPageIdx;
+        if (storyMode.introPageIdx > 0) {
+            --storyMode.introPageIdx;
+            resetStoryPanelScroll();
+        }
     } else if (clicked == 1) {
         // Skip: jump straight into Set1 match. Chain advance() twice -
         // IntroMonologue→SetIntro then SetIntro→MatchPlaying - and start
         // the match immediately so the player skips ALL narrative panels.
         audioManager.playMenuClickSound();
         storyMode.introPageIdx = StoryContent::kIntroPageCount - 1;
+        resetStoryPanelScroll();
         storyMode.advance();   // → SetIntro
         storyMode.advance();   // → MatchPlaying
         startStoryMatch();
     } else if (clicked == 2) {
         audioManager.playMenuClickSound();
         storyMode.advance();
+        resetStoryPanelScroll();
         if (storyMode.subBeat == StoryMode::SubBeat::SetIntro) {
             state = GameState::StoryBeat;
         }
     }
 
-    UIC::drawHintBar("ENTER tiếp · ESC về menu", w, h);
+    UIC::drawHintBar("W/S cuộn · ENTER tiếp · ESC về menu", w, h);
 }
 
 void Game::updateStoryBeat() {
+    updateStoryPanelScroll();
+
     if (IsKeyPressed(KEY_ESCAPE)) {
         audioManager.playMenuClickSound();
         exitStoryToMenu();
@@ -1334,6 +1476,7 @@ void Game::updateStoryBeat() {
         StoryMode::SubBeat oldBeat = storyMode.subBeat;
         StoryMode::SetId   oldSet  = storyMode.currentSet;
         storyMode.advance();
+        resetStoryPanelScroll();
         if (oldBeat == StoryMode::SubBeat::SetWin) {
             onSetCompleted(oldSet);
         }
@@ -1352,8 +1495,10 @@ void Game::drawStoryBeat() {
     DrawRectangleGradientV(0, 0, w, h,
                            Theme::palette.bg_top, Theme::palette.bg_bottom);
 
-    const char* hint = "ENTER tiếp · ESC về menu";
-    UIC::ComicPanel cp = { nullptr, nullptr, nullptr, "", 62 };
+    const char* hint = "W/S cuộn · ENTER tiếp · ESC về menu";
+    UIC::ComicPanel cp = { nullptr, nullptr, nullptr, "", kStoryPanelWidthCh };
+    const Texture2D* beatArt = nullptr;
+    int panelY = 110;
 
     switch (storyMode.subBeat) {
         case StoryMode::SubBeat::SetIntro: {
@@ -1362,11 +1507,16 @@ void Game::drawStoryBeat() {
             cp.title = "VÀO TRẬN";
             cp.tag   = st.tag;
             cp.body  = st.intro;
+            int setIdx = storySetIndex(storyMode.currentSet);
+            if (setIdx >= 0 && setIdx < static_cast<int>(storySetIntroImages.size())
+                && storySetIntroImages[setIdx].id != 0) {
+                beatArt = &storySetIntroImages[setIdx];
+            }
             // Final boss reveals the kraken art in the intro.
-            if (storyMode.currentSet == StoryMode::SetId::FinalBoss) {
+            if (!beatArt && storyMode.currentSet == StoryMode::SetId::FinalBoss) {
                 cp.plot = StoryContent::kThuyTinhBossArt;
             }
-            hint = "ENTER bắt đầu trận · ESC về menu";
+            hint = "W/S cuộn · ENTER bắt đầu trận · ESC về menu";
             break;
         }
         case StoryMode::SubBeat::SetWin: {
@@ -1375,7 +1525,12 @@ void Game::drawStoryBeat() {
             cp.title = "THẮNG";
             cp.tag   = st.tag;
             cp.body  = st.win;
-            hint = "ENTER tiếp";
+            int setIdx = storySetIndex(storyMode.currentSet);
+            if (setIdx >= 0 && setIdx < static_cast<int>(storySetWinImages.size())
+                && storySetWinImages[setIdx].id != 0) {
+                beatArt = &storySetWinImages[setIdx];
+            }
+            hint = "W/S cuộn · ENTER tiếp";
             break;
         }
         case StoryMode::SubBeat::SetLose: {
@@ -1384,7 +1539,12 @@ void Game::drawStoryBeat() {
             cp.title = "BẠI";
             cp.tag   = st.tag;
             cp.body  = st.lose;
-            hint = "ENTER chơi lại set";
+            int setIdx = storySetIndex(storyMode.currentSet);
+            if (setIdx >= 0 && setIdx < static_cast<int>(storySetLoseImages.size())
+                && storySetLoseImages[setIdx].id != 0) {
+                beatArt = &storySetLoseImages[setIdx];
+            }
+            hint = "W/S cuộn · ENTER chơi lại set";
             break;
         }
         case StoryMode::SubBeat::LinhVatUnlock: {
@@ -1392,7 +1552,13 @@ void Game::drawStoryBeat() {
             cp.title = "BAN THƯỞNG";
             cp.tag   = linhVatNameFor(storyMode.currentSet);
             cp.body  = linhVatUnlockLineFor(storyMode.currentSet);
-            hint = "ENTER tiếp · ESC về menu";
+            int unlockIdx = storyUnlockIndex(storyMode.currentSet);
+            if (unlockIdx >= 0
+                && unlockIdx < static_cast<int>(storyUnlockImages.size())
+                && storyUnlockImages[unlockIdx].id != 0) {
+                beatArt = &storyUnlockImages[unlockIdx];
+            }
+            hint = "W/S cuộn · ENTER tiếp · ESC về menu";
             break;
         }
         case StoryMode::SubBeat::Epilogue: {
@@ -1400,7 +1566,10 @@ void Game::drawStoryBeat() {
             cp.title = "CÔ SỬ TIÊN";
             cp.tag   = "VĨ THANH";
             cp.body  = StoryContent::kEpilogueLine;
-            hint = "ENTER về menu";
+            if (storyEpilogueImage.id != 0) {
+                beatArt = &storyEpilogueImage;
+            }
+            hint = "W/S cuộn · ENTER về menu";
             break;
         }
         default:
@@ -1408,12 +1577,24 @@ void Game::drawStoryBeat() {
             break;
     }
 
-    UIC::drawComicPanel(cp, w / 2, 110);
+    if (beatArt) {
+        drawStoryIllustrationFrame(beatArt, w / 2, 92, 540, 210);
+        panelY = 318;
+    }
+
+    float panelMaxScroll = 0.0f;
+    UIC::drawComicPanel(cp, w / 2, panelY,
+                        storyPanelMaxHeightFor(panelY, h),
+                        storyPanelScroll, &panelMaxScroll);
+    storyPanelMaxScroll = panelMaxScroll;
+    if (storyPanelScroll > storyPanelMaxScroll) {
+        storyPanelScroll = storyPanelMaxScroll;
+    }
 
     // Epilogue is a leaf - only Menu is shown; all other beats add Next.
     int btnCount = (storyMode.subBeat == StoryMode::SubBeat::Epilogue) ? 1 : 2;
     NavBtn btns[2] = { { "Menu", true }, { "Next", true } };
-    int clicked = drawNavRow(w, h - 110, btns, btnCount);
+    int clicked = drawNavRow(w, static_cast<int>(storyNavRowCenterY(h)), btns, btnCount);
     if (clicked == 0) {
         audioManager.playMenuClickSound();
         exitStoryToMenu();
@@ -1422,6 +1603,7 @@ void Game::drawStoryBeat() {
         StoryMode::SubBeat oldBeat = storyMode.subBeat;
         StoryMode::SetId   oldSet  = storyMode.currentSet;
         storyMode.advance();
+        resetStoryPanelScroll();
         if (oldBeat == StoryMode::SubBeat::SetWin) {
             onSetCompleted(oldSet);
         }

@@ -2,7 +2,9 @@
 #include "Fonts.h"
 #include "Theme.h"
 
+#include <algorithm>
 #include <string>
+#include <vector>
 
 namespace {
 constexpr float kFrameInset = 4.0f;
@@ -13,6 +15,7 @@ constexpr float kBtnTextSize = 22.0f;
 constexpr float kTitleSize   = 50.0f;
 constexpr float kHintSize    = 14.0f;
 constexpr float kPanelTextSize = 18.0f;
+constexpr float kPanelLineStep = 22.0f;
 
 // ASCII avatars. Leading whitespace pre-baked so the face sits under the
 // dialogue-bubble tail. Width-consistent across rows so columns stack.
@@ -153,6 +156,20 @@ void renderWrappedBody(std::string& out, const std::string& wrapped,
         i = nl + 1;
     }
 }
+
+std::vector<std::string> splitLines(const std::string& text) {
+    std::vector<std::string> lines;
+    size_t i = 0;
+    while (i <= text.size()) {
+        size_t nl = text.find('\n', i);
+        lines.push_back((nl == std::string::npos)
+            ? text.substr(i)
+            : text.substr(i, nl - i));
+        if (nl == std::string::npos) break;
+        i = nl + 1;
+    }
+    return lines;
+}
 }  // namespace
 
 namespace UIC {
@@ -255,14 +272,72 @@ void drawHintBar(const char* hint, int screenW, int screenH, bool withBackdrop) 
                 Theme::withAlpha(Theme::palette.son_bone, 220));
 }
 
-void drawComicPanel(const ComicPanel& p, int xCenter, int yTop) {
+void drawComicPanel(const ComicPanel& p, int xCenter, int yTop,
+                    float maxHeight, float bodyScroll, float* outMaxScroll) {
     int W = (p.widthCh > 0) ? p.widthCh : 50;
+    const bool cappedHeight = maxHeight > 0.0f;
+
     int textW = W - 6;  // 2 frame chars + 2 chars padding each side
     if (textW < 8) textW = 8;
 
-    std::string out;
-    out.reserve(static_cast<size_t>(W) * 32u * 4u);
-    out += "╔" + repeatGlyph("═", W - 2) + "╗\n";
+    std::vector<std::string> plotLines;
+    if (p.plot && p.plot[0]) {
+        plotLines = splitLines(std::string(p.plot));
+    }
+
+    auto buildWrappedBodyLines = [&](int wrapWidth) {
+        return splitLines(wrapBody(p.body, wrapWidth));
+    };
+
+    std::vector<std::string> bodyLines = buildWrappedBodyLines(textW);
+
+    const int fixedRowsTop = 1 + (p.title ? 2 : 0) + 1
+                           + (plotLines.empty() ? 0
+                                                : static_cast<int>(plotLines.size()) + 2);
+    const int fixedRowsBottom = 2;
+    const float fixedHeight = (fixedRowsTop + fixedRowsBottom) * kPanelLineStep;
+
+    float bodyViewportHeight = static_cast<float>(bodyLines.size()) * kPanelLineStep;
+    if (cappedHeight) {
+        float availableBody = maxHeight - fixedHeight;
+        if (availableBody < kPanelLineStep) availableBody = kPanelLineStep;
+        int visibleRows = std::max(1, static_cast<int>(availableBody / kPanelLineStep));
+        bodyViewportHeight = visibleRows * kPanelLineStep;
+    }
+
+    float maxScroll = std::max(0.0f,
+        static_cast<float>(bodyLines.size()) * kPanelLineStep - bodyViewportHeight);
+
+    // Reserve a small gutter when the body scrolls so the scrollbar does not
+    // sit on top of text.
+    if (cappedHeight && maxScroll > 0.0f) {
+        int gutterTextW = std::max(8, textW - 2);
+        bodyLines = buildWrappedBodyLines(gutterTextW);
+        bodyViewportHeight = std::max(kPanelLineStep, bodyViewportHeight);
+        maxScroll = std::max(0.0f,
+            static_cast<float>(bodyLines.size()) * kPanelLineStep - bodyViewportHeight);
+        textW = gutterTextW;
+    }
+
+    if (outMaxScroll) *outMaxScroll = maxScroll;
+    bodyScroll = std::max(0.0f, std::min(bodyScroll, maxScroll));
+
+    const std::string topBorder = "╔" + repeatGlyph("═", W - 2) + "╗";
+    const std::string midBorder = "╠" + repeatGlyph("═", W - 2) + "╣";
+    const std::string plotBorder = "╟" + repeatGlyph("─", W - 2) + "╢";
+    const std::string bottomBorder = "╚" + repeatGlyph("═", W - 2) + "╝";
+
+    int panelWidth = Fonts::measure(Fonts::mono, topBorder.c_str(), kPanelTextSize, 0.0f);
+    int panelX = xCenter - panelWidth / 2;
+    float y = static_cast<float>(yTop);
+
+    auto drawLine = [&](const std::string& line, float yPos) {
+        Fonts::draw(Fonts::mono, line.c_str(), panelX, static_cast<int>(yPos),
+                    kPanelTextSize, Theme::palette.son_bone, 0.0f);
+    };
+
+    drawLine(topBorder, y);
+    y += kPanelLineStep;
 
     if (p.title) {
         std::string left  = std::string("  ") + p.title;
@@ -273,41 +348,61 @@ void drawComicPanel(const ComicPanel& p, int xCenter, int yTop) {
         std::string content = left;
         appendSpaces(content, gap);
         content += right;
-        out += paddedRow(content, W, "║") + "\n";
-        out += "╠" + repeatGlyph("═", W - 2) + "╣\n";
+        drawLine(paddedRow(content, W, "║"), y);
+        y += kPanelLineStep;
+        drawLine(midBorder, y);
+        y += kPanelLineStep;
     }
 
-    out += paddedRow("", W, "║") + "\n";
+    drawLine(paddedRow("", W, "║"), y);
+    y += kPanelLineStep;
 
-    // Plot block — verbatim, no wrap. Lines longer than textW are truncated
-    // by the caller. Each plot line gets a 2-space indent inside the frame.
-    if (p.plot && p.plot[0]) {
-        const char* q = p.plot;
-        std::string line;
-        for (;;) {
-            char c = *q;
-            if (c == '\n' || c == '\0') {
-                out += paddedRow(std::string("  ") + line, W, "║") + "\n";
-                line.clear();
-                if (c == '\0') break;
-                ++q;
-                continue;
-            }
-            line += c;
-            ++q;
+    if (!plotLines.empty()) {
+        for (const std::string& line : plotLines) {
+            drawLine(paddedRow(std::string("  ") + line, W, "║"), y);
+            y += kPanelLineStep;
         }
-        out += "╟" + repeatGlyph("─", W - 2) + "╢\n";
-        out += paddedRow("", W, "║") + "\n";
+        drawLine(plotBorder, y);
+        y += kPanelLineStep;
+        drawLine(paddedRow("", W, "║"), y);
+        y += kPanelLineStep;
     }
 
-    renderWrappedBody(out, wrapBody(p.body, textW), W, "║");
-    out += paddedRow("", W, "║") + "\n";
-    out += "╚" + repeatGlyph("═", W - 2) + "╝";
+    const float bodyTopY = y;
+    if (bodyViewportHeight > 0.0f) {
+        BeginScissorMode(panelX, static_cast<int>(bodyTopY), panelWidth,
+                         static_cast<int>(bodyViewportHeight));
+        float bodyY = bodyTopY - bodyScroll;
+        for (const std::string& line : bodyLines) {
+            drawLine(paddedRow(std::string("  ") + line, W, "║"), bodyY);
+            bodyY += kPanelLineStep;
+        }
+        EndScissorMode();
+        y += bodyViewportHeight;
+    }
 
-    int width = Fonts::measure(Fonts::mono, out.c_str(), kPanelTextSize, 0.0f);
-    Fonts::draw(Fonts::mono, out.c_str(),
-                xCenter - width / 2, yTop, kPanelTextSize,
-                Theme::palette.son_bone, 0.0f);
+    if (maxScroll > 0.0f && bodyViewportHeight > 0.0f) {
+        Rectangle track = {
+            static_cast<float>(panelX + panelWidth - 12),
+            bodyTopY + 3.0f,
+            5.0f,
+            std::max(8.0f, bodyViewportHeight - 6.0f)
+        };
+        float thumbH = std::max(18.0f, track.height * (bodyViewportHeight
+                        / (bodyViewportHeight + maxScroll)));
+        float thumbY = track.y;
+        if (maxScroll > 0.0f && track.height > thumbH) {
+            thumbY += (track.height - thumbH) * (bodyScroll / maxScroll);
+        }
+        DrawRectangleRounded(track, 0.8f, 4,
+                             Theme::withAlpha(Theme::palette.slate_fog, 110));
+        DrawRectangleRounded({track.x, thumbY, track.width, thumbH}, 0.8f, 4,
+                             Theme::withAlpha(Theme::palette.gold_foil, 220));
+    }
+
+    drawLine(paddedRow("", W, "║"), y);
+    y += kPanelLineStep;
+    drawLine(bottomBorder, y);
 }
 
 void drawDialoguePanel(const DialoguePanel& p, int xCenter, int yTop) {

@@ -33,7 +33,9 @@ struct ComicPanel {
     const char* body;      // UTF-8; explicit '\n' preserved
     int         widthCh;   // total panel width in mono columns
 };
-void drawComicPanel(const ComicPanel& p, int xCenter, int yTop);
+void drawComicPanel(const ComicPanel& p, int xCenter, int yTop,
+                    float maxHeight = 0.0f, float bodyScroll = 0.0f,
+                    float* outMaxScroll = nullptr);
 
 // Cowsay-style dialogue. Rounded bubble ╭─╮│╰╯ + tail + ASCII avatar,
 // keyed by Speaker.
