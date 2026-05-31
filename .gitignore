@@ -68,3 +68,21 @@ doancaro/slides/*.pptx
 
 # Local document previews
 doancaro/Caro report cover preview.docx
+
+# Unrelated local coursework and reference clutter
+books/
+cf/
+homework_lythuyet/
+past_exams/
+midterm_cheatsheet.md
+note_from_teacher_in_week4.md
+week7/25310023_25310057_25310043.cpp
+week7/note.md
+week7/operator_overloading_lesson.md
+week8/source/hello.cpp
+week9/note.md
+week9/final-week/note.md
+
+# Local-only Caro reference files
+doancaro/25310023_25310057_25310043.txt
+doancaro/report/example/
