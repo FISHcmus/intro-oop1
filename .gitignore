@@ -52,3 +52,19 @@ server exited unexpectedly
 
 # Serena MCP runtime cache (per-machine)
 .serena/cache/
+
+# Local runtime state
+settings.cfg
+saves/
+
+# Generated report artifacts
+doancaro/report/our_work/*.aux
+doancaro/report/our_work/*.log
+doancaro/report/our_work/*.toc
+doancaro/report/our_work/*.pdf
+
+# Generated slide exports
+doancaro/slides/*.pptx
+
+# Local document previews
+doancaro/Caro report cover preview.docx
