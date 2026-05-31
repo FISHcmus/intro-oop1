@@ -2,6 +2,7 @@
 #include "AudioManager.h"
 #include "Fonts.h"
 #include "UI.h"
+#include "ViewBackgrounds.h"
 #include "raylib.h"
 #include <cstdio>
 #include <ctime>
@@ -107,6 +108,9 @@ void SaveLoadScreen::update(AudioManager& audio) {
 
 void SaveLoadScreen::draw() {
     int screenW = GetScreenWidth();
+    int screenH = GetScreenHeight();
+
+    ViewBackgrounds::draw(ViewBackgroundId::SaveLoad, screenW, screenH);
 
     // Title
     const char* title = (mode == SlotScreenMode::Save) ? "SAVE GAME" : "LOAD GAME";
@@ -129,7 +133,6 @@ void SaveLoadScreen::draw() {
     }
 
     // Instructions
-    int screenH = GetScreenHeight();
     if (mode == SlotScreenMode::Save) {
         Fonts::draw(Fonts::body, "[Enter] Save to slot  [ESC] Cancel",
                     10, screenH - 30, 16, DARKGRAY);

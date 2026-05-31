@@ -187,6 +187,12 @@ void MenuScreen::draw() {
     UIC::drawHintBar("W/S or Arrow Keys to navigate, Enter to select", w, h);
 }
 
+MenuChoice MenuScreen::consumeChoice() {
+    MenuChoice out = choice;
+    choice = MenuChoice::None;
+    return out;
+}
+
 void MenuScreen::reset() {
     selectedIndex = 0;
     choice = MenuChoice::None;

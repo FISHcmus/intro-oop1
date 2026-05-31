@@ -21,6 +21,7 @@ public:
     void draw();
 
     MenuChoice getChoice() const { return choice; }
+    MenuChoice consumeChoice();
     void reset();
 
 private:

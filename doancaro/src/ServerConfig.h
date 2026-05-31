@@ -18,6 +18,7 @@ bool advancedSelectorEnabled();
 OnlineEndpointPreset defaultPreset();
 Endpoint endpointForPreset(OnlineEndpointPreset preset);
 Endpoint resolveOnlineEndpoint(OnlineEndpointPreset preset);
+std::string resolveOnlineFallbackHost(OnlineEndpointPreset preset);
 bool endpointConfigured(const Endpoint& endpoint);
 const char* presetLabel(OnlineEndpointPreset preset);
 std::string presetSummary(OnlineEndpointPreset preset);

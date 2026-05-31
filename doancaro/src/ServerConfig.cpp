@@ -14,11 +14,16 @@
 #ifndef CARO_DEFAULT_PRODUCTION_PORT
 #define CARO_DEFAULT_PRODUCTION_PORT 34567
 #endif
+#ifndef CARO_DEFAULT_PRODUCTION_FALLBACK_HOST
+#define CARO_DEFAULT_PRODUCTION_FALLBACK_HOST ""
+#endif
 
 namespace {
 
 constexpr const char* kProductionHost = CARO_DEFAULT_PRODUCTION_HOST;
 constexpr int kProductionPort = CARO_DEFAULT_PRODUCTION_PORT;
+constexpr const char* kProductionFallbackHost =
+    CARO_DEFAULT_PRODUCTION_FALLBACK_HOST;
 constexpr const char* kLocalHost = "127.0.0.1";
 constexpr int kLocalPort = 34567;
 
@@ -88,6 +93,16 @@ Endpoint resolveOnlineEndpoint(OnlineEndpointPreset preset) {
         endpoint.port = port;
     }
     return endpoint;
+}
+
+std::string resolveOnlineFallbackHost(OnlineEndpointPreset preset) {
+    std::string fallback;
+    if (preset == OnlineEndpointPreset::Production) {
+        fallback = kProductionFallbackHost;
+        const char* host = std::getenv("CARO_SERVER_FALLBACK_HOST");
+        if (host && *host) fallback = host;
+    }
+    return fallback;
 }
 
 bool endpointConfigured(const Endpoint& endpoint) {

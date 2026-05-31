@@ -13,6 +13,14 @@ constexpr float kPulseDuration   = 0.6f;
 constexpr float kWashDuration    = 0.7f;
 constexpr float kCaptionDuration = 1.5f;
 constexpr float kCaptionFade     = 0.4f;
+constexpr float kBaseSizeScale   = 1.48f;
+constexpr float kOrbSizeScale    = 0.17f;
+
+constexpr float kSocketTopU    = 0.4997f;
+constexpr float kSocketTopV    = 0.3110f;
+constexpr float kSocketLeftU   = 0.2313f;
+constexpr float kSocketRightU  = 0.7655f;
+constexpr float kSocketBottomV = 0.7817f;
 
 // Wuxia palette has no red — define a pair tuned to sit next to son_jade
 // without screaming. Saturation kept moderate so it reads through the
@@ -21,6 +29,20 @@ const Color kWonGreen  = {110, 200, 130, 255};
 const Color kWonGlow   = {180, 240, 200, 255};
 const Color kLossRed   = {210,  60,  60, 255};
 const Color kLossGlow  = {255, 110, 110, 255};
+
+bool hasTexture(const Texture2D* tex) {
+    return tex && tex->id != 0;
+}
+
+Rectangle sigilBaseRect(const Layout& L) {
+    const float size = static_cast<float>(L.sideLen) * kBaseSizeScale;
+    return {
+        static_cast<float>(L.centerX) - size * 0.5f,
+        static_cast<float>(L.bottomY) - size,
+        size,
+        size
+    };
+}
 
 // Compute the three orb centers given the triangle layout. Layout convention:
 // (centerX, bottomY) is the bottom-center of the equilateral frame; height
@@ -34,6 +56,15 @@ void orbPositions(const Layout& L, Vector2 out[3]) {
                static_cast<float>(L.bottomY) - h * 0.22f };  // bottom-left
     out[2] = { static_cast<float>(L.centerX) + L.sideLen * 0.21f,
                static_cast<float>(L.bottomY) - h * 0.22f };  // bottom-right
+}
+
+void orbPositions(const Rectangle& baseRect, Vector2 out[3]) {
+    out[0] = { baseRect.x + baseRect.width * kSocketTopU,
+               baseRect.y + baseRect.height * kSocketTopV };
+    out[1] = { baseRect.x + baseRect.width * kSocketLeftU,
+               baseRect.y + baseRect.height * kSocketBottomV };
+    out[2] = { baseRect.x + baseRect.width * kSocketRightU,
+               baseRect.y + baseRect.height * kSocketBottomV };
 }
 
 void drawOrb(Vector2 pos, int r,
@@ -67,40 +98,86 @@ void drawOrb(Vector2 pos, int r,
                      Theme::withAlpha(Theme::palette.gold_foil, 220));
 }
 
+void drawTexturedOrb(const Texture2D& tex, Vector2 pos, float size,
+                     bool pulsing, float pulsePhase, Color glow) {
+    float glowAlphaScale = pulsing
+        ? (0.45f + 0.55f * (0.5f + 0.5f * std::sin(pulsePhase * 6.28318f * 2.0f)))
+        : 0.55f;
+    float pulseScale = pulsing ? (1.0f + 0.08f * glowAlphaScale) : 1.0f;
+    float radius = size * 0.5f;
+
+    if (glow.a > 0) {
+        auto glowA = static_cast<unsigned char>(165.0f * glowAlphaScale);
+        auto haloA = static_cast<unsigned char>(70.0f * glowAlphaScale);
+        DrawCircleV(pos, radius + 5.0f, Theme::withAlpha(glow, haloA));
+        DrawCircleV(pos, radius + 2.0f, Theme::withAlpha(glow, glowA));
+    }
+
+    Rectangle src = {
+        0.0f, 0.0f,
+        static_cast<float>(tex.width),
+        static_cast<float>(tex.height)
+    };
+    Rectangle dst = {
+        pos.x - size * pulseScale * 0.5f,
+        pos.y - size * pulseScale * 0.5f,
+        size * pulseScale,
+        size * pulseScale
+    };
+    DrawTexturePro(tex, src, dst, {0.0f, 0.0f}, 0.0f, WHITE);
+}
+
 }  // namespace
 
 void draw(const Layout& L,
           const StoryMode::OrbState orbs[3],
           float currentTime,
-          float lastFillTime) {
+          float lastFillTime,
+          const Textures* textures) {
     using StoryMode::OrbState;
 
-    const float h = static_cast<float>(L.sideLen) * 0.866f;
-    Vector2 apex = { static_cast<float>(L.centerX),
-                     static_cast<float>(L.bottomY) - h };
-    Vector2 bl   = { static_cast<float>(L.centerX) - L.sideLen * 0.5f,
-                     static_cast<float>(L.bottomY) };
-    Vector2 br   = { static_cast<float>(L.centerX) + L.sideLen * 0.5f,
-                     static_cast<float>(L.bottomY) };
+    const bool texturedBase = textures && hasTexture(textures->base);
+    Rectangle baseRect = {};
+    if (texturedBase) {
+        baseRect = sigilBaseRect(L);
+        Rectangle src = {
+            0.0f, 0.0f,
+            static_cast<float>(textures->base->width),
+            static_cast<float>(textures->base->height)
+        };
+        Rectangle shadowDst = baseRect;
+        shadowDst.x += 2.0f;
+        shadowDst.y += 3.0f;
+        DrawTexturePro(*textures->base, src, shadowDst,
+                       {0.0f, 0.0f}, 0.0f,
+                       Theme::withAlpha(BLACK, 100));
+        DrawTexturePro(*textures->base, src, baseRect,
+                       {0.0f, 0.0f}, 0.0f, WHITE);
+    } else {
+        const float h = static_cast<float>(L.sideLen) * 0.866f;
+        Vector2 apex = { static_cast<float>(L.centerX),
+                         static_cast<float>(L.bottomY) - h };
+        Vector2 bl   = { static_cast<float>(L.centerX) - L.sideLen * 0.5f,
+                         static_cast<float>(L.bottomY) };
+        Vector2 br   = { static_cast<float>(L.centerX) + L.sideLen * 0.5f,
+                         static_cast<float>(L.bottomY) };
 
-    // Drop shadow under the frame — three offset thick lines, low alpha.
-    Color shadow = Theme::withAlpha(Theme::palette.ink_sumi, 110);
-    DrawLineEx({apex.x + 2.0f, apex.y + 2.0f},
-               {bl.x   + 2.0f, bl.y   + 2.0f}, 4.0f, shadow);
-    DrawLineEx({apex.x + 2.0f, apex.y + 2.0f},
-               {br.x   + 2.0f, br.y   + 2.0f}, 4.0f, shadow);
-    DrawLineEx({bl.x   + 2.0f, bl.y   + 2.0f},
-               {br.x   + 2.0f, br.y   + 2.0f}, 4.0f, shadow);
+        Color shadow = Theme::withAlpha(Theme::palette.ink_sumi, 110);
+        DrawLineEx({apex.x + 2.0f, apex.y + 2.0f},
+                   {bl.x   + 2.0f, bl.y   + 2.0f}, 4.0f, shadow);
+        DrawLineEx({apex.x + 2.0f, apex.y + 2.0f},
+                   {br.x   + 2.0f, br.y   + 2.0f}, 4.0f, shadow);
+        DrawLineEx({bl.x   + 2.0f, bl.y   + 2.0f},
+                   {br.x   + 2.0f, br.y   + 2.0f}, 4.0f, shadow);
 
-    // Inner ink wash gives the orbs something to breathe against.
-    DrawTriangle(apex, bl, br,
-                 Theme::withAlpha(Theme::palette.ink_sumi, 160));
+        DrawTriangle(apex, bl, br,
+                     Theme::withAlpha(Theme::palette.ink_sumi, 160));
 
-    // Gold-foil outline.
-    Color line = Theme::palette.gold_foil;
-    DrawLineEx(apex, bl, 2.5f, line);
-    DrawLineEx(apex, br, 2.5f, line);
-    DrawLineEx(bl,   br, 2.5f, line);
+        Color line = Theme::palette.gold_foil;
+        DrawLineEx(apex, bl, 2.5f, line);
+        DrawLineEx(apex, br, 2.5f, line);
+        DrawLineEx(bl,   br, 2.5f, line);
+    }
 
     // Identify which orb pulses — last-recorded non-Pending in chronological
     // order. The pulse is suppressed on first appearance (lastFillTime < 0).
@@ -115,10 +192,41 @@ void draw(const Layout& L,
     float pulsePhase = pulseT / kPulseDuration;
 
     Vector2 orbs2D[3];
-    orbPositions(L, orbs2D);
+    float orbSize = static_cast<float>(L.orbRadius * 2);
+    if (texturedBase) {
+        orbPositions(baseRect, orbs2D);
+        orbSize = baseRect.width * kOrbSizeScale;
+    } else {
+        orbPositions(L, orbs2D);
+    }
+
     for (int i = 0; i < 3; ++i) {
-        drawOrb(orbs2D[i], L.orbRadius, orbs[i],
-                pulsing && (i == lastIdx), pulsePhase);
+        const bool orbPulsing = pulsing && (i == lastIdx);
+        if (textures) {
+            const Texture2D* orbTexture = nullptr;
+            Color glow = {0, 0, 0, 0};
+            switch (orbs[i]) {
+                case OrbState::Pending:
+                    orbTexture = textures->pending;
+                    break;
+                case OrbState::Won:
+                    orbTexture = textures->won;
+                    glow = kWonGlow;
+                    break;
+                case OrbState::Lost:
+                    orbTexture = textures->lost;
+                    glow = kLossGlow;
+                    break;
+            }
+            if (hasTexture(orbTexture)) {
+                drawTexturedOrb(*orbTexture, orbs2D[i], orbSize,
+                                orbPulsing, pulsePhase, glow);
+                continue;
+            }
+        }
+
+        drawOrb(orbs2D[i], static_cast<int>(orbSize * 0.5f), orbs[i],
+                orbPulsing, pulsePhase);
     }
 }
 

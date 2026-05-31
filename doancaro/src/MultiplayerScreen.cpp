@@ -4,6 +4,7 @@
 #include "Fonts.h"
 #include "Theme.h"
 #include "UIComponents.h"
+#include "ViewBackgrounds.h"
 #include "raylib.h"
 
 #include <algorithm>
@@ -123,7 +124,17 @@ void MultiplayerScreen::setWaitingView(const std::string& newHeading,
 void MultiplayerScreen::setStatusMessage(const std::string& status,
                                          const std::string& detail) {
     statusLine = status;
-    detailLine = detail;
+    if (!detail.empty()) {
+        detailLine = detail;
+        return;
+    }
+
+    if (view == View::Waiting && !roomCode.empty()) {
+        detailLine = "Room code: " + roomCode;
+        return;
+    }
+
+    detailLine.clear();
 }
 
 void MultiplayerScreen::setRoomCode(const std::string& code) {
@@ -143,8 +154,8 @@ void MultiplayerScreen::update(AudioManager& audio) {
 }
 
 void MultiplayerScreen::draw() {
-    DrawRectangleGradientV(0, 0, GetScreenWidth(), GetScreenHeight(),
-                           Theme::palette.bg_top, Theme::palette.bg_bottom);
+    ViewBackgrounds::draw(ViewBackgroundId::Multiplayer,
+                          GetScreenWidth(), GetScreenHeight());
 
     UIC::drawTitle(heading.c_str(), GetScreenWidth(), GetScreenHeight());
     switch (view) {

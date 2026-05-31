@@ -22,6 +22,13 @@ struct Layout {
     int orbRadius = 11;
 };
 
+struct Textures {
+    const Texture2D* base    = nullptr;
+    const Texture2D* pending = nullptr;
+    const Texture2D* won     = nullptr;
+    const Texture2D* lost    = nullptr;
+};
+
 // Draws the framed sigil with three orbs.
 //   orbs           — chronological per-match outcome snapshot (size 3)
 //   currentTime    — GetTime() this frame
@@ -30,7 +37,8 @@ struct Layout {
 void draw(const Layout& L,
           const StoryMode::OrbState orbs[3],
           float currentTime,
-          float lastFillTime);
+          float lastFillTime,
+          const Textures* textures = nullptr);
 
 // Radial color burst from the sigil center. Alpha decays over ~0.7s.
 // Call BEFORE HUD/text so labels stay readable through the wash.

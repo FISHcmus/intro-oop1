@@ -47,8 +47,10 @@ public:
     bool startLanJoin(const std::string& address, int port,
                       const std::string& playerName);
     bool startOnlineHost(const std::string& address, int port,
+                         const std::string& fallbackAddress,
                          const std::string& playerName);
     bool startOnlineJoin(const std::string& address, int port,
+                         const std::string& fallbackAddress,
                          const std::string& roomCode,
                          const std::string& playerName);
 
@@ -85,6 +87,7 @@ private:
     void runLanHost(int port);
     void runLanJoin(const std::string& address, int port);
     void runOnline(const std::string& address, int port,
+                   const std::string& fallbackAddress,
                    bool createRoom, const std::string& roomCode);
 
     void pushEvent(NetEvent event);
@@ -96,7 +99,8 @@ private:
 
     bool initSockets();
     SocketHandle createListenSocket(int port);
-    SocketHandle connectSocket(const std::string& address, int port);
+    SocketHandle connectSocket(const std::string& address, int port,
+                               const std::string& fallbackAddress = std::string());
     std::string guessLocalIPv4() const;
     static void closeSocket(SocketHandle& fd);
     static std::vector<std::string> splitFields(const std::string& line);

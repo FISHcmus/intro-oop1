@@ -8,6 +8,8 @@ set(CARO_PRODUCTION_SERVER_HOST "" CACHE STRING
     "Configured production multiplayer hostname for online rooms")
 set(CARO_PRODUCTION_SERVER_PORT 34567 CACHE STRING
     "Configured production multiplayer port for online rooms")
+set(CARO_PRODUCTION_SERVER_FALLBACK_HOST "" CACHE STRING
+    "Optional fallback IP/hostname for production multiplayer when DNS fails")
 
 # --- Build speed optimizations ---
 
@@ -77,9 +79,11 @@ set(SOURCES
     src/DifficultyScreen.cpp
     src/MultiplayerScreen.cpp
     src/SaveLoadScreen.cpp
+    src/ViewBackgrounds.cpp
     src/AudioManager.cpp
     src/FileManager.cpp
     src/NetworkSession.cpp
+    src/RuntimePaths.cpp
     src/ServerConfig.cpp
     src/ParticleSystem.cpp
     src/StoryMode.cpp
@@ -95,6 +99,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     $<$<NOT:$<CONFIG:Debug>>:CARO_ENABLE_ENDPOINT_OVERRIDE=0>
     CARO_DEFAULT_PRODUCTION_HOST="${CARO_PRODUCTION_SERVER_HOST}"
     CARO_DEFAULT_PRODUCTION_PORT=${CARO_PRODUCTION_SERVER_PORT}
+    CARO_DEFAULT_PRODUCTION_FALLBACK_HOST="${CARO_PRODUCTION_SERVER_FALLBACK_HOST}"
 )
 if (WIN32)
     target_link_libraries(${PROJECT_NAME} ws2_32)

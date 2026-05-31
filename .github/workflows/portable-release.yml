@@ -1,0 +1,161 @@
+name: Build and release portable CaroGame bundles
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARO_PRODUCTION_SERVER_HOST: ${{ vars.CARO_PRODUCTION_SERVER_HOST }}
+  CARO_PRODUCTION_SERVER_PORT: ${{ vars.CARO_PRODUCTION_SERVER_PORT }}
+  CARO_PRODUCTION_SERVER_FALLBACK_HOST: ${{ vars.CARO_PRODUCTION_SERVER_FALLBACK_HOST }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: Linux x86_64
+            build_dir: build-linux
+            bundle_name: CaroGame-linux-x86_64
+            artifact_name: portable-linux-x86_64
+            archive_name: CaroGame-linux-x86_64.tar.gz
+            binary_name: CaroGame
+            target_dir: build-linux/doancaro
+          - os: windows-latest
+            label: Windows x64
+            build_dir: build-windows
+            bundle_name: CaroGame-windows-x64
+            artifact_name: portable-windows-x64
+            archive_name: CaroGame-windows-x64.zip
+            binary_name: CaroGame.exe
+            target_dir: build-windows/doancaro/Release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            libasound2-dev \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxinerama-dev \
+            libxkbcommon-dev \
+            libxrandr-dev
+
+      - name: Configure Linux release build
+        if: runner.os == 'Linux'
+        run: |
+          port="${CARO_PRODUCTION_SERVER_PORT:-34567}"
+          cmake -S . -B "${{ matrix.build_dir }}" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=OFF \
+            -DCARO_PRODUCTION_SERVER_HOST="${CARO_PRODUCTION_SERVER_HOST:-}" \
+            -DCARO_PRODUCTION_SERVER_PORT="${port}" \
+            -DCARO_PRODUCTION_SERVER_FALLBACK_HOST="${CARO_PRODUCTION_SERVER_FALLBACK_HOST:-}"
+
+      - name: Configure Windows release build
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $port = if ($env:CARO_PRODUCTION_SERVER_PORT) { $env:CARO_PRODUCTION_SERVER_PORT } else { "34567" }
+          cmake -S . -B "${{ matrix.build_dir }}" `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_POLICY_DEFAULT_CMP0091=NEW `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+            -DBUILD_TESTS=OFF `
+            -DCARO_PRODUCTION_SERVER_HOST="$env:CARO_PRODUCTION_SERVER_HOST" `
+            -DCARO_PRODUCTION_SERVER_PORT="$port" `
+            -DCARO_PRODUCTION_SERVER_FALLBACK_HOST="$env:CARO_PRODUCTION_SERVER_FALLBACK_HOST"
+
+      - name: Build release bundle
+        run: cmake --build "${{ matrix.build_dir }}" --config Release --target CaroGame --parallel
+
+      - name: Package Linux portable bundle
+        if: runner.os == 'Linux'
+        run: |
+          stage_root="dist/${{ matrix.bundle_name }}"
+          rm -rf "$stage_root"
+          mkdir -p "$stage_root"
+          cp "${{ matrix.target_dir }}/${{ matrix.binary_name }}" "$stage_root/"
+          cp -R "${{ matrix.target_dir }}/assets" "$stage_root/assets"
+          cat > "$stage_root/README.txt" <<'EOF'
+          CaroGame portable bundle
+
+          Run:
+            ./CaroGame
+
+          Requirements:
+            - Keep the assets/ directory next to the executable.
+            - The target Linux machine still needs common desktop libraries
+              such as X11, OpenGL, and ALSA.
+          EOF
+          tar -C dist -czf "dist/${{ matrix.archive_name }}" "${{ matrix.bundle_name }}"
+
+      - name: Package Windows portable bundle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stageRoot = Join-Path "dist" "${{ matrix.bundle_name }}"
+          if (Test-Path $stageRoot) {
+            Remove-Item -Recurse -Force $stageRoot
+          }
+          New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
+          Copy-Item "${{ matrix.target_dir }}\\${{ matrix.binary_name }}" $stageRoot
+          Copy-Item -Recurse "${{ matrix.target_dir }}\\assets" (Join-Path $stageRoot "assets")
+          @'
+          CaroGame portable bundle
+
+          Run:
+            CaroGame.exe
+
+          Requirements:
+            - Keep the assets\ directory next to the executable.
+          '@ | Set-Content -Path (Join-Path $stageRoot "README.txt")
+          $archive = Join-Path "dist" "${{ matrix.archive_name }}"
+          if (Test-Path $archive) {
+            Remove-Item -Force $archive
+          }
+          Compress-Archive -Path $stageRoot -DestinationPath $archive
+
+      - name: Upload portable bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/${{ matrix.archive_name }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download bundle artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: portable-*
+          merge-multiple: true
+
+      - name: Publish tagged release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-assets/CaroGame-linux-x86_64.tar.gz
+            release-assets/CaroGame-windows-x64.zip
+          generate_release_notes: true

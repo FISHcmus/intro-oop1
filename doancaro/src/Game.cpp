@@ -4,7 +4,10 @@
 #include "UIComponents.h"
 #include "StoryContent.h"
 #include "StorySigil.h"
+#include "RuntimePaths.h"
+#include "ViewBackgrounds.h"
 #include <algorithm>
+#include <cmath>
 #include <climits>
 #include <cstdlib>
 #include <ctime>
@@ -16,12 +19,45 @@ static const int SCREEN_HEIGHT = 700;
 
 namespace {
 
+constexpr float kLaunchMinDuration = 5.0f;
+constexpr int kLaunchStepCount = 6;
+constexpr float kLaunchFadeInDuration = 0.55f;
+constexpr float kLaunchFadeOutDuration = 0.45f;
 constexpr float kStoryPanelLineStep = 22.0f;
 constexpr float kStoryPanelScrollStep = kStoryPanelLineStep * 2.0f;
 constexpr float kStoryNavCenterFromBottom = 86.0f;
 constexpr float kStoryNavButtonHeight = 48.0f;
 constexpr float kStoryPanelGapToNav = 8.0f;
 constexpr int kStoryPanelWidthCh = 70;
+constexpr int kStoryPickerCardW = 186;
+constexpr int kStoryPickerCardH = 236;
+constexpr int kStoryPickerGap = 18;
+
+const char* const kLaunchStepPillLabels[kLaunchStepCount] = {
+    "Renderer",
+    "Typography",
+    "Audio",
+    "Main Menu",
+    "Scenes",
+    "Campaign"
+};
+
+float clamp01(float value) {
+    if (value < 0.0f) return 0.0f;
+    if (value > 1.0f) return 1.0f;
+    return value;
+}
+
+float easeOutCubic(float t) {
+    t = clamp01(t);
+    float inv = 1.0f - t;
+    return 1.0f - inv * inv * inv;
+}
+
+float easeInCubic(float t) {
+    t = clamp01(t);
+    return t * t * t;
+}
 
 float storyNavRowCenterY(int screenH) {
     return static_cast<float>(screenH) - kStoryNavCenterFromBottom;
@@ -31,6 +67,40 @@ float storyPanelMaxHeightFor(int panelY, int screenH) {
     float navTop = storyNavRowCenterY(screenH) - kStoryNavButtonHeight * 0.5f;
     return std::max(kStoryPanelLineStep, navTop - static_cast<float>(panelY)
                                          - kStoryPanelGapToNav);
+}
+
+Rectangle storyPickerCardRect(int index, int screenW, int screenH) {
+    int totalW = 4 * kStoryPickerCardW + 3 * kStoryPickerGap;
+    int leftX = (screenW - totalW) / 2;
+    int topY = screenH / 2 - kStoryPickerCardH / 2 + 12;
+    return {
+        static_cast<float>(leftX + index * (kStoryPickerCardW + kStoryPickerGap)),
+        static_cast<float>(topY),
+        static_cast<float>(kStoryPickerCardW),
+        static_cast<float>(kStoryPickerCardH)
+    };
+}
+
+Rectangle storyPickerBackRect(int screenW, int screenH) {
+    return {
+        static_cast<float>(screenW / 2 - 110),
+        static_cast<float>(screenH - 80),
+        220.0f,
+        44.0f
+    };
+}
+
+void drawLaunchTextCentered(const char* text, int centerX, int y, int fontSize,
+                            Color color, bool fontsReady,
+                            bool titleFace = false, bool boldFace = false) {
+    if (fontsReady) {
+        Font font = titleFace ? Fonts::title : (boldFace ? Fonts::bold : Fonts::body);
+        Fonts::drawCentered(font, text, centerX, y, static_cast<float>(fontSize), color);
+        return;
+    }
+
+    int width = MeasureText(text, fontSize);
+    DrawText(text, centerX - width / 2, y, fontSize, color);
 }
 
 // Immediate-mode navigation button row. Draws up to 3 buttons centred at
@@ -166,6 +236,67 @@ void unloadTextureSafe(Texture2D& tex) {
     }
 }
 
+void drawTextureCover(const Texture2D& tex, Rectangle dst, Color tint) {
+    if (tex.id == 0 || dst.width <= 0.0f || dst.height <= 0.0f) return;
+
+    Rectangle src = {
+        0.0f, 0.0f,
+        static_cast<float>(tex.width),
+        static_cast<float>(tex.height)
+    };
+    float srcAspect = src.width / src.height;
+    float dstAspect = dst.width / dst.height;
+
+    if (srcAspect > dstAspect) {
+        float cropW = src.height * dstAspect;
+        src.x = (src.width - cropW) * 0.5f;
+        src.width = cropW;
+    } else {
+        float cropH = src.width / dstAspect;
+        src.y = (src.height - cropH) * 0.5f;
+        src.height = cropH;
+    }
+
+    DrawTexturePro(tex, src, dst, {0.0f, 0.0f}, 0.0f, tint);
+}
+
+void drawStoryCardArt(const Texture2D* tex, Rectangle frame,
+                      bool unlocked, bool hot) {
+    DrawRectangleRounded(frame, 0.10f, 8,
+                         Theme::withAlpha(Theme::palette.slate_fog,
+                                          unlocked ? 235 : 185));
+
+    Rectangle inner = {
+        frame.x + 4.0f, frame.y + 4.0f,
+        frame.width - 8.0f, frame.height - 8.0f
+    };
+    if (tex && tex->id != 0) {
+        drawTextureCover(*tex, inner,
+                         Theme::withAlpha(WHITE, unlocked ? 255 : 125));
+    } else {
+        DrawRectangleRounded(inner, 0.08f, 6,
+                             Theme::withAlpha(Theme::palette.bg_bottom, 220));
+    }
+
+    Rectangle glaze = {
+        inner.x,
+        inner.y + inner.height * 0.48f,
+        inner.width,
+        inner.height * 0.52f
+    };
+    DrawRectangleGradientV(static_cast<int>(glaze.x), static_cast<int>(glaze.y),
+                           static_cast<int>(glaze.width),
+                           static_cast<int>(glaze.height),
+                           Theme::withAlpha(Theme::palette.ink_sumi, 0),
+                           Theme::withAlpha(Theme::palette.ink_sumi,
+                                            unlocked ? 120 : 165));
+
+    DrawRectangleRoundedLinesEx(frame, 0.10f, 8, 1.5f,
+                                Theme::withAlpha(Theme::palette.gold_foil,
+                                                 unlocked ? (hot ? 235 : 185)
+                                                          : 95));
+}
+
 void drawStoryIllustrationFrame(const Texture2D* tex, int xCenter, int yTop,
                                 int frameW, int frameH) {
     Rectangle outer = {
@@ -210,7 +341,7 @@ void drawStoryIllustrationFrame(const Texture2D* tex, int xCenter, int yTop,
 }  // namespace
 
 Game::Game()
-    : state(GameState::Menu), settingsReturnState(GameState::Menu),
+    : state(GameState::Launch), settingsReturnState(GameState::Menu),
       player1(nullptr), player2(nullptr), currentPlayer(nullptr),
       cursorRow(Board::SIZE / 2), cursorCol(Board::SIZE / 2),
       vsAI(true), aiDepth(3),
@@ -219,6 +350,11 @@ Game::Game()
       storySigilLastFillTime(-1.0f),
       storyPanelScroll(0.0f), storyPanelMaxScroll(0.0f),
       playTime(0.0f),
+      launchLoadStep(0), launchStartedAt(0.0f),
+      launchFramePrimed(false), launchFontsReady(false),
+      launchAudioReady(false), launchAssetsReady(false),
+      launchStatusLine("Booting production services"),
+      launchDetailLine("Preparing startup resources for the release build."),
       toastMessage{}, toastTimer(0.0f),
       showDebugPanel(false),
       quitRequested(false),
@@ -228,8 +364,11 @@ Game::Game()
       waitingForNetworkAck(false),
       storyVoiIcon{}, storyGaIcon{}, storyNguaIcon{},
       storyIntroImages{},
+      storySetCardImages{},
       storySetIntroImages{}, storySetWinImages{}, storySetLoseImages{},
-      storyUnlockImages{}, storyEpilogueImage{} {
+      storyUnlockImages{}, storyEpilogueImage{},
+      storySigilBaseTexture{}, storySigilPendingTexture{},
+      storySigilWonTexture{}, storySigilLostTexture{} {
     loadSettings();
 }
 
@@ -246,36 +385,34 @@ void Game::run() {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Caro Game - OOP1 Project");
     SetTargetFPS(60);
     SetExitKey(0);  // Disable ESC auto-close; we handle ESC ourselves
-
-    renderer.init(SCREEN_WIDTH, SCREEN_HEIGHT);
-    Fonts::init();
-    audioManager.init();
-    MenuScreen::preload();
-    loadStoryAssets();
+    launchStartedAt = static_cast<float>(GetTime());
 
     while (!WindowShouldClose() && !quitRequested) {
         // Settings/Save/Load fall through on purpose: they keep whatever's
         // already playing so a quick visit doesn't cut the current track.
         // Story narration screens use menu music - they're between matches.
-        switch (state) {
-            case GameState::Menu:
-            case GameState::Multiplayer:
-            case GameState::StoryPickSet:
-            case GameState::StoryIntro:
-            case GameState::StoryBeat:
-                audioManager.switchToMenuMusic();
-                break;
-            case GameState::Playing:
-            case GameState::GameOver:
-                audioManager.switchToGameMusic();
-                break;
-            default:
-                break;
+        if (launchAudioReady && state != GameState::Launch) {
+            switch (state) {
+                case GameState::Menu:
+                case GameState::Multiplayer:
+                case GameState::StoryPickSet:
+                case GameState::StoryIntro:
+                case GameState::StoryBeat:
+                    audioManager.switchToMenuMusic();
+                    break;
+                case GameState::Playing:
+                case GameState::GameOver:
+                    audioManager.switchToGameMusic();
+                    break;
+                default:
+                    break;
+            }
+            audioManager.updateMusic();
         }
-        audioManager.updateMusic();
 
         // Update
         switch (state) {
+            case GameState::Launch:         updateLaunch();         break;
             case GameState::Menu:           updateMenu();           break;
             case GameState::Settings:       updateSettings();       break;
             case GameState::PickDifficulty: updateDifficulty();     break;
@@ -304,6 +441,7 @@ void Game::run() {
         }
 
         switch (state) {
+            case GameState::Launch:         drawLaunch();         break;
             case GameState::Menu:           drawMenu();           break;
             case GameState::Settings:       drawSettings();       break;
             case GameState::PickDifficulty: drawDifficulty();     break;
@@ -331,7 +469,309 @@ void Game::run() {
     Fonts::cleanup();
     renderer.shutdown();
     MenuScreen::shutdown();
+    ViewBackgrounds::shutdown();
     CloseWindow();
+}
+
+void Game::runLaunchLoadStep() {
+    switch (launchLoadStep) {
+        case 0:
+            launchStatusLine = "Initializing renderer";
+            launchDetailLine = "Creating the scene renderer, shaders, and board stage.";
+            renderer.init(SCREEN_WIDTH, SCREEN_HEIGHT);
+            break;
+        case 1:
+            launchStatusLine = "Loading typography";
+            launchDetailLine = "Preparing title, interface, and monospace font sets.";
+            Fonts::init();
+            launchFontsReady = true;
+            break;
+        case 2:
+            launchStatusLine = "Initializing audio";
+            launchDetailLine = "Opening the audio device and loading sound banks.";
+            audioManager.init();
+            launchAudioReady = true;
+            break;
+        case 3:
+            launchStatusLine = "Preloading main menu";
+            launchDetailLine = "Caching the animated title backdrop and menu frames.";
+            MenuScreen::preload();
+            break;
+        case 4:
+            launchStatusLine = "Preloading interface scenes";
+            launchDetailLine = "Caching settings, multiplayer, and save-room backgrounds.";
+            ViewBackgrounds::preload();
+            break;
+        case 5:
+            launchStatusLine = "Loading campaign assets";
+            launchDetailLine = "Preparing story illustrations, unlock art, and campaign panels.";
+            loadStoryAssets();
+            launchAssetsReady = true;
+            break;
+        default:
+            break;
+    }
+
+    launchLoadStep++;
+}
+
+void Game::updateLaunch() {
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        quitRequested = true;
+        return;
+    }
+
+    if (!launchFramePrimed) {
+        launchFramePrimed = true;
+        return;
+    }
+
+    if (launchLoadStep < kLaunchStepCount) {
+        runLaunchLoadStep();
+        return;
+    }
+
+    launchAssetsReady = true;
+
+    float elapsed = static_cast<float>(GetTime()) - launchStartedAt;
+    if (elapsed >= kLaunchMinDuration) {
+        state = GameState::Menu;
+        menuScreen.reset();
+        return;
+    }
+
+    char detail[160];
+    std::snprintf(detail, sizeof(detail),
+                  "Startup checks complete. Opening the main menu in %.1f seconds.",
+                  kLaunchMinDuration - elapsed);
+    launchStatusLine = "Ready";
+    launchDetailLine = detail;
+}
+
+void Game::drawLaunch() {
+    const int screenW = GetScreenWidth();
+    const int screenH = GetScreenHeight();
+    const int centerX = screenW / 2;
+    const float elapsed = static_cast<float>(GetTime()) - launchStartedAt;
+    const float fadeIn = easeOutCubic(elapsed / kLaunchFadeInDuration);
+    const float fadeOut = launchAssetsReady
+                        ? easeInCubic((elapsed - (kLaunchMinDuration - kLaunchFadeOutDuration))
+                                      / kLaunchFadeOutDuration)
+                        : 0.0f;
+    const float masterAlpha = clamp01(fadeIn * (1.0f - fadeOut));
+    const float pulse = 0.5f + 0.5f * std::sin(elapsed * 1.8f);
+    const int completedSteps = std::min(launchLoadStep, kLaunchStepCount);
+    const bool loadingActive = launchLoadStep < kLaunchStepCount;
+    const int activeStep = loadingActive ? launchLoadStep : (kLaunchStepCount - 1);
+
+    DrawRectangleGradientV(0, 0, screenW, screenH,
+                           Theme::withAlpha(Theme::palette.bg_top,
+                                            static_cast<unsigned char>(255 * masterAlpha)),
+                           Theme::withAlpha(Theme::palette.bg_bottom,
+                                            static_cast<unsigned char>(255 * masterAlpha)));
+    DrawCircleGradient(static_cast<int>(screenW * 0.20f),
+                       static_cast<int>(screenH * 0.26f), 220.0f + 18.0f * pulse,
+                       Theme::withAlpha(Theme::palette.son_jade,
+                                        static_cast<unsigned char>((80.0f + 22.0f * pulse) * masterAlpha)),
+                       Theme::withAlpha(Theme::palette.son_jade, 0));
+    DrawCircleGradient(static_cast<int>(screenW * 0.82f),
+                       static_cast<int>(screenH * 0.22f), 240.0f + 24.0f * (1.0f - pulse),
+                       Theme::withAlpha(Theme::palette.thuy_cyan,
+                                        static_cast<unsigned char>((76.0f + 24.0f * (1.0f - pulse)) * masterAlpha)),
+                       Theme::withAlpha(Theme::palette.thuy_cyan, 0));
+    DrawRectangleGradientV(0, screenH / 2, screenW, screenH / 2,
+                           Theme::withAlpha(Theme::palette.ink_sumi, 0),
+                           Theme::withAlpha(Theme::palette.ink_sumi,
+                                            static_cast<unsigned char>(96 * masterAlpha)));
+
+    Rectangle panel = {
+        static_cast<float>(screenW / 2 - 350),
+        static_cast<float>(screenH / 2 - 205),
+        700.0f,
+        410.0f
+    };
+    DrawRectangleRounded(panel, 0.10f, 10,
+                         Theme::withAlpha(Theme::palette.ink_sumi,
+                                          static_cast<unsigned char>(196 * masterAlpha)));
+    DrawRectangleRoundedLinesEx(panel, 0.10f, 10, 2.0f,
+                                Theme::withAlpha(Theme::palette.gold_foil,
+                                                 static_cast<unsigned char>(212 * masterAlpha)));
+
+    const int sealCx = centerX;
+    const int sealCy = static_cast<int>(panel.y) + 52;
+    DrawCircleGradient(sealCx, sealCy, 32.0f + 3.0f * pulse,
+                       Theme::withAlpha(Theme::palette.paper_washi,
+                                        static_cast<unsigned char>(38 * masterAlpha)),
+                       Theme::withAlpha(Theme::palette.paper_washi, 0));
+    DrawCircleLines(sealCx, sealCy, 31.0f,
+                    Theme::withAlpha(Theme::palette.gold_foil,
+                                     static_cast<unsigned char>(215 * masterAlpha)));
+    DrawCircleV({static_cast<float>(sealCx - 9), static_cast<float>(sealCy)}, 7.0f,
+                Theme::withAlpha(Theme::palette.son_jade,
+                                 static_cast<unsigned char>(240 * masterAlpha)));
+    DrawCircleV({static_cast<float>(sealCx + 9), static_cast<float>(sealCy)}, 7.0f,
+                Theme::withAlpha(Theme::palette.thuy_cyan,
+                                 static_cast<unsigned char>(240 * masterAlpha)));
+    DrawLineEx({static_cast<float>(sealCx), static_cast<float>(sealCy - 14)},
+               {static_cast<float>(sealCx), static_cast<float>(sealCy + 14)},
+               2.0f,
+               Theme::withAlpha(Theme::palette.gold_foil,
+                                static_cast<unsigned char>(180 * masterAlpha)));
+
+    drawLaunchTextCentered("NHANNHT FOUNDATION", centerX,
+                           static_cast<int>(panel.y) + 106, 46,
+                           Theme::withAlpha(Theme::palette.paper_washi,
+                                            static_cast<unsigned char>(248 * masterAlpha)),
+                           launchFontsReady, true, false);
+    drawLaunchTextCentered("PRESENTS", centerX,
+                           static_cast<int>(panel.y) + 160, 22,
+                           Theme::withAlpha(Theme::palette.gold_foil,
+                                            static_cast<unsigned char>(226 * masterAlpha)),
+                           launchFontsReady, false, true);
+    drawLaunchTextCentered("Launching production build", centerX,
+                           static_cast<int>(panel.y) + 192, 16,
+                           Theme::withAlpha(Theme::palette.son_bone,
+                                            static_cast<unsigned char>(210 * masterAlpha)),
+                           launchFontsReady, false, false);
+
+    Rectangle dividerLeft = {
+        panel.x + 78.0f,
+        panel.y + 210.0f,
+        180.0f,
+        2.0f
+    };
+    Rectangle dividerRight = {
+        panel.x + panel.width - 258.0f,
+        panel.y + 210.0f,
+        180.0f,
+        2.0f
+    };
+    DrawRectangleRec(dividerLeft,
+                     Theme::withAlpha(Theme::palette.gold_foil,
+                                      static_cast<unsigned char>(140 * masterAlpha)));
+    DrawRectangleRec(dividerRight,
+                     Theme::withAlpha(Theme::palette.gold_foil,
+                                      static_cast<unsigned char>(140 * masterAlpha)));
+
+    char phase[96];
+    std::snprintf(phase, sizeof(phase), "Startup progress %d / %d",
+                  completedSteps,
+                  kLaunchStepCount);
+    drawLaunchTextCentered(phase, centerX,
+                           static_cast<int>(panel.y) + 226, 16,
+                           Theme::withAlpha(Theme::palette.thuy_pearl,
+                                            static_cast<unsigned char>(215 * masterAlpha)),
+                           launchFontsReady, false, false);
+    drawLaunchTextCentered(launchStatusLine.c_str(), centerX,
+                           static_cast<int>(panel.y) + 254, 22,
+                           Theme::withAlpha(Theme::palette.paper_washi,
+                                            static_cast<unsigned char>(245 * masterAlpha)),
+                           launchFontsReady, false, true);
+    drawLaunchTextCentered(launchDetailLine.c_str(), centerX,
+                           static_cast<int>(panel.y) + 286, 15,
+                           Theme::withAlpha(Theme::palette.son_bone,
+                                            static_cast<unsigned char>(210 * masterAlpha)),
+                           launchFontsReady, false, false);
+
+    Rectangle barFrame = {
+        panel.x + 72.0f,
+        panel.y + 320.0f,
+        panel.width - 144.0f,
+        16.0f
+    };
+    DrawRectangleRounded(barFrame, 0.5f, 8,
+                         Theme::withAlpha(Theme::palette.slate_fog,
+                                          static_cast<unsigned char>(188 * masterAlpha)));
+    DrawRectangleRoundedLinesEx(barFrame, 0.5f, 8, 1.5f,
+                                Theme::withAlpha(Theme::palette.gold_foil,
+                                                 static_cast<unsigned char>(180 * masterAlpha)));
+
+    float progress = static_cast<float>(launchLoadStep) /
+                     static_cast<float>(kLaunchStepCount);
+    progress = clamp01(progress);
+
+    Rectangle barFill = {
+        barFrame.x + 4.0f,
+        barFrame.y + 4.0f,
+        (barFrame.width - 8.0f) * progress,
+        barFrame.height - 8.0f
+    };
+    if (barFill.width > 0.0f) {
+        DrawRectangleRounded(barFill, 0.45f, 8,
+                             Theme::withAlpha(Theme::palette.thuy_cyan,
+                                              static_cast<unsigned char>(232 * masterAlpha)));
+        Rectangle shimmer = {
+            barFill.x + std::max(0.0f, barFill.width - 38.0f),
+            barFill.y,
+            std::min(34.0f, barFill.width),
+            barFill.height
+        };
+        if (shimmer.width > 0.0f) {
+            DrawRectangleRounded(shimmer, 0.45f, 8,
+                                 Theme::withAlpha(Theme::palette.paper_washi,
+                                                  static_cast<unsigned char>(72 * masterAlpha)));
+        }
+    }
+
+    const float stepGap = 8.0f;
+    const float stepWidth = 96.0f;
+    const float stepHeight = 28.0f;
+    const float stepStartX = panel.x + (panel.width - (stepWidth * 6.0f + stepGap * 5.0f)) * 0.5f;
+    const float stepTopY = panel.y + 348.0f;
+    for (int i = 0; i < kLaunchStepCount; ++i) {
+        Rectangle stepRect = {
+            stepStartX + i * (stepWidth + stepGap),
+            stepTopY,
+            stepWidth,
+            stepHeight
+        };
+
+        bool isComplete = i < completedSteps;
+        bool isActive = loadingActive && i == activeStep;
+        unsigned char fillAlpha = isComplete ? 148 : (isActive ? 122 : 76);
+        unsigned char borderAlpha = isComplete ? 208 : (isActive ? 190 : 96);
+        Color fillColor = isComplete
+                        ? Theme::withAlpha(Theme::palette.thuy_cyan,
+                                           static_cast<unsigned char>(fillAlpha * masterAlpha))
+                        : Theme::withAlpha(Theme::palette.slate_fog,
+                                           static_cast<unsigned char>(fillAlpha * masterAlpha));
+        if (isActive) {
+            fillColor = Theme::withAlpha(Theme::palette.son_jade,
+                                         static_cast<unsigned char>(fillAlpha * masterAlpha));
+        }
+
+        DrawRectangleRounded(stepRect, 0.35f, 8, fillColor);
+        DrawRectangleRoundedLinesEx(stepRect, 0.35f, 8, 1.2f,
+                                    Theme::withAlpha(Theme::palette.gold_foil,
+                                                     static_cast<unsigned char>(borderAlpha * masterAlpha)));
+        drawLaunchTextCentered(kLaunchStepPillLabels[i],
+                               static_cast<int>(stepRect.x + stepRect.width * 0.5f),
+                               static_cast<int>(stepRect.y) + 6,
+                               12,
+                               Theme::withAlpha(Theme::palette.paper_washi,
+                                                static_cast<unsigned char>((isComplete || isActive ? 244 : 176) * masterAlpha)),
+                               launchFontsReady, false, isComplete || isActive);
+    }
+
+    char footer[128];
+    if (launchAssetsReady) {
+        std::snprintf(footer, sizeof(footer),
+                      "Startup complete. Handing off to the main menu.");
+    } else {
+        std::snprintf(footer, sizeof(footer),
+                      "Press Esc to cancel startup.");
+    }
+    drawLaunchTextCentered(footer, centerX,
+                           static_cast<int>(panel.y + panel.height - 24.0f), 13,
+                           Theme::withAlpha(Theme::palette.son_bone,
+                                            static_cast<unsigned char>(188 * masterAlpha)),
+                           launchFontsReady, false, false);
+
+    if (fadeOut > 0.0f) {
+        DrawRectangle(0, 0, screenW, screenH,
+                      Theme::withAlpha(Theme::palette.ink_sumi,
+                                       static_cast<unsigned char>(255 * fadeOut)));
+    }
 }
 
 void Game::loadStoryAssets() {
@@ -379,6 +819,10 @@ void Game::loadStoryAssets() {
     const char* const setNames[4] = { "set1", "set2", "set3", "finalboss" };
     for (int i = 0; i < 4; ++i) {
         std::snprintf(path, sizeof(path),
+                      "assets/images/story/set-picker/%s-card-wuxia-v1.png", setNames[i]);
+        loadTextureIfPresent(storySetCardImages[i], path);
+
+        std::snprintf(path, sizeof(path),
                       "assets/images/story/set-intro/%s-wuxia-v1.png", setNames[i]);
         loadTextureIfPresent(storySetIntroImages[i], path);
         if (storySetIntroImages[i].id == 0) {
@@ -420,6 +864,14 @@ void Game::loadStoryAssets() {
 
     loadTextureIfPresent(storyEpilogueImage,
                          "assets/images/story/epilogue/epilogue-wuxia-v1.png");
+    loadTextureIfPresent(storySigilBaseTexture,
+                         "assets/images/story/sigil/story-sigil-base-wuxia-v1.png");
+    loadTextureIfPresent(storySigilPendingTexture,
+                         "assets/images/story/sigil/story-sigil-orb-pending-wuxia-v1.png");
+    loadTextureIfPresent(storySigilWonTexture,
+                         "assets/images/story/sigil/story-sigil-orb-win-wuxia-v1.png");
+    loadTextureIfPresent(storySigilLostTexture,
+                         "assets/images/story/sigil/story-sigil-orb-loss-wuxia-v1.png");
 }
 
 void Game::unloadStoryAssets() {
@@ -427,6 +879,9 @@ void Game::unloadStoryAssets() {
     unloadTextureSafe(storyGaIcon);
     unloadTextureSafe(storyNguaIcon);
     for (Texture2D& tex : storyIntroImages) {
+        unloadTextureSafe(tex);
+    }
+    for (Texture2D& tex : storySetCardImages) {
         unloadTextureSafe(tex);
     }
     for (Texture2D& tex : storySetIntroImages) {
@@ -442,6 +897,10 @@ void Game::unloadStoryAssets() {
         unloadTextureSafe(tex);
     }
     unloadTextureSafe(storyEpilogueImage);
+    unloadTextureSafe(storySigilBaseTexture);
+    unloadTextureSafe(storySigilPendingTexture);
+    unloadTextureSafe(storySigilWonTexture);
+    unloadTextureSafe(storySigilLostTexture);
 }
 
 void Game::updateMenu() {
@@ -453,7 +912,7 @@ void Game::updateMenu() {
         return;
     }
     menuScreen.update(audioManager);
-    MenuChoice choice = menuScreen.getChoice();
+    MenuChoice choice = menuScreen.consumeChoice();
 
     switch (choice) {
         case MenuChoice::NewGame:
@@ -560,6 +1019,8 @@ void Game::updateMultiplayer() {
             {
                 ServerConfig::Endpoint endpoint =
                     ServerConfig::resolveOnlineEndpoint(action.endpointPreset);
+                std::string fallbackHost =
+                    ServerConfig::resolveOnlineFallbackHost(action.endpointPreset);
                 if (!ServerConfig::endpointConfigured(endpoint)) {
                     multiplayerScreen.setStatusMessage(
                         "Online server not configured",
@@ -567,7 +1028,8 @@ void Game::updateMultiplayer() {
                     break;
                 }
                 if (!networkSession.startOnlineHost(endpoint.host, endpoint.port,
-                                                action.playerName)) {
+                                                    fallbackHost,
+                                                    action.playerName)) {
                     multiplayerScreen.setStatusMessage("Failed to reach online server");
                     break;
                 }
@@ -582,6 +1044,8 @@ void Game::updateMultiplayer() {
             {
                 ServerConfig::Endpoint endpoint =
                     ServerConfig::resolveOnlineEndpoint(action.endpointPreset);
+                std::string fallbackHost =
+                    ServerConfig::resolveOnlineFallbackHost(action.endpointPreset);
                 if (!ServerConfig::endpointConfigured(endpoint)) {
                     multiplayerScreen.setStatusMessage(
                         "Online server not configured",
@@ -589,6 +1053,7 @@ void Game::updateMultiplayer() {
                     break;
                 }
                 if (!networkSession.startOnlineJoin(endpoint.host, endpoint.port,
+                                                    fallbackHost,
                                                     action.roomCode, action.playerName)) {
                     multiplayerScreen.setStatusMessage("Failed to join online room");
                     break;
@@ -1258,6 +1723,30 @@ void Game::updateStoryPickSet() {
         audioManager.playMenuClickSound();
         state = GameState::Menu;
         menuScreen.reset();
+        return;
+    }
+
+    int maxAvail = cheatUnlockAll ? 4 : storyMaxUnlocked;
+    Vector2 mp = GetMousePosition();
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        for (int i = 0; i < 4; ++i) {
+            if ((i + 1) > maxAvail) continue;
+            if (CheckCollisionPointRec(mp, storyPickerCardRect(i, GetScreenWidth(), GetScreenHeight()))) {
+                audioManager.playMenuClickSound();
+                inStoryMode = true;
+                storyMode.jumpToSet(static_cast<StoryMode::SetId>(i));
+                storySigilLastFillTime = -1.0f;
+                resetStoryPanelScroll();
+                state = GameState::StoryIntro;
+                return;
+            }
+        }
+
+        if (CheckCollisionPointRec(mp, storyPickerBackRect(GetScreenWidth(), GetScreenHeight()))) {
+            audioManager.playMenuClickSound();
+            state = GameState::Menu;
+            menuScreen.reset();
+        }
     }
 }
 
@@ -1287,78 +1776,62 @@ void Game::drawStoryPickSet() {
         { "BOSS · TỬ ĐẤU", "CHÂN HÌNH THUỶ TINH","Đầy đủ 3 linh vật" },
     };
 
-    constexpr int kCardW = 168;
-    constexpr int kCardH = 220;
-    constexpr int kGap   = 22;
-    int totalW = 4 * kCardW + 3 * kGap;
-    int leftX  = (sw - totalW) / 2;
-    int topY   = sh / 2 - kCardH / 2 + 10;
-
     Vector2 mp = GetMousePosition();
     for (int i = 0; i < 4; ++i) {
-        int x0 = leftX + i * (kCardW + kGap);
-        int y0 = topY;
-        int cx = x0 + kCardW / 2;
+        Rectangle r = storyPickerCardRect(i, sw, sh);
+        int x0 = static_cast<int>(r.x);
+        int y0 = static_cast<int>(r.y);
+        int cx = x0 + static_cast<int>(r.width) / 2;
         bool unlocked = (i + 1) <= maxAvail;
-        Rectangle r = { static_cast<float>(x0), static_cast<float>(y0),
-                        static_cast<float>(kCardW), static_cast<float>(kCardH) };
         bool hot = unlocked && CheckCollisionPointRec(mp, r);
 
-        if (hot && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            audioManager.playMenuClickSound();
-            inStoryMode = true;
-            storyMode.jumpToSet(static_cast<StoryMode::SetId>(i));
-            storySigilLastFillTime = -1.0f;
-            resetStoryPanelScroll();
-            state = GameState::StoryIntro;
-            return;
-        }
-
-        unsigned char bgA     = unlocked ? 215 : 130;
-        unsigned char borderA = unlocked ? (hot ? 250 : 180) : 80;
+        unsigned char bgA     = unlocked ? 220 : 145;
+        unsigned char borderA = unlocked ? (hot ? 250 : 185) : 90;
         DrawRectangleRounded(r, 0.10f, 8,
                              Theme::withAlpha(Theme::palette.ink_sumi, bgA));
         DrawRectangleRoundedLinesEx(r, 0.10f, 8, 2.5f,
                                     Theme::withAlpha(Theme::palette.gold_foil, borderA));
+
+        Rectangle artFrame = {
+            static_cast<float>(x0 + 14),
+            static_cast<float>(y0 + 34),
+            r.width - 28.0f,
+            104.0f
+        };
+        drawStoryCardArt(&storySetCardImages[i], artFrame, unlocked, hot);
 
         unsigned char tagA   = unlocked ? 240 : 130;
         unsigned char titleA = unlocked ? 245 : 140;
 
         Fonts::drawCentered(Fonts::bold, meta[i].tag, cx, y0 + 18, 13.0f,
                             Theme::withAlpha(Theme::palette.gold_foil, tagA));
-        Fonts::drawCentered(Fonts::bold, meta[i].title, cx, y0 + 56, 17.0f,
+        Fonts::drawCentered(Fonts::bold, meta[i].title, cx, y0 + 148, 17.0f,
                             Theme::withAlpha(Theme::palette.son_bone, titleA));
 
         if (unlocked) {
-            Fonts::drawCentered(Fonts::body, meta[i].beasts, cx, y0 + 110, 13.0f,
+            Fonts::drawCentered(Fonts::body, meta[i].beasts, cx, y0 + 176, 13.0f,
                                 Theme::withAlpha(Theme::palette.son_bone, 220));
             Fonts::drawCentered(Fonts::bold, "Vào trận",
-                                cx, y0 + kCardH - 38, 15.0f,
+                                cx, y0 + static_cast<int>(r.height) - 28, 15.0f,
                                 Theme::withAlpha(Theme::palette.gold_foil,
                                                  hot ? 255 : 200));
         } else {
+            DrawRectangleRounded(artFrame, 0.10f, 8,
+                                 Theme::withAlpha(Theme::palette.ink_sumi, 105));
             Fonts::drawCentered(Fonts::bold, "[ KHÓA ]",
-                                cx, y0 + kCardH / 2 + 4, 16.0f,
+                                cx, y0 + 176, 16.0f,
                                 Theme::withAlpha(Theme::palette.son_bone, 150));
             Fonts::drawCentered(Fonts::body, "Thắng ải trước để mở",
-                                cx, y0 + kCardH / 2 + 36, 12.0f,
+                                cx, y0 + 201, 12.0f,
                                 Theme::withAlpha(Theme::palette.son_bone, 110));
         }
     }
 
-    int backX = sw / 2 - 110;
-    int backY = sh - 80;
-    Rectangle backBtn = { static_cast<float>(backX),
-                          static_cast<float>(backY), 220.0f, 44.0f };
+    Rectangle backBtn = storyPickerBackRect(sw, sh);
     UIC::State bs = UIC::State::Rest;
     if (CheckCollisionPointRec(mp, backBtn)) {
         bs = IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? UIC::State::Pressed
                                                   : UIC::State::Focused;
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            audioManager.playMenuClickSound();
-            state = GameState::Menu;
-            menuScreen.reset();
-        }
     }
     UIC::drawPrimaryButton(backBtn, "Quay lại", bs);
 }
@@ -1821,8 +2294,14 @@ void Game::drawStoryHUD() {
                                    washColor, storySigilLastFillTime, now);
     }
 
+    StorySigil::Textures sigilTextures{};
+    sigilTextures.base = &storySigilBaseTexture;
+    sigilTextures.pending = &storySigilPendingTexture;
+    sigilTextures.won = &storySigilWonTexture;
+    sigilTextures.lost = &storySigilLostTexture;
+
     StorySigil::draw(sigil, storyMode.matchOutcomes, now,
-                     storySigilLastFillTime);
+                     storySigilLastFillTime, &sigilTextures);
 
     if (sigilActive && sigilT <= kCaptionDur) {
         char cap[40];
@@ -2065,7 +2544,8 @@ void Game::autoSave() {
 }
 
 void Game::saveSettings() const {
-    FILE* f = fopen("settings.cfg", "w");
+    std::string path = RuntimePaths::persistencePath("settings.cfg");
+    FILE* f = fopen(path.c_str(), "w");
     if (!f) return;
     fprintf(f, "%d\n", vsAI ? 1 : 0);
     fprintf(f, "%d\n", storyMaxUnlocked);
@@ -2074,7 +2554,8 @@ void Game::saveSettings() const {
 }
 
 void Game::loadSettings() {
-    FILE* f = fopen("settings.cfg", "r");
+    std::string path = RuntimePaths::persistencePath("settings.cfg");
+    FILE* f = fopen(path.c_str(), "r");
     if (!f) return;
     char buf[64];
     auto readInt = [&](int& out) -> bool {

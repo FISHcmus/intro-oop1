@@ -1,4 +1,5 @@
 #include "FileManager.h"
+#include "RuntimePaths.h"
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -12,7 +13,7 @@
 #endif
 
 std::string FileManager::getSaveDir() {
-    std::string dir = "saves";
+    std::string dir = RuntimePaths::persistencePath("saves");
     struct stat st = {};
     if (stat(dir.c_str(), &st) != 0) {
         MKDIR(dir.c_str());

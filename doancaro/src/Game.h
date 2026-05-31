@@ -21,7 +21,7 @@
 #include <atomic>
 
 enum class GameState {
-    Menu, Settings, PickDifficulty, Multiplayer, Playing, GameOver,
+    Launch, Menu, Settings, PickDifficulty, Multiplayer, Playing, GameOver,
     SaveScreen, LoadScreen,
     StoryPickSet, // campaign-select panel — pick which set to play
     StoryIntro,   // Cô Sử Tiên paginated monologue
@@ -87,6 +87,16 @@ private:
     // Play time tracking
     float playTime;
 
+    // Startup splash / staged preload
+    int launchLoadStep;
+    float launchStartedAt;
+    bool launchFramePrimed;
+    bool launchFontsReady;
+    bool launchAudioReady;
+    bool launchAssetsReady;
+    std::string launchStatusLine;
+    std::string launchDetailLine;
+
     // Toast notification
     char toastMessage[64];
     float toastTimer;
@@ -121,13 +131,19 @@ private:
     Texture2D storyGaIcon;
     Texture2D storyNguaIcon;
     std::array<Texture2D, StoryContent::kIntroPageCount> storyIntroImages;
+    std::array<Texture2D, 4> storySetCardImages;
     std::array<Texture2D, 4> storySetIntroImages;
     std::array<Texture2D, 4> storySetWinImages;
     std::array<Texture2D, 4> storySetLoseImages;
     std::array<Texture2D, 3> storyUnlockImages;
     Texture2D storyEpilogueImage;
+    Texture2D storySigilBaseTexture;
+    Texture2D storySigilPendingTexture;
+    Texture2D storySigilWonTexture;
+    Texture2D storySigilLostTexture;
 
     // Game loop phases
+    void updateLaunch();
     void updateMenu();
     void updateSettings();
     void updateDifficulty();
@@ -139,6 +155,7 @@ private:
     void updateStoryIntro();
     void updateStoryBeat();
 
+    void drawLaunch();
     void drawMenu();
     void drawSettings();
     void drawDifficulty();
@@ -156,6 +173,7 @@ private:
     // Helpers
     void resetStoryPanelScroll();
     void updateStoryPanelScroll();
+    void runLaunchLoadStep();
     void startNewGame();
     void startNetworkMatch(const NetEvent& event);
     void leaveNetworkSession(const char* toast = nullptr);

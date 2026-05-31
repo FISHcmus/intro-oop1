@@ -2,6 +2,7 @@
 #include "AudioManager.h"
 #include "Theme.h"
 #include "UIComponents.h"
+#include "ViewBackgrounds.h"
 #include "raylib.h"
 
 #include <cstdio>
@@ -54,9 +55,7 @@ void SettingsScreen::draw() {
     int screenW = GetScreenWidth();
     int screenH = GetScreenHeight();
 
-    DrawRectangleGradientV(0, 0, screenW, screenH,
-                           Theme::palette.bg_top,
-                           Theme::palette.bg_bottom);
+    ViewBackgrounds::draw(ViewBackgroundId::Settings, screenW, screenH);
 
     UIC::drawTitle("SETTINGS", screenW, screenH);
 

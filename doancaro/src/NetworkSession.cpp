@@ -97,21 +97,23 @@ bool NetworkSession::startLanJoin(const std::string& address, int port,
 }
 
 bool NetworkSession::startOnlineHost(const std::string& address, int port,
+                                     const std::string& fallbackAddress,
                                      const std::string& playerName) {
     if (!beginSession(NetworkMode::OnlineHost)) return false;
     selfName = playerName;
-    worker = std::thread(&NetworkSession::runOnline, this, address, port, true,
-                         std::string());
+    worker = std::thread(&NetworkSession::runOnline, this, address, port,
+                         fallbackAddress, true, std::string());
     return true;
 }
 
 bool NetworkSession::startOnlineJoin(const std::string& address, int port,
+                                     const std::string& fallbackAddress,
                                      const std::string& roomCode,
                                      const std::string& playerName) {
     if (!beginSession(NetworkMode::OnlineJoin)) return false;
     selfName = playerName;
-    worker = std::thread(&NetworkSession::runOnline, this, address, port, false,
-                         roomCode);
+    worker = std::thread(&NetworkSession::runOnline, this, address, port,
+                         fallbackAddress, false, roomCode);
     return true;
 }
 
@@ -259,7 +261,10 @@ NetworkSession::SocketHandle NetworkSession::createListenSocket(int port) {
 }
 
 NetworkSession::SocketHandle NetworkSession::connectSocket(
-    const std::string& address, int port) {
+    const std::string& address, int port, const std::string& fallbackAddress) {
+    auto tryAddress = [port](const std::string& host) -> SocketHandle {
+        if (host.empty()) return kInvalidSocket;
+
     char portBuf[16];
     std::snprintf(portBuf, sizeof(portBuf), "%d", port);
 
@@ -268,7 +273,7 @@ NetworkSession::SocketHandle NetworkSession::connectSocket(
     hints.ai_socktype = SOCK_STREAM;
 
     struct addrinfo* result = nullptr;
-    if (getaddrinfo(address.c_str(), portBuf, &hints, &result) != 0) {
+        if (getaddrinfo(host.c_str(), portBuf, &hints, &result) != 0) {
         return kInvalidSocket;
     }
 
@@ -287,6 +292,15 @@ NetworkSession::SocketHandle NetworkSession::connectSocket(
     freeaddrinfo(result);
     if (sock == kInvalidNativeSocket) return kInvalidSocket;
     return toStored(sock);
+    };
+
+    SocketHandle primary = tryAddress(address);
+    if (primary != kInvalidSocket) return primary;
+
+    if (!fallbackAddress.empty() && fallbackAddress != address) {
+        return tryAddress(fallbackAddress);
+    }
+    return kInvalidSocket;
 }
 
 std::string NetworkSession::guessLocalIPv4() const {
@@ -487,9 +501,10 @@ void NetworkSession::runLanJoin(const std::string& address, int port) {
 }
 
 void NetworkSession::runOnline(const std::string& address, int port,
+                               const std::string& fallbackAddress,
                                bool createRoom,
                                const std::string& roomCode) {
-    socketFd = connectSocket(address, port);
+    socketFd = connectSocket(address, port, fallbackAddress);
     if (socketFd == kInvalidSocket) {
         pushError("Failed to reach online server");
         running.store(false);
