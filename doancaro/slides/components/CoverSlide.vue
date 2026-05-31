@@ -1,258 +1,139 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onSlideEnter } from '@slidev/client'
+import { slideBackgrounds } from './slideBackgrounds'
 
 const mountKey = ref(0)
+const bg = slideBackgrounds.cover
 onSlideEnter(() => { mountKey.value++ })
 </script>
 
 <template>
-  <div class="s-cover" :key="mountKey">
-    <div class="rule rule-top"></div>
-    <div class="rule rule-bottom"></div>
-
-    <div class="chrome">
-      <div class="brand"
-           v-motion
-           :initial="{ opacity: 0, scale: 1.15, rotate: -2 }"
-           :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { duration: 200, delay: 150 } }">
-        <span class="dot"></span>CARO
-      </div>
-      <div class="num"
-           v-motion
-           :initial="{ opacity: 0, scale: 1.15, rotate: 2 }"
-           :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { duration: 200, delay: 220 } }">
-        HCMUS &middot; OOP1 &middot; Đồ án cuối kỳ
-      </div>
+  <div class="s-cover scene-slide" :key="mountKey">
+    <div class="scene-bg warm">
+      <img :src="bg" alt="Story world background" />
     </div>
 
-    <div class="cover-grid">
-      <div class="cover-text">
-        <div class="eyebrow">
-          <span class="eb-text"
-                v-motion
-                :initial="{ opacity: 0, x: -6 }"
-                :enter="{ opacity: 1, x: 0, transition: { duration: 220, delay: 500 } }">
-            Buổi bảo vệ cuối kỳ &middot; ~10 phút
-          </span>
-        </div>
-        <div class="wordmark">
-          <span class="l" v-motion
-                :initial="{ opacity: 0, y: 20 }"
-                :enter="{ opacity: 1, y: 0, transition: { duration: 220, delay: 600 } }">C</span><span class="l" v-motion
-                :initial="{ opacity: 0, y: 20 }"
-                :enter="{ opacity: 1, y: 0, transition: { duration: 220, delay: 660 } }">a</span><span class="l" v-motion
-                :initial="{ opacity: 0, y: 20 }"
-                :enter="{ opacity: 1, y: 0, transition: { duration: 220, delay: 720 } }">r</span><span class="l" v-motion
-                :initial="{ opacity: 0, y: 20 }"
-                :enter="{ opacity: 1, y: 0, transition: { duration: 220, delay: 780 } }">o</span><span class="plus" v-motion
-                :initial="{ opacity: 0, scale: 0, rotate: -15 }"
-                :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { type: 'spring', stiffness: 300, damping: 12, delay: 880 } }">+</span><span class="ai-l" v-motion
-                :initial="{ opacity: 0, y: 20 }"
-                :enter="{ opacity: 1, y: 0, transition: { duration: 220, delay: 1000 } }">A</span><span class="ai-l" v-motion
-                :initial="{ opacity: 0, y: 20 }"
-                :enter="{ opacity: 1, y: 0, transition: { duration: 220, delay: 1060 } }">I</span>
-        </div>
-        <div class="tag"
+    <div class="scene-shell">
+      <div class="chrome dark">
+        <div class="brand"
              v-motion
-             :initial="{ opacity: 0, y: 12 }"
-             :enter="{ opacity: 1, y: 0, transition: { duration: 280, delay: 1150 } }">
-          Cờ Caro 3D viết bằng raylib —<br/>
-          ba mức AI từ <em>greedy one-ply</em> tới <em>minimax + TT</em>.
+             :initial="{ opacity: 0, scale: 1.12, rotate: -2 }"
+             :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { duration: 220, delay: 120 } }">
+          <span class="dot"></span>CARO
+        </div>
+        <div class="num"
+             v-motion
+             :initial="{ opacity: 0, scale: 1.12, rotate: 2 }"
+             :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { duration: 220, delay: 180 } }">
+          HCMUS &middot; OOP1 &middot; Đồ án cuối kỳ
         </div>
       </div>
 
-      <div class="cover-board"
-           v-motion
-           :initial="{ opacity: 0, scale: 0.92 }"
-           :enter="{ opacity: 1, scale: 1, transition: { type: 'spring', stiffness: 200, damping: 18, delay: 1200 } }">
-        <div class="board-grid">
-          <div v-for="i in 49" :key="i" class="cell"
-               :class="{
-                 'x': [17, 25, 33].includes(i),
-                 'o': [24, 32].includes(i)
-               }">
-            <span v-if="[17, 25, 33].includes(i)">×</span>
-            <span v-else-if="[24, 32].includes(i)">○</span>
+      <div class="cover-layout">
+        <div class="glass-panel cover-panel"
+             v-motion
+             :initial="{ opacity: 0, y: 24, scale: 0.98 }"
+             :enter="{ opacity: 1, y: 0, scale: 1, transition: { duration: 320, delay: 320 } }">
+          <div class="eyebrow on-image">Đồ án cuối kỳ &middot; nhóm 13</div>
+          <h1 class="scene-title cover-title">CARO</h1>
+          <p class="scene-copy cover-copy">
+            Từ bàn cờ quen thuộc, nhóm phát triển thành một game có AI nhiều mức độ,
+            Story Mode và thế giới hình ảnh lấy cảm hứng từ thần thoại Việt.
+          </p>
+          <div class="scene-chip-row">
+            <div class="scene-chip">15&times;15</div>
+            <div class="scene-chip">Greedy + Minimax + TT</div>
+            <div class="scene-chip">Story Mode</div>
+            <div class="scene-chip">Wuxia Storm</div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <div class="meta">
-      <div>
-        <div class="team"
+        <div class="paper-panel cover-meta"
              v-motion
-             :initial="{ opacity: 0, y: 10 }"
-             :enter="{ opacity: 1, y: 0, transition: { duration: 220, delay: 1250 } }">Nhóm 13 &middot; HCMUS FIT</div>
-        <div class="members"
-             v-motion
-             :initial="{ opacity: 0, y: 10 }"
-             :enter="{ opacity: 1, y: 0, transition: { duration: 220, delay: 1320 } }">Nhân 25310023 &middot; Hằng 25310057 &middot; Trâm 25310043</div>
+             :initial="{ opacity: 0, x: 24 }"
+             :enter="{ opacity: 1, x: 0, transition: { duration: 280, delay: 520 } }">
+          <div class="meta-kicker">Thông tin</div>
+          <div class="meta-line"><b>GVHD</b> &middot; Tiến sĩ Trương Toàn Thịnh</div>
+          <div class="meta-line"><b>Nhóm 13</b></div>
+          <div class="meta-line"><b>Nguyễn Hữu Thiện Nhân</b> &middot; 25310023</div>
+          <div class="meta-line"><b>Bùi Thị Minh Hằng</b> &middot; 25310057</div>
+          <div class="meta-line"><b>Phạm Ngọc Trâm</b> &middot; 25310043</div>
+          <div class="meta-foot">C++14 &middot; raylib &middot; Slidev</div>
+        </div>
       </div>
-      <div class="stamp"
-           v-motion
-           :initial="{ opacity: 0, scale: 1.15, rotate: -1.5 }"
-           :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { type: 'spring', stiffness: 260, damping: 14, delay: 1400 } }">raylib &middot; C++14</div>
+
+      <div class="foot dark">
+        <div>Nhập môn Lập trình Hướng đối tượng 1</div>
+        <div>slide nộp cuối kỳ</div>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.s-cover {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 700px 450px at 85% 110%, rgba(26,138,122,0.18), transparent 60%),
-    radial-gradient(ellipse 500px 350px at 0% 0%, rgba(255,92,60,0.08), transparent 50%),
-    var(--paper);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0 70px;
-  overflow: hidden;
-}
-
-.rule {
-  position: absolute;
-  height: 1px;
-  background: var(--ink);
-  opacity: 0.12;
-  z-index: 4;
-  left: 36px;
-  right: 36px;
-  transform: scaleX(0);
-  transform-origin: left center;
-  animation: rule-draw 520ms cubic-bezier(.2,.8,.2,1) 40ms forwards;
-}
-.rule-top { top: 62px; }
-.rule-bottom {
-  bottom: 76px;
-  transform-origin: right center;
-  animation-delay: 80ms;
-}
-
-@keyframes rule-draw { to { transform: scaleX(1); } }
-
-.cover-grid {
+.cover-layout {
+  margin-top: auto;
+  margin-bottom: auto;
   display: grid;
-  grid-template-columns: 1.1fr 0.7fr;
-  align-items: center;
-  gap: 40px;
+  grid-template-columns: minmax(0, 760px) 280px;
+  gap: 22px;
+  align-items: end;
 }
 
-.eyebrow {
+.cover-panel {
+  padding: 34px 36px 36px;
+}
+
+.cover-title {
+  font-size: 118px;
+  margin-bottom: 14px;
+}
+
+.cover-copy {
+  max-width: 620px;
+  margin: 0 0 20px;
+  font-size: 20px;
+  line-height: 1.42;
+}
+
+.cover-meta {
+  padding: 22px 22px 20px;
+  align-self: center;
+}
+
+.meta-kicker {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--coral);
+  margin-bottom: 12px;
+}
+
+.meta-line {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.meta-line + .meta-line {
+  margin-top: 8px;
+}
+
+.meta-foot {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(11, 22, 24, 0.12);
   font-family: var(--mono);
   font-size: 11px;
   color: var(--muted);
-  letter-spacing: 0.1em;
   text-transform: uppercase;
-  margin-bottom: 20px;
-  display: flex; align-items: center; gap: 7px;
-}
-.eyebrow::before {
-  content: ""; width: 30px; height: 1px; background: var(--ink);
-  transform: scaleX(0);
-  transform-origin: left center;
-  animation: rule-draw 320ms cubic-bezier(.2,.8,.2,1) 380ms forwards;
-}
-.eb-text { display: inline-block; will-change: transform, opacity; }
-
-.wordmark {
-  font-size: 108px;
-  line-height: 1;
-  font-weight: 900;
-  letter-spacing: -0.06em;
-  color: var(--ink);
-  margin-bottom: 18px;
-  font-family: var(--sans);
-}
-.wordmark .l,
-.wordmark .plus,
-.wordmark .ai-l {
-  display: inline-block;
-  will-change: transform, opacity;
-}
-.wordmark .plus {
-  color: var(--coral);
-  font-size: 72px;
-  vertical-align: middle;
-  margin: 0 8px;
-  letter-spacing: 0;
-}
-.wordmark .ai-l { color: var(--teal); }
-
-.tag {
-  font-size: 20px;
-  font-weight: 500;
-  line-height: 1.25;
-  max-width: 520px;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-  font-family: var(--sans);
-  will-change: transform, opacity;
-}
-.tag em { color: var(--teal); font-style: normal; font-weight: 700; }
-
-.cover-board {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  will-change: transform, opacity;
-}
-
-.board-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 28px);
-  grid-template-rows: repeat(7, 28px);
-  gap: 0;
-  background: var(--paper-2);
-  border: 2px solid var(--ink);
-  padding: 8px;
-  box-shadow: 0 14px 32px -12px rgba(26,138,122,0.28);
-}
-.cell {
-  border: 1px solid rgba(11,22,24,0.12);
-  display: grid;
-  place-items: center;
-  font-family: var(--mono);
-  font-size: 18px;
-  font-weight: 700;
-  color: transparent;
-}
-.cell.x { color: var(--coral); }
-.cell.o { color: var(--teal); }
-
-.meta {
-  position: absolute;
-  bottom: 36px; left: 70px; right: 70px;
-  display: flex; justify-content: space-between; align-items: flex-end;
-  font-family: var(--mono); font-size: 11px; color: var(--muted);
-}
-.meta .team { color: var(--ink); font-weight: 700; will-change: transform, opacity; }
-.meta .members { margin-top: 4px; will-change: transform, opacity; }
-
-.stamp {
-  border: 1px solid var(--ink);
-  padding: 5px 9px;
-  border-radius: 2px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--ink);
-  font-weight: 600;
-  font-family: var(--mono);
-  will-change: transform, opacity;
+  letter-spacing: 0.08em;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rule, .eyebrow::before {
-    animation: none;
-    transform: scaleX(1);
-  }
-  .chrome .brand, .chrome .num,
-  .eb-text, .wordmark .l, .wordmark .plus, .wordmark .ai-l,
-  .tag, .cover-board, .meta .team, .meta .members, .stamp {
+  .chrome .brand, .chrome .num, .cover-panel, .cover-meta {
     transform: none !important;
     opacity: 1 !important;
   }

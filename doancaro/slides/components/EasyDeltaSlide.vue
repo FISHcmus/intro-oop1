@@ -1,85 +1,72 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onSlideEnter } from '@slidev/client'
+import { slideBackgrounds } from './slideBackgrounds'
 
 const mountKey = ref(0)
+const bg = slideBackgrounds.easyDelta
 onSlideEnter(() => { mountKey.value++ })
 </script>
 
 <template>
-  <div class="s-delta" :key="mountKey">
-    <div class="chrome">
-      <div class="brand"
-           v-motion
-           :initial="{ opacity: 0, scale: 1.15, rotate: -2 }"
-           :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { duration: 200, delay: 100 } }">
-        <span class="dot"></span>CARO
-      </div>
-      <div class="num"
-           v-motion
-           :initial="{ opacity: 0, scale: 1.15, rotate: 2 }"
-           :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { duration: 200, delay: 180 } }">
-        <b>04</b> &middot; Easy &middot; chấm điểm delta
-      </div>
+  <div class="s-delta scene-slide" :key="mountKey">
+    <div class="scene-bg cool">
+      <img :src="bg" alt="Debug background" />
     </div>
 
-    <div class="eyebrow"
-         v-motion
-         :initial="{ opacity: 0, x: -6 }"
-         :enter="{ opacity: 1, x: 0, transition: { duration: 220, delay: 250 } }">
-      Vì sao dùng delta, không dùng điểm tuyệt đối
-    </div>
-
-    <h2 v-motion
-        :initial="{ opacity: 0, y: 18 }"
-        :enter="{ opacity: 1, y: 0, transition: { duration: 260, delay: 320 } }">
-      <em>delta</em> = score(after) &minus; score(before)
-    </h2>
-
-    <div class="body-grid">
-      <div class="pseudocode"
-           v-motion
-           :initial="{ opacity: 0, y: 16 }"
-           :enter="{ opacity: 1, y: 0, transition: { duration: 280, delay: 520 } }">
-        <div class="pc-label">Giả mã &mdash; greedy one-ply</div>
-        <pre><code><span class="cm">// Xếp hạng theo mức cải thiện thế cờ</span>
-<span class="cm">// sau khi thử đặt quân của ta.</span>
-<span class="kw">for</span> each empty cell (r, c):
-    before = <span class="fn">localScore</span>(board, r, c)     <span class="cm">// mẫu 4 hướng</span>
-    board.<span class="fn">place</span>(r, c, AI)
-    after  = <span class="fn">localScore</span>(board, r, c)
-    board.<span class="fn">undo</span>(r, c)
-    delta  = after &minus; before
-
-<span class="kw">pick</span> argmax(delta)</code></pre>
+    <div class="scene-shell">
+      <div class="chrome dark">
+        <div class="brand"
+             v-motion
+             :initial="{ opacity: 0, scale: 1.12, rotate: -2 }"
+             :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { duration: 200, delay: 100 } }">
+          <span class="dot"></span>CARO
+        </div>
+        <div class="num"
+             v-motion
+             :initial="{ opacity: 0, scale: 1.12, rotate: 2 }"
+             :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { duration: 200, delay: 180 } }">
+          <b>05</b> &middot; Easy &middot; vùng nhìn
+        </div>
       </div>
 
-      <div class="insight"
+      <div class="glass-panel delta-panel"
            v-motion
-           :initial="{ opacity: 0, x: 12 }"
-           :enter="{ opacity: 1, x: 0, transition: { duration: 280, delay: 720 } }">
-        <div class="kicker">Vì sao không chỉ dùng |after|?</div>
-        <p>
-          Khi ta <b>chặn một đe doạ của đối thủ</b>, các cửa sổ vốn có điểm cao
-          sẽ sụt về gần 0 &mdash; cả hai bên đều có quân trong đó.
-          Nên chỉ dùng |after| sẽ <b>chấm thấp nước chặn</b>.
-        </p>
-        <p>
-          <em>delta</em> ghi nhận sự thay đổi. Một nước chặn mạnh tạo ra delta
-          dương lớn vì <em>before</em> rất âm (đe doạ của đối thủ).
-        </p>
-        <div class="examples">
-          <div class="ex">
-            <div class="ex-label">Đe doạ mình 3→4</div>
-            <div class="ex-before">before: +1000</div>
-            <div class="ex-after">after: +15000</div>
-            <div class="ex-delta">Δ = +14000</div>
+           :initial="{ opacity: 0, x: 24 }"
+           :enter="{ opacity: 1, x: 0, transition: { duration: 320, delay: 320 } }">
+        <div class="eyebrow on-image">Không quét cả bàn cờ</div>
+        <h2 class="scene-title">Easy chỉ nhìn <em>chỗ đáng nhìn</em>.</h2>
+
+        <div class="delta-grid">
+          <div class="code-box">
+            <div class="scene-kicker">Pseudocode</div>
+            <pre><code>checkWinner(lastMove):
+  for dir in [ngang, doc, cheo1, cheo2]:
+    if count(lastMove, dir) >= 5:
+      return WIN
+  return NONE
+
+candidateMoves():
+  return emptyCells near existing stones</code></pre>
           </div>
-          <div class="ex">
-            <div class="ex-label">Chặn open-4 đối thủ</div>
-            <div class="ex-before">before: &minus;22500</div>
-            <div class="ex-after">after: 0</div>
-            <div class="ex-delta win">Δ = +22500</div>
+
+          <div class="delta-notes">
+            <div class="paper-panel note-card">
+              <div class="note-head">Kiểm tra thắng</div>
+              <p>Chỉ xét từ nước vừa đánh ra 4 hướng.</p>
+            </div>
+            <div class="examples">
+              <div class="paper-panel ex-card">
+                <div class="ex-label">Candidate</div>
+                <div class="ex-math">ô trống gần vùng cờ</div>
+                <div class="ex-result">ít nhánh hơn</div>
+              </div>
+              <div class="paper-panel ex-card strong">
+                <div class="ex-label">Kết quả</div>
+                <div class="ex-math">ít tính toán hơn</div>
+                <div class="ex-result">nhanh hơn rõ rệt</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -88,132 +75,94 @@ onSlideEnter(() => { mountKey.value++ })
 </template>
 
 <style scoped>
-.s-delta {
-  position: absolute;
-  inset: 0;
-  background: var(--paper);
-  padding: 90px 60px 70px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+.delta-panel {
+  margin-top: 12px;
+  margin-bottom: 18px;
+  margin-left: auto;
+  width: min(900px, 86%);
+  padding: 20px 22px 22px;
 }
 
-.eyebrow {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--muted);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  margin-bottom: 14px;
-  display: flex; align-items: center; gap: 7px;
-  will-change: transform, opacity;
-}
-.eyebrow::before {
-  content: ""; width: 24px; height: 1px; background: var(--ink); opacity: 0.5;
+.delta-panel .scene-title {
+  font-size: 48px;
+  margin-bottom: 12px;
 }
 
-h2 {
-  font-size: 36px;
-  letter-spacing: -0.03em;
-  margin-bottom: 34px;
-  font-family: var(--mono);
-  font-weight: 700;
-  will-change: transform, opacity;
-}
-h2 em { color: var(--coral); font-style: normal; font-family: var(--sans); }
-
-.body-grid {
+.delta-grid {
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap: 40px;
-  flex: 1;
-}
-
-.pseudocode {
-  will-change: transform, opacity;
-}
-.pc-label {
-  font-family: var(--mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--muted);
-  margin-bottom: 6px;
-}
-.pseudocode pre {
-  background: var(--ink);
-  color: var(--paper);
-  padding: 18px 22px;
-  border-radius: 6px;
-  font-family: var(--mono);
-  font-size: 14px;
-  line-height: 1.65;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.pseudocode .cm { color: rgba(250,250,247,0.45); }
-.pseudocode .kw { color: var(--gold); }
-.pseudocode .fn { color: var(--teal-tint); }
-
-.insight {
-  display: flex;
-  flex-direction: column;
+  grid-template-columns: 1fr 0.95fr;
   gap: 14px;
-  will-change: transform, opacity;
 }
-.kicker {
+
+.code-box pre {
+  margin: 10px 0 0;
+  padding: 14px 16px;
+  border-radius: 22px;
+  background: rgba(255, 251, 242, 0.58);
+  border: 1px solid rgba(11, 22, 24, 0.10);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.delta-notes {
+  display: grid;
+  gap: 10px;
+}
+
+.note-card,
+.ex-card {
+  padding: 12px 14px;
+}
+
+.note-head,
+.ex-label {
   font-family: var(--mono);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--coral);
+  margin-bottom: 8px;
 }
-.insight p {
-  font-size: 14px;
-  line-height: 1.5;
+
+.note-card p {
   margin: 0;
-  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink-2);
 }
-.insight p b { font-weight: 700; }
-.insight p em { color: var(--teal); font-style: normal; font-weight: 700; }
+
+.note-card code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
 
 .examples {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 8px;
+  gap: 12px;
 }
-.ex {
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 10px 12px;
+
+.ex-math {
   font-family: var(--mono);
-  font-size: 11px;
-  line-height: 1.55;
-  background: var(--paper-2);
-}
-.ex-label {
-  font-family: var(--sans);
+  font-size: 14px;
   font-weight: 700;
-  font-size: 11px;
   color: var(--ink);
-  margin-bottom: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
-.ex-before, .ex-after { color: var(--muted); }
-.ex-delta {
-  margin-top: 4px;
-  color: var(--teal);
-  font-weight: 700;
-  border-top: 1px solid var(--line);
-  padding-top: 4px;
+
+.ex-result {
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--teal-deep);
 }
-.ex-delta.win { color: var(--coral); }
+
+.ex-card.strong .ex-result {
+  color: var(--coral);
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .chrome .brand, .chrome .num, .eyebrow, h2, .pseudocode, .insight {
+  .chrome .brand, .chrome .num, .delta-panel {
     transform: none !important;
     opacity: 1 !important;
   }

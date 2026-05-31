@@ -1,86 +1,59 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onSlideEnter } from '@slidev/client'
+import { slideBackgrounds } from './slideBackgrounds'
 
 const mountKey = ref(0)
+const bg = slideBackgrounds.easyOverview
 onSlideEnter(() => { mountKey.value++ })
 </script>
 
 <template>
-  <div class="s-easy" :key="mountKey">
-    <div class="chrome">
-      <div class="brand"
-           v-motion
-           :initial="{ opacity: 0, scale: 1.15, rotate: -2 }"
-           :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { duration: 200, delay: 100 } }">
-        <span class="dot"></span>CARO
-      </div>
-      <div class="num"
-           v-motion
-           :initial="{ opacity: 0, scale: 1.15, rotate: 2 }"
-           :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { duration: 200, delay: 180 } }">
-        <b>03</b> &middot; Chế độ Easy &middot; tổng quan
-      </div>
+  <div class="s-easy scene-slide" :key="mountKey">
+    <div class="scene-bg warm">
+      <img :src="bg" alt="Board background" />
     </div>
 
-    <div class="eyebrow"
-         v-motion
-         :initial="{ opacity: 0, x: -6 }"
-         :enter="{ opacity: 1, x: 0, transition: { duration: 220, delay: 250 } }">
-      Mức 1 &middot; Greedy one-ply
-    </div>
-
-    <h2 v-motion
-        :initial="{ opacity: 0, y: 18 }"
-        :enter="{ opacity: 1, y: 0, transition: { duration: 260, delay: 320 } }">
-      Không phải <em>look-ahead</em> &mdash;<br/>chỉ <em>look-around</em>.
-    </h2>
-
-    <div class="body-grid">
-      <ul class="bullets">
-        <li v-motion
-            :initial="{ opacity: 0, x: -10 }"
-            :enter="{ opacity: 1, x: 0, transition: { duration: 240, delay: 600 } }">
-          <span class="num-pill">1</span>
-          <div>
-            <b>Không có tree search.</b> Không minimax, không α–β, không transposition table &mdash; cũng không có opening book.
-          </div>
-        </li>
-        <li v-motion
-            :initial="{ opacity: 0, x: -10 }"
-            :enter="{ opacity: 1, x: 0, transition: { duration: 240, delay: 780 } }">
-          <span class="num-pill">2</span>
-          <div>
-            <b>Chỉ tính điểm cục bộ.</b> Với mỗi ô trống, đánh giá các cửa sổ 5 ô đi qua nó theo cả 4 hướng.
-          </div>
-        </li>
-        <li v-motion
-            :initial="{ opacity: 0, x: -10 }"
-            :enter="{ opacity: 1, x: 0, transition: { duration: 240, delay: 960 } }">
-          <span class="num-pill">3</span>
-          <div>
-            <b>Chọn delta lớn nhất.</b> Cho điểm bàn cờ <em>before</em> và <em>after</em> khi thử đặt một quân &mdash; bước nhảy lớn nhất thắng.
-          </div>
-        </li>
-      </ul>
-
-      <div class="diagram"
-           v-motion
-           :initial="{ opacity: 0, scale: 0.9 }"
-           :enter="{ opacity: 1, scale: 1, transition: { type: 'spring', stiffness: 200, damping: 20, delay: 1150 } }">
-        <div class="board">
-          <div v-for="i in 81" :key="i" class="cell"
-               :class="{
-                 'x': i === 41,
-                 'ring': [22, 23, 24, 25, 26, 31, 32, 34, 35, 40, 42, 49, 50, 51, 58, 59, 60].includes(i),
-                 'farthest': [14, 15, 16, 17, 18, 19, 20, 29, 38, 47, 56, 65, 74, 73, 72, 71, 70, 69, 68, 59].includes(i)
-               }">
-            <span v-if="i === 41">×</span>
-          </div>
+    <div class="scene-shell">
+      <div class="chrome dark">
+        <div class="brand"
+             v-motion
+             :initial="{ opacity: 0, scale: 1.12, rotate: -2 }"
+             :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { duration: 200, delay: 100 } }">
+          <span class="dot"></span>CARO
         </div>
-        <div class="caption">
-          Các cửa sổ đi qua quân trung tâm<br/>
-          <span class="note">(4 hướng &times; tối đa 5 vị trí = 17 cửa sổ được đánh giá)</span>
+        <div class="num"
+             v-motion
+             :initial="{ opacity: 0, scale: 1.12, rotate: 2 }"
+             :enter="{ opacity: 1, scale: 1, rotate: 0, transition: { duration: 200, delay: 180 } }">
+          <b>04</b> &middot; Easy &middot; tốc độ
+        </div>
+      </div>
+
+      <div class="glass-panel easy-panel"
+           v-motion
+           :initial="{ opacity: 0, y: 24 }"
+           :enter="{ opacity: 1, y: 0, transition: { duration: 320, delay: 320 } }">
+        <div class="eyebrow on-image">Mức 1 &middot; ưu tiên phản hồi nhanh</div>
+        <h2 class="scene-title">Easy ưu tiên <em>tốc độ</em>.</h2>
+
+        <div class="easy-grid">
+          <div class="bullets">
+            <div class="bullet"><span>1</span><p>Phản hồi nhanh.</p></div>
+            <div class="bullet"><span>2</span><p>Dễ tiếp cận với người mới.</p></div>
+            <div class="bullet"><span>3</span><p>AI vẫn đủ khôn để tạo thử thách.</p></div>
+          </div>
+
+          <div class="paper-panel diagram-box">
+            <div class="diagram-head">Goal(Easy)</div>
+            <div class="board">
+              <div v-for="i in 81" :key="i" class="cell"
+                   :class="{ ring: [22,23,24,25,26,31,32,34,35,40,42,49,50,51,58,59,60].includes(i), x: i === 41 }">
+                <span v-if="i === 41">×</span>
+              </div>
+            </div>
+            <div class="diagram-note"><code>move nhanh</code> &middot; <code>phản hồi mượt</code> &middot; <code>không nhìn quá sâu</code></div>
+          </div>
         </div>
       </div>
     </div>
@@ -88,124 +61,108 @@ onSlideEnter(() => { mountKey.value++ })
 </template>
 
 <style scoped>
-.s-easy {
-  position: absolute;
-  inset: 0;
-  background: var(--paper);
-  padding: 90px 60px 70px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+.easy-panel {
+  margin-top: 12px;
+  margin-bottom: 18px;
+  width: min(940px, 88%);
+  padding: 20px 22px 22px;
 }
 
-.eyebrow {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--muted);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  margin-bottom: 14px;
-  display: flex; align-items: center; gap: 7px;
-  will-change: transform, opacity;
-}
-.eyebrow::before {
-  content: ""; width: 24px; height: 1px; background: var(--ink); opacity: 0.5;
+.easy-panel .scene-title {
+  font-size: 48px;
+  margin-bottom: 12px;
 }
 
-h2 {
-  font-size: 38px;
-  letter-spacing: -0.03em;
-  margin-bottom: 38px;
-  line-height: 1.15;
-  will-change: transform, opacity;
-}
-h2 em { color: var(--teal); font-style: normal; }
-
-.body-grid {
+.easy-grid {
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
-  gap: 48px;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 14px;
   align-items: center;
-  flex: 1;
 }
 
 .bullets {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  display: grid;
+  gap: 10px;
 }
-.bullets li {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  font-size: 16px;
-  line-height: 1.45;
-  color: var(--ink);
-  will-change: transform, opacity;
-}
-.bullets li b { font-weight: 700; }
-.bullets li em { color: var(--teal); font-style: normal; font-weight: 700; }
 
-.num-pill {
+.bullet {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.bullet span {
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
-  flex: 0 0 auto;
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  background: var(--ink);
-  color: var(--paper);
+  border-radius: 999px;
+  background: rgba(255, 251, 242, 0.62);
+  border: 1px solid rgba(11, 22, 24, 0.12);
   font-family: var(--mono);
   font-size: 13px;
   font-weight: 700;
-  margin-top: 1px;
+  color: var(--teal-deep);
 }
 
-.diagram {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  will-change: transform, opacity;
+.bullet p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--ink-2);
+}
+
+.diagram-box {
+  padding: 14px 14px 12px;
+}
+
+.diagram-head {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--coral);
+  margin-bottom: 10px;
 }
 
 .board {
   display: grid;
-  grid-template-columns: repeat(9, 24px);
-  grid-template-rows: repeat(9, 24px);
-  background: var(--paper-2);
-  border: 2px solid var(--ink);
+  grid-template-columns: repeat(9, 20px);
+  grid-template-rows: repeat(9, 20px);
+  background: rgba(11, 22, 24, 0.04);
+  border: 1px solid rgba(11, 22, 24, 0.12);
   padding: 6px;
+  width: fit-content;
 }
+
 .cell {
-  border: 1px solid rgba(11,22,24,0.1);
+  border: 1px solid rgba(11, 22, 24, 0.08);
   display: grid;
   place-items: center;
   font-family: var(--mono);
-  font-size: 14px;
   font-weight: 800;
   color: var(--coral);
-  background: transparent;
+  font-size: 13px;
 }
-.cell.ring { background: var(--coral-tint); }
-.cell.farthest { background: rgba(255, 227, 219, 0.45); }
+
+.cell.ring { background: rgba(255, 92, 60, 0.12); }
 .cell.x { background: var(--coral); color: var(--paper); }
 
-.caption {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--muted);
-  letter-spacing: 0.03em;
-  text-align: center;
-  line-height: 1.5;
+.diagram-note {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink-2);
 }
-.caption .note { opacity: 0.75; }
+
+.diagram-note code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .chrome .brand, .chrome .num, .eyebrow, h2,
-  .bullets li, .diagram {
+  .chrome .brand, .chrome .num, .easy-panel {
     transform: none !important;
     opacity: 1 !important;
   }
