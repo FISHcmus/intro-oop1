@@ -39,21 +39,27 @@ Nhóm chúng em xin chân thành cảm ơn *ThS. Trương Toàn Thịnh* đã h�
 
 # Chương 1 - Mở đầu
 
+![](../../public/report-hero-storyworld.png)
+*Hình 1.1. Tranh chủ đề mở đầu của đồ án, quy tụ bàn cờ Caro, Cô Sử Tiên, Sơn Tinh, Thủy Tinh và ba linh-vật Voi chín ngà, Gà chín cựa, Ngựa chín hồng mao. Hình này đại diện cho tham vọng kết nối gameplay với một cách kể mới của thần thoại Việt trong không gian trò chơi số.*
+
 ## 1.1 Lý do chọn đề tài
 
 Nhóm chọn đề tài *Caro* vì đây là trò chơi quen thuộc, luật chơi dễ hiểu nhưng vẫn đủ chiều sâu để triển khai thành một sản phẩm phần mềm hoàn chỉnh. Nếu chỉ dừng ở mức "đặt quân và kiểm tra thắng", bài toán khá đơn giản. Tuy nhiên, khi mở rộng thành một trò chơi có 3D UI, có đối thủ máy với nhiều mức độ khó, có khả năng lưu progression, có chế độ cốt truyện và kết nối mạng, phạm vi kỹ thuật tăng lên rõ rệt. Điều này khiến đề tài phù hợp với mục tiêu của môn *Nhập môn Lập trình Hướng đối tượng*: không chỉ viết được chương trình chạy đúng, mà còn phải tổ chức mã nguồn sao cho có thể mở rộng mà không đổ vỡ toàn bộ hệ thống.
 
 Một lý do khác khiến nhóm chọn Caro là trò chơi này cho phép kết hợp tốt giữa phần "logic thuần" và phần "trải nghiệm người dùng". Ở tầng logic, nhóm có cơ hội làm việc với cấu trúc dữ liệu, thuật toán tìm kiếm cây trò chơi, heuristic, hashing và unit test. Ở tầng UI, nhóm có thể khai thác raylib để xây dựng camera 3D, hiệu ứng đặt quân, âm thanh, menu screen, launch screen và các nền minh họa cho Story Mode. Nhờ đó, đồ án không bị nghiêng hẳn về một phía, mà buộc nhóm phải xử lý cả software architecture lẫn cảm giác sử dụng thực tế.
 
+Ngoài lý do kỹ thuật, nhóm cũng có một chủ đích nội dung rõ ràng: không muốn Story Mode chỉ là một lớp "fantasy cho có", mà phải mang được tinh thần Việt Nam. Vì vậy, khi phát triển phần cốt truyện, nhóm chọn hướng tái diễn giải truyền thuyết *Sơn Tinh - Thủy Tinh* cùng ba lễ vật *voi chín ngà, gà chín cựa, ngựa chín hồng mao* trong một hình thức gần với trò chơi hiện đại. Tham vọng của nhóm không phải tuyên bố rằng mình "đại diện" cho văn hóa Việt, mà là góp một nỗ lực nhỏ để hình ảnh, cảm hứng và nhịp kể của văn hóa Việt có thể tiếp tục nở rộ trong không gian số, thay vì luôn phải mượn chất liệu ngoại lai.
+
 ## 1.2 Mục tiêu của đồ án
 
-Từ đầu học kỳ, nhóm đặt ra ba mục tiêu chính cho sản phẩm:
+Từ đầu học kỳ, nhóm đặt ra bốn mục tiêu chính cho sản phẩm:
 
 1. Xây dựng được một trò chơi Caro 15×15 có thể chơi ổn định ở hai chế độ cơ bản: người với người và người với máy.
 2. Thể hiện rõ tư duy lập trình hướng đối tượng qua cách chia lớp, tách trách nhiệm, kế thừa và đa hình.
 3. Phát triển thêm các tính năng mở rộng đủ khác biệt để sản phẩm không chỉ là "bài tập lớn", mà là một trò chơi có bản sắc riêng.
+4. Đưa được một lớp cảm hứng văn hóa Việt vào sản phẩm, đặc biệt qua Story Mode, theo hướng tái kể và làm mới chất liệu thần thoại quen thuộc.
 
-Từ ba mục tiêu này, nhóm xác định rõ rằng đồ án phải giải quyết đồng thời nhiều bài toán: luật chơi, AI, save/load, UI state management, hiển thị 3D, và về sau là Story Mode cùng Multiplayer. Vì vậy, ngay từ giai đoạn thiết kế, nhóm ưu tiên một cấu trúc có thể phát triển dần thay vì dồn toàn bộ logic vào một file điều phối duy nhất.
+Từ bốn mục tiêu này, nhóm xác định rõ rằng đồ án phải giải quyết đồng thời nhiều bài toán: luật chơi, AI, save/load, UI state management, hiển thị 3D, và về sau là Story Mode cùng Multiplayer. Vì vậy, ngay từ giai đoạn thiết kế, nhóm ưu tiên một cấu trúc có thể phát triển dần thay vì dồn toàn bộ logic vào một file điều phối duy nhất.
 
 ## 1.3 Phạm vi và kết quả đạt được
 
@@ -68,7 +74,7 @@ Bảng dưới đây tổng hợp các chức năng quan trọng của phiên b�
 | Giao diện | Menu, HUD, Settings, Save/Load, Game Over | Hoàn thành |
 | Đồ họa 3D | Camera quỹ đạo, raycast picking, shader, particle | Hoàn thành |
 | Âm thanh | Nhạc nền và hiệu ứng thao tác | Hoàn thành |
-| Story Mode | 4 chặng, campaign progression theo best-of-3, linh-vật, trận trùm | Hoàn thành |
+| Story Mode | 4 chặng, campaign progression theo best-of-3, linh-vật, trận trùm, tái diễn giải *Sơn Tinh - Thủy Tinh* | Hoàn thành |
 | Multiplayer | Chơi qua LAN và online qua relay TCP | Hoàn thành |
 | Unit test | Catch2 cho các lớp logic chính | Hoàn thành |
 | Khởi động sản phẩm | Launch screen, preload tài nguyên | Hoàn thành |
@@ -319,6 +325,9 @@ Nhóm không muốn trò chơi chỉ dừng ở mức "chạy được luật". 
 
 Điều quan trọng là nhóm không cố chạy theo đồ họa quá nặng. Ở quy mô đồ án môn học, một lựa chọn hợp lý hơn là giữ chất lượng hình ảnh vừa đủ tốt, dễ kiểm soát bằng mã, và không làm build hay khởi động trở nên quá nặng nề.
 
+![](../../public/menu.png)
+*Hình 4.1. Main Menu thể hiện visual direction tổng thể của sản phẩm, bao gồm typography, nền minh họa và bố cục điều hướng chính.*
+
 ## 4.2 Pipeline 3D và cách hiển thị
 
 raylib cung cấp một pipeline khá trực tiếp: tạo cửa sổ, thiết lập camera, vẽ model trong `BeginMode3D`, sau đó chồng các thành phần 2D như HUD và nút điều hướng ở cuối frame. Cấu trúc này phù hợp với sản phẩm của nhóm vì phần "trò chơi" chủ yếu nằm trên một mặt phẳng duy nhất, nhưng vẫn cần chiều sâu thị giác để tạo cảm giác khác biệt so với bàn cờ 2D thông thường.
@@ -333,17 +342,26 @@ Về chọn ô, nhóm dùng raycast từ vị trí chuột vào mặt phẳng b�
 
 HUD của trò chơi được giữ theo hướng rõ thông tin thay vì quá cầu kỳ. Những gì người chơi cần nhìn thấy ngay gồm: tên hai bên, quân đang đến lượt, thời gian chơi, số nước đã đi, trạng thái AI và các hotkey quan trọng.
 
+![](../../public/gameplay.png)
+*Hình 4.2. Gameplay screen với camera quỹ đạo, mặt bàn 3D, HUD và vùng tương tác chính của người chơi.*
+
 ## 4.4 Hiệu ứng, âm thanh và cảm giác thao tác
 
 Một phần khiến trò chơi bớt khô là các phản hồi thị giác và âm thanh sau mỗi hành động. Khi người chơi đặt quân, hệ thống phát hiệu ứng particle nhỏ và âm thanh ngắn. Khi có chiến thắng, đường thắng sáng lên, nền tối bớt ở bốn góc và hiệu ứng ăn mừng xuất hiện tại các ô liên quan. Những chi tiết này không thay đổi luật chơi, nhưng có ảnh hưởng rõ rệt đến cảm giác hoàn thiện của sản phẩm.
 
 Âm thanh được chia thành nhạc nền và hiệu ứng. Nhóm cố gắng giữ nhạc ở mức vừa phải để không lấn át các tín hiệu thao tác như click, đặt quân hoặc chiến thắng. Đây là chi tiết nhỏ nhưng quan trọng vì trò chơi vốn thiên về nhịp suy nghĩ và quan sát.
 
+![](../../public/ai_win.png)
+*Hình 4.3. Màn hình kết thúc ván cho thấy lớp overlay, hiệu ứng chiến thắng và cách trò chơi phản hồi sau một kết quả rõ ràng.*
+
 ## 4.5 Asset Loading và Launch Screen
 
 Một thay đổi lớn ở giai đoạn hoàn thiện là nhóm bổ sung *launch screen* ở đầu chương trình. Màn hình này giữ trong khoảng 5 giây đầu, đồng thời cho phép hệ thống preload các tài nguyên lớn ở phía sau. Đây không chỉ là lớp trang trí thương hiệu; nó giải quyết một vấn đề thực tế là nếu tải nhiều texture và nền minh họa đồng loạt ngay khi mở cửa sổ, trải nghiệm khởi động sẽ bị giật.
 
 Nhóm áp dụng cùng một nguyên tắc như phần AI: công việc nặng được chia thành các bước nhỏ và bàn giao lại cho main thread đúng lúc cần thiết. Nhờ đó, người dùng có cảm giác chương trình khởi động có chủ đích, thay vì nhìn vào một cửa sổ trống hoặc đứng hình trong vài giây đầu.
+
+![](../../public/launch-screen.png)
+*Hình 4.4. Launch screen của bản production, vừa đóng vai trò nhận diện sản phẩm vừa che giai đoạn preload asset ở đầu chương trình.*
 
 -----
 
@@ -355,9 +373,13 @@ Sau khi hai chế độ cơ bản PvP và PvE đã ổn định, nhóm nhận ra
 
 Story Mode trả lời câu hỏi thứ nhất. Multiplayer trả lời câu hỏi thứ hai. Hai hướng mở rộng này khá khác nhau về bản chất, nhưng lại là phép thử tốt cho kiến trúc của đồ án: nếu phần lõi được tách đúng, cả hai đều có thể cắm vào hệ thống hiện có mà không cần viết lại luật chơi.
 
+Với riêng Story Mode, mục tiêu của nhóm còn đi xa hơn việc "thêm cốt truyện". Đây là nơi nhóm thử biến một trò chơi Caro thành chỗ gặp nhau giữa gameplay và trí nhớ văn hóa. Thay vì phủ lên game một lớp fantasy vô danh, nhóm chọn đi từ truyền thuyết *Sơn Tinh - Thủy Tinh*, ba sính lễ quen thuộc và cảm thức mùa nước của người Việt để xây dựng một campaign có màu sắc riêng. Nói ngắn gọn, Story Mode mang tham vọng làm cho văn hóa Việt hiện diện rõ hơn, sống động hơn và có khả năng tiếp tục nở rộ trong hình thức trò chơi số.
+
 ## 5.2 Story Mode và Campaign Progression
 
 Story Mode biến các ván Caro rời rạc thành một campaign nhiều chặng. Thay vì chỉ vào game rồi đánh một ván duy nhất, người chơi đi qua các set có độ khó tăng dần, có lời dẫn riêng, có phần thưởng mở khóa và một trận đấu trùm ở cuối.
+
+Điểm nhóm muốn nhấn mạnh là campaign này không được viết như một thần tích chép lại nguyên văn, cũng không đi theo kiểu fantasy dịch sẵn. Nhóm chọn cách tái kể truyền thuyết bằng một góc nhìn khác: *Cô Sử Tiên* vừa là người kể chuyện vừa là người mang mặc cảm lịch sử; *Sơn Tinh* và *Thủy Tinh* không chỉ là hai cái tên quen thuộc trong sách giáo khoa mà trở thành hai lực đối nghịch núi - nước tiếp tục va vào đời sống hiện đại; còn không gian truyện thì dịch chuyển từ huyền sử xa xăm về gần với miền Nam đương đại, nơi mưa, triều cường, đường ngập và nỗi lo mất đất có thể được cảm nhận trực tiếp.
 
 | Set | Độ khó | `aiDepth` | Vai trò trong campaign progression |
 |-----|--------|-----------|---------------------------|
@@ -367,6 +389,8 @@ Story Mode biến các ván Caro rời rạc thành một campaign nhiều chặ
 | 4 | Final Boss | 4 | Cao trào của chiến dịch |
 
 Điểm nhóm thấy thú vị nhất ở Story Mode là phần này không cần một hệ thống gameplay mới hoàn toàn. Nó chủ yếu là một lớp quản lý progression đặt bên trên `Board`, `AIPlayer` và FSM sẵn có. Nói cách khác, Story Mode là ví dụ tốt cho việc mở rộng sản phẩm bằng cách tái sử dụng phần lõi thay vì dựng thêm một "game thứ hai" bên trong game.
+
+Chính vì bám vào phần lõi sẵn có, lớp cốt truyện ở đây không bị tách rời khỏi gameplay. Khi người chơi chặn nước, giữ thế cờ, mở khóa linh-vật hay bước vào trận trùm, họ không chỉ đi qua một chuỗi màn hình đẹp mắt mà đang được đặt vào một phiên bản mới của cuộc đối đầu *Sơn Tinh - Thủy Tinh*. Đây là chỗ nhóm muốn dùng trò chơi như một hình thức kể lại văn hóa: không phải chỉ để "nhắc tên" truyền thuyết, mà để người chơi thực sự tương tác với nó.
 
 ## 5.3 Luồng trạng thái của Story Mode
 
@@ -385,11 +409,23 @@ flowchart TD
 
 Luồng này cho thấy Story Mode không thay thế hoàn toàn màn hình chơi chính; nó bọc quanh nó. `StoryPickSet`, `StoryIntro` và `StoryBeat` chỉ làm nhiệm vụ dẫn dắt, còn ván cờ thực tế vẫn diễn ra trong `Playing`. Nhờ đó, nhóm tránh được việc nhân đôi logic xử lý cờ chỉ để phục vụ một chế độ phụ.
 
+Về mặt nội dung, cách tổ chức này cũng có lợi. Nhóm có thể giữ nhịp kể cô đọng, tránh biến đồ án thành một visual novel dài dòng, nhưng vẫn đủ chỗ để từng chặng mang một ý nghĩa riêng: mùa mưa trái nhịp, vết nứt long mạch, bức tường biển dựng đứng, rồi cao trào là cuộc đối đầu trực diện với Thủy Tinh. Các chặng vì thế không chỉ tăng độ khó AI, mà còn nâng dần quy mô biểu tượng của câu chuyện.
+
 ## 5.4 Linh-vật và trận trùm
 
 Một điểm làm Story Mode khác với PvE thường là cơ chế *linh-vật*. Mỗi linh-vật tương ứng với một dạng hỗ trợ: hoàn tác, làm nhiễu nước đi của AI hoặc hồi sinh ở trận cuối. Về mặt triển khai, nhóm cố ý gắn các linh-vật này vào những cơ chế đã tồn tại thay vì dựng thêm hệ thống riêng. Undo dùng lại `moveHistory`, làm nhiễu AI dùng lại pipeline chọn nước đi, còn hồi sinh được gắn vào logic kiểm tra kết quả của trận trùm.
 
+Ba linh-vật chủ đạo của campaign là Voi chín ngà, Gà chín cựa và Ngựa chín hồng mao. Đây không phải những cái tên được chọn ngẫu nhiên cho có màu dân gian. Chúng đi thẳng từ bộ sính lễ gắn với truyện *Sơn Tinh - Thủy Tinh*, rồi tiếp tục được nối sang các lớp ký ức văn hóa khác trong phần lời dẫn mở khóa. Nhờ vậy, mỗi linh-vật không chỉ là một power-up, mà còn là một điểm neo văn hóa giúp Story Mode giữ được căn tính Việt Nam của nó.
+
+Nhóm cũng giữ đúng định hướng mỹ thuật của trò chơi khi thiết kế ba hình tượng này: màu sáng, chất liệu hội họa, dễ nhận diện và đủ khác nhau để người chơi nhớ vai trò của từng linh-vật ngay từ phần giới thiệu. Quan trọng hơn, nhóm muốn người chơi nhìn thấy ở đó không chỉ một con voi, một con gà, một con ngựa "đẹp để trang trí", mà là ba biểu tượng bước ra từ kho truyện dân gian Việt Nam và được làm mới trong ngôn ngữ hình ảnh của game.
+
+![](../../public/story-beasts.png)
+
+*Hình 5.1. Ba linh-vật của Story Mode: Voi chín ngà, Gà chín cựa và Ngựa chín hồng mao. Hình tổng hợp này được dựng từ bộ art đã dùng trực tiếp trong game.*
+
 Trận Final Boss được xem như nơi đẩy độ khó lên cao nhất. AI ở đây dùng độ sâu lớn hơn thông thường và có cơ chế gây bất lợi cho người chơi sau một số lượt nhất định. Tuy nhiên, nhóm vẫn giữ nguyên tắc cân bằng: trận trùm khó hơn thật, nhưng không được trở thành phần chơi "ăn gian đến mức mất hứng". Vì vậy, người chơi vẫn có các cơ chế bù như best-of-3 và lượt hỗ trợ từ linh-vật.
+
+Ở cấp ý tưởng, đây cũng là đoạn mà tham vọng "làm mới thần thoại Việt" bộc lộ rõ nhất. Thủy Tinh không còn chỉ là một cái tên quen thuộc trong truyện kể thiếu nhi, mà trở thành hình tượng của nước dữ, của mùa lũ lặp đi lặp lại, của nỗi đe dọa luôn quay lại với đất sống của con người. Còn người chơi, thông qua Sơn Tinh và ba linh-vật, được đặt vào vai trò giữ đất, giữ long mạch, giữ quyền được đứng vững. Nhóm muốn đoạn kết này khiến người chơi cảm nhận rằng truyền thuyết Việt không nằm chết trong sách, mà vẫn có thể được kể lại bằng gameplay, nhịp hình và tương tác.
 
 ## 5.5 Multiplayer
 
@@ -453,10 +489,10 @@ Phần này trình bày các screen tiêu biểu của phiên bản cuối cùng
 *Hình 6.7. Debug panel dùng để quan sát quá trình suy nghĩ của AI.*
 
 ![](../../public/choose-diff-storymode.png)
-*Hình 6.8. Màn hình chọn chặng trong Story Mode.*
+*Hình 6.8. Màn hình chọn chặng trong Story Mode, nơi campaign được tổ chức như một hành trình tái diễn giải truyền thuyết Việt theo các lớp tăng dần về độ khó và ý nghĩa biểu tượng.*
 
 ![](../../public/story-telling.png)
-*Hình 6.9. Màn hình dẫn truyện trong Story Mode, cho thấy phần mở rộng nội dung ngoài ván cờ thuần túy.*
+*Hình 6.9. Màn hình dẫn truyện trong Story Mode, cho thấy nỗ lực đưa nhịp kể và cảm thức của thần thoại Việt vào trải nghiệm chơi thay vì chỉ dùng truyện làm lớp trang trí.*
 
 ![](../../public/multiplayer.png)
 *Hình 6.10. Màn hình Multiplayer phục vụ việc tạo hoặc tham gia phòng đấu.*
@@ -474,7 +510,7 @@ Thứ nhất, phần *chức năng cốt lõi* đã ổn định. Luật chơi, 
 
 Thứ hai, *kiến trúc phần mềm* thể hiện khá rõ tinh thần của môn học. Nhóm không chỉ sử dụng lớp và đối tượng theo hình thức, mà thực sự dựa vào đóng gói, kế thừa và phân tách trách nhiệm để mở rộng hệ thống. Việc Story Mode và Multiplayer cùng tái sử dụng `Board`, `Player`, `AIPlayer` và FSM là minh chứng rõ nhất cho điểm này.
 
-Thứ ba, *trải nghiệm người dùng* tốt hơn mức tối thiểu thường thấy ở đồ án môn học. Camera 3D, âm thanh, hiệu ứng đặt quân, launch screen, Story progression và multiplayer online khiến sản phẩm có cảm giác gần với một trò chơi thật hơn là một bài demo thuật toán. Dù vẫn còn hạn chế, đây là phần mà nhóm thấy mình tiến bộ rõ nhất so với giai đoạn đầu.
+Thứ ba, *trải nghiệm người dùng và bản sắc nội dung* tốt hơn mức tối thiểu thường thấy ở đồ án môn học. Camera 3D, âm thanh, hiệu ứng đặt quân, launch screen, Story progression và multiplayer online khiến sản phẩm có cảm giác gần với một trò chơi thật hơn là một bài demo thuật toán. Riêng Story Mode còn giúp sản phẩm có một tham vọng rõ ràng hơn: dùng hình thức game để kể lại, làm mới và góp phần lan tỏa văn hóa Việt trong một ngôn ngữ mà người chơi hiện nay dễ tiếp cận. Dù vẫn còn hạn chế, đây là phần mà nhóm thấy mình tiến bộ rõ nhất so với giai đoạn đầu.
 
 ## 6.3 Những hạn chế còn tồn tại
 
