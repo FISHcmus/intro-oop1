@@ -13,10 +13,4 @@ export const slideBackgrounds = {
   storyProgression: '/story/set-intro/finalboss-wuxia-v1.png',
   storyBeasts: '/story/intro/intro-page-06-wuxia-v4.png',
   artDirection: '/story/set-win/set3-wuxia-v1.png',
-  finalImpression: '/story/epilogue/epilogue-wuxia-v1.png',
-  multiplayer: '/story/set-win/set3-wuxia-v1.png',
-  multiplayerPipeline: '/story/set-win/set3-wuxia-v1.png',
-  saveLoad: '/story/set-win/set2-wuxia-v1.png',
-  saveIntegrity: '/story/set-win/set2-wuxia-v1.png',
-  close: '/story/epilogue/epilogue-wuxia-v1.png',
 }
