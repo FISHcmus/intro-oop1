@@ -1,0 +1,16 @@
+export const slideBackgrounds = {
+  cover: '/story/intro/intro-page-05-wuxia-v4.png',
+  bigIdea: '/story/intro/intro-page-01-wuxia-v4.png',
+  demo: '/story/intro/intro-page-01-wuxia-v4.png',
+  easyOverview: '/story/intro/intro-page-01-wuxia-v4.png',
+  easyDelta: '/story/intro/intro-page-02-wuxia-v4.png',
+  minimaxTree: '/story/intro/intro-page-03-wuxia-v4.png',
+  minimaxAB: '/story/intro/intro-page-07-wuxia-v4.png',
+  minimaxTT: '/story/intro/intro-page-04-wuxia-v4.png',
+  tiers: '/story/intro/intro-page-06-wuxia-v4.png',
+  story: '/story/intro/intro-page-07-wuxia-v4.png',
+  storyOrigin: '/story/intro/intro-page-03-wuxia-v4.png',
+  storyProgression: '/story/set-intro/finalboss-wuxia-v1.png',
+  storyBeasts: '/story/intro/intro-page-06-wuxia-v4.png',
+  artDirection: '/story/set-win/set3-wuxia-v1.png',
+}

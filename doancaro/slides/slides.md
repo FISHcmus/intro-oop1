@@ -25,6 +25,12 @@ layout: none
 layout: none
 ---
 
+<BigIdeaSlide />
+
+---
+layout: none
+---
+
 <EasyOverviewSlide />
 
 ---
@@ -32,6 +38,12 @@ layout: none
 ---
 
 <EasyDeltaSlide />
+
+---
+layout: none
+---
+
+<TiersSlide />
 
 ---
 layout: none
@@ -55,28 +67,28 @@ layout: none
 layout: none
 ---
 
-<TiersSlide />
-
----
-layout: none
----
-
 <StoryModeSlide />
 
 ---
 layout: none
 ---
 
-<MultiplayerSlide />
+<StoryOriginSlide />
 
 ---
 layout: none
 ---
 
-<SaveLoadSlide />
+<StoryProgressionSlide />
 
 ---
 layout: none
 ---
 
-<CloseSlide />
+<StoryBeastsSlide />
+
+---
+layout: none
+---
+
+<ArtDirectionSlide />
