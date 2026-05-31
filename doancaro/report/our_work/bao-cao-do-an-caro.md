@@ -21,7 +21,7 @@ _Môn Nhập môn Lập trình Hướng đối tượng_
 
 -----
 
-### Nhóm thực hiện - Nhóm 02
+### Nhóm thực hiện - Nhóm 13
 
 | MSSV     | Họ và tên             | Vai trò chính |
 |----------|-----------------------|---------------|

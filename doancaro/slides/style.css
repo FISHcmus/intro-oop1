@@ -1,0 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700&display=swap');
+
+:root {
+  --ink: #0B1618;
+  --ink-2: #1a2b2e;
+  --muted: #5a6b6e;
+  --line: #e6ebea;
+  --paper: #fafaf7;
+  --paper-2: #f2efe8;
+  --teal: #1a8a7a;
+  --teal-deep: #0f5f54;
+  --teal-tint: #d5ece7;
+  --coral: #ff5c3c;
+  --coral-tint: #ffe3db;
+  --gold: #e8b04a;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --sans: "Be Vietnam Pro", system-ui, sans-serif;
+}
+
+.slidev-layout {
+  font-family: var(--sans) !important;
+  color: var(--ink);
+  font-weight: 500;
+  background: var(--paper) !important;
+}
+
+h1, h2, h3 {
+  font-family: var(--sans) !important;
+  letter-spacing: -0.025em;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--ink);
+  margin: 0;
+}
+
+/* Chrome header bar — shared across slides */
+.chrome {
+  position: absolute;
+  top: 28px; left: 36px; right: 36px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  z-index: 5;
+}
+.chrome .brand {
+  display: flex; align-items: center; gap: 5px;
+  color: var(--ink); font-weight: 700;
+}
+.chrome .brand .dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--coral);
+  box-shadow: 0 0 0 1.5px var(--coral-tint);
+}
+.chrome .num { font-variant-numeric: tabular-nums; }
+.chrome .num b { color: var(--ink); font-weight: 700; }
+
+.chrome.dark { color: rgba(250,250,247,0.5); }
+.chrome.dark .brand { color: var(--paper); }
+.chrome.dark .num b { color: var(--paper); }
+
+/* Footer bar */
+.foot {
+  position: absolute; left: 36px; right: 36px; bottom: 24px;
+  display: flex; justify-content: space-between; align-items: flex-end;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  z-index: 5;
+}
+.foot.dark { color: rgba(250,250,247,0.5); }
+
+/* Eyebrow label — "— WORD · WORD" */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+  display: flex; align-items: center; gap: 7px;
+}
+.eyebrow::before {
+  content: ""; width: 30px; height: 1px; background: var(--ink); opacity: 0.6;
+}
+
+/* Accent helpers (inline in headings) */
+.accent-teal { color: var(--teal); }
+.accent-coral { color: var(--coral); }
+.accent-gold { color: var(--gold); }
+
+/* Code / pseudocode blocks */
+pre, code {
+  font-family: var(--mono);
+}
+
+.slidev-layout img {
+  border-radius: 0;
+  box-shadow: none;
+}

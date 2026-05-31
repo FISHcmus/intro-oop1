@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"math/rand"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,11 +52,17 @@ type client struct {
 
 func main() {
 	addr := flag.String("addr", ":34567", "listen address")
+	healthAddr := flag.String("health-addr", "", "optional HTTP health listen address")
 	flag.Parse()
 
 	srv := &server{
 		rooms: make(map[string]*room),
 		rnd:   rand.New(rand.NewSource(time.Now().UnixNano())),
+	}
+	startedAt := time.Now()
+
+	if *healthAddr != "" {
+		go serveHealth(*healthAddr, srv, startedAt)
 	}
 
 	ln, err := net.Listen("tcp", *addr)
@@ -227,6 +235,12 @@ func (s *server) removeRoom(code string) {
 	delete(s.rooms, code)
 }
 
+func (s *server) roomCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.rooms)
+}
+
 func (s *server) newRoomCodeLocked() string {
 	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 	for {
@@ -388,4 +402,39 @@ func otherMark(mark byte) byte {
 		return cellO
 	}
 	return cellX
+}
+
+func serveHealth(addr string, srv *server, startedAt time.Time) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("ok\n"))
+	})
+	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		payload := map[string]any{
+			"activeRooms":   srv.roomCount(),
+			"startedAt":     startedAt.UTC().Format(time.RFC3339),
+			"uptimeSeconds": int(time.Since(startedAt).Seconds()),
+		}
+		_ = json.NewEncoder(w).Encode(payload)
+	})
+
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	log.Printf("caro health server listening on %s", addr)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Printf("health server: %v", err)
+	}
 }

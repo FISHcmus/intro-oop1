@@ -1,0 +1,21 @@
+[Unit]
+Description=Caro room server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__CARO_SERVICE_USER__
+Group=__CARO_SERVICE_GROUP__
+WorkingDirectory=__CARO_WORKDIR__
+ExecStart=__CARO_BIN__ --addr 127.0.0.1:34567 --health-addr 127.0.0.1:34569
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=__CARO_WORKDIR__
+
+[Install]
+WantedBy=multi-user.target
