@@ -15,7 +15,7 @@ _Môn Nhập môn Lập trình Hướng đối tượng_
 
 - **Môn học:** Nhập môn Lập trình Hướng đối tượng
 - **Lớp:** Công nghệ giáo dục - Khoa Khoa học liên ngành
-- **Giảng viên hướng dẫn:** ThS. Trương Toàn Thịnh
+- **Giảng viên hướng dẫn:** TS. Trương Toàn Thịnh
 - **Học kỳ:** II - Năm học 2025–2026
 - **Ngày báo cáo:** _____
 
@@ -33,7 +33,7 @@ _Môn Nhập môn Lập trình Hướng đối tượng_
 
 ## Lời cảm ơn
 
-Nhóm chúng em xin chân thành cảm ơn *ThS. Trương Toàn Thịnh* đã hướng dẫn trong suốt học kỳ và tạo điều kiện để nhóm thử sức với một đề tài vừa mang tính học thuật, vừa có nhiều không gian để mở rộng. Trong quá trình thực hiện đồ án, nhóm không chỉ ôn lại các khái niệm nền tảng của lập trình hướng đối tượng mà còn học thêm nhiều vấn đề thực tế hơn như tổ chức mã nguồn lớn hơn bài tập trên lớp, kiểm soát lỗi khi lưu file, giữ giao diện không bị treo khi AI đang tính, và cân bằng giữa yêu cầu kỹ thuật với thời gian hoàn thành. Nhóm cũng cảm ơn các thành viên đã phối hợp trong giai đoạn hoàn thiện báo cáo, hình ảnh, slide và phần trình bày. Mọi nhận xét của Thầy/Cô sẽ là cơ sở quan trọng để nhóm cải thiện sản phẩm và cách làm việc ở các đồ án sau.
+Nhóm chúng em xin chân thành cảm ơn *TS. Trương Toàn Thịnh* đã hướng dẫn trong suốt học kỳ và tạo điều kiện để nhóm thử sức với một đề tài vừa mang tính học thuật, vừa có nhiều không gian để mở rộng. Trong quá trình thực hiện đồ án, nhóm không chỉ ôn lại các khái niệm nền tảng của lập trình hướng đối tượng mà còn học thêm nhiều vấn đề thực tế hơn như tổ chức mã nguồn lớn hơn bài tập trên lớp, kiểm soát lỗi khi lưu file, giữ giao diện không bị treo khi AI đang tính, và cân bằng giữa yêu cầu kỹ thuật với thời gian hoàn thành. Nhóm cũng cảm ơn các thành viên đã phối hợp trong giai đoạn hoàn thiện báo cáo, hình ảnh, slide và phần trình bày. Mọi nhận xét của Thầy/Cô sẽ là cơ sở quan trọng để nhóm cải thiện sản phẩm và cách làm việc ở các đồ án sau.
 
 -----
 
@@ -81,6 +81,8 @@ Bảng dưới đây tổng hợp các chức năng quan trọng của phiên b�
 | Release packaging | Build portable cho Linux và Windows | Hoàn thành |
 
 Ở mức mã nguồn, đồ án hiện có khoảng *10 000 dòng C++*, được chia thành hơn *20 module nguồn* cùng với phần unit test và tài nguyên UI. Đây không còn là quy mô của một bài tập ngắn trên lớp; vì vậy chất lượng tổ chức mã và cách viết báo cáo cũng cần được tiếp cận như một dự án nhỏ hoàn chỉnh.
+
+Phiên bản mã nguồn công khai của đồ án được nhóm trưởng *Nguyễn Hữu Thiện Nhân (NHANNHT)* phát hành dưới tên *NHANNHT Gomoku* tại: <https://github.com/nhannht/nhannht-gomoku>. Đây là bản public dùng để giới thiệu sản phẩm, chia sẻ mã nguồn và làm portfolio kỹ thuật cá nhân của tác giả chính.
 
 ## 1.4 Công cụ và môi trường phát triển
 
@@ -577,5 +579,7 @@ Nếu có thêm thời gian, nhóm muốn phát triển tiếp theo các hướn
 [7] *ISO/IEC 14882:2014*. C++14 Standard. <https://en.cppreference.com>
 
 [8] *IEEE 802.3*. CRC-32 polynomial `0xEDB88320`.
+
+[9] *Nguyễn Hữu Thiện Nhân (NHANNHT)* (2026). *NHANNHT Gomoku* - mã nguồn công khai của đồ án Caro/Gomoku 3D. <https://github.com/nhannht/nhannht-gomoku>
 
 *Hết báo cáo*

@@ -22,19 +22,19 @@
 ```
 intro-oop1/
 ├── doancaro/                    # Final project — Caro game (raylib, C++14)
-│   ├── src/                     #   18 modules — see "Caro Architecture" below
+│   ├── src/                     #   25 modules — see "Caro Architecture" below
 │   ├── tools/gallery_main.cpp   #   CaroGallery dev binary (UI sandbox)
 │   ├── tests/                   #   Catch2 v3 unit tests (test_board, test_ai)
 │   ├── assets/                  #   fonts/, images/, models/, sounds/, pieces/, textures/, videos/
 │   ├── slides/                  #   Slidev defense deck (caro-slides, package.json)
-│   ├── report/                  #   our_work/ (.md, .org, .tex, .pdf) + example/
-│   ├── storyline/               #   storyline_final.org — Cô Sử Tiên 4-set Story Mode arc
+│   ├── report/                  #   our_work/ (.md, .tex, .pdf) + example/
+│   ├── storyline/               #   storyline_final.md — Cô Sử Tiên 4-set Story Mode arc
 │   ├── public/                  #   screenshots used in the report
 │   ├── AI_ALGORITHM.md          #   AI design doc
 │   ├── CMakeLists.txt           #   3 targets (CaroGame, CaroGallery, CaroTests)
 │   └── .raw-assets/             #   gitignored — original GLB sources before stripping
 │
-├── week1/ … week3/, week7/, week8/   # Weekly homework dirs (note: 4, 5, 6 skipped — not yet done)
+├── week1/ … week3/, week7/ … week9/  # Weekly homework dirs (note: 4, 5, 6 skipped)
 ├── homework_lythuyet/lythuyetlan5/   # Theory homework
 ├── baigiang/                    # Lecture slides — PPSX (Week01–Week10)
 ├── extracted_content/           # Markdown extracted from PPSX (CSLTr_Week*.md + week*_images/)
@@ -42,8 +42,8 @@ intro-oop1/
 ├── books/                       # Reference PDFs — Stroustrup C++, CLRS Algorithms
 ├── past_exams/                  # Mid-term archives (2023-2024 + 2026 thuchanh)
 ├── ci-assets/                   # Visual Studio submission bundle (.sln, .vcxproj, bundle CMakeLists)
-├── cf/                          # Codeforces problem sets (gym W1-W2, W3-W4, W5-W6, OOP-Challenge)
-├── saves/                       # Runtime save data (.cdat slots)
+├── cf/                          # Codeforces sets (gym W1-W2 … W7-W8, OOP-2025B-W1-W5, OOP-Challenge, moodle_submit/)
+├── saves/                       # Runtime save data (.caro slots)
 ├── cmake-build-debug/           # CLion debug build dir
 ├── cmake-build-release/         # CLion release build dir
 ├── DoAnCaro.pdf                 # Final-project specification (teacher's rubric)
@@ -60,7 +60,7 @@ intro-oop1/
 
 | Target | Source | Role |
 |---|---|---|
-| `CaroGame` | src/* (~14 .cpp incl. main.cpp) | Production binary |
+| `CaroGame` | src/* (21 .cpp incl. main.cpp) | Production binary |
 | `CaroGallery` | tools/gallery_main.cpp + CaroUI lib | Dev sandbox — exercises every UIC component in every state, no game state. Window 1100×700, ESC to quit |
 | `CaroTests` | tests/test_board.cpp, tests/test_ai.cpp + GameLogic lib | Catch2 v3.8.0 unit tests, FetchContent + CTest discovery |
 
@@ -76,22 +76,29 @@ intro-oop1/
 | File | Role |
 |---|---|
 | `main.cpp` | 6-line entry: `Game game; game.run();` |
-| `Game.{h,cpp}` | Top-level state machine (`enum class GameState { Menu, Settings, PickDifficulty, Playing, GameOver, SaveScreen, LoadScreen }`); owns Board + 2 Players + Renderer + every screen + AudioManager. Async AI thread. Move history for undo. Toast + debug panel. |
+| `Game.{h,cpp}` | Top-level state machine (`enum class GameState { Menu, Settings, PickDifficulty, Multiplayer, Playing, GameOver, SaveScreen, LoadScreen, StoryPickSet, StoryIntro, StoryBeat }`); owns Board + 2 Players + Renderer + every screen + AudioManager + NetworkSession + `StoryMode::State` + story textures. Async AI thread (joined, never detached). Move history for undo (2 plies in PvAI, 1 in PvP). Toast + debug panel. |
 | `Board.{h,cpp}` | 15×15 grid. `placeMove/undoMove`, win detection, `getCandidateMoves` for AI, Zobrist hash for TT. |
 | `Player.{h,cpp}` | Base class. Human `setNextMove` from input. Stats. |
 | `AIPlayer.{h,cpp}` | Minimax + alpha-beta + transposition table (`unordered_map<uint64_t, TTEntry>`) + 243-entry pattern table (3⁵ window encoding). Threat-space search code present but unwired. `lastDebug` exposes top-5 moves, depth completed, TT stats. |
 | `Renderer.{h,cpp}` | 3D scene — orbital camera, 6 GLB models, **5 shaders**: gloss/Phong wet-coat, sky 3-stop gradient, edge-fade scroll, vignette, multi-octave value-noise mist. Async texture loader (450 unique piece grains). Camera-breathing idle bob. |
-| `MenuScreen.{h,cpp}` | Items: NewGame / **StoryMode** / LoadGame / Settings / Exit. preload() / shutdown() for ~200 MB animated background frames (121 PNGs). |
-| `SettingsScreen.{h,cpp}` | vsAI toggle + Back. |
+| `MenuScreen.{h,cpp}` | Items: NewGame / **StoryMode** / LoadGame / **Multiplayer** / Settings / Exit (`MenuChoice`, 6 items). preload() / shutdown() for ~200 MB animated background frames (121 PNGs). |
+| `SettingsScreen.{h,cpp}` | 3 rows: Mode info (vsAI) + Story-cheat toggle (`cheatUnlockAll` — unlock all story sets) + Back. |
 | `DifficultyScreen.{h,cpp}` | Easy / Normal / Hard / Cancel. Maps to AI search depth 1/2/3. |
 | `SaveLoadScreen.{h,cpp}` | 4 slots (0=autosave, 1–3 manual). Save/Load mode. Per-slot delete confirm. Slot card preview. |
 | `GameScreen.{h,cpp}` | HUD draw, message draw, prompt with text input. |
 | `AudioManager.{h,cpp}` | Place/Win/Lose/MenuClick SFX. BGM with menu/in-game pools, random reroll on track end. |
-| `FileManager.{h,cpp}` | Save format. Magic="CARO" (0x4341524F), version 3, CRC32 checksum, 4 slots. Header has stats + AI depth + game mode. |
+| `FileManager.{h,cpp}` | Save format `.caro`. Magic="CARO" (0x4341524F), **version 4**, CRC32 over the whole blob, 4 slots (0=autosave). Header: stats + AI depth + game mode (PvP/PvAI/Story) + v4 story fields (setId, match wins/losses, Voi/Gà/Ngựa charges). Atomic write via .tmp/.bak; older versions auto-migrated on load. |
 | `ParticleSystem.{h,cpp}` | 3D particles. Shapes: Cube/FlatRect/Spark. Emitters: placement / win-celebration / landing. Pending burst queue. |
-| `Theme.{h,cpp}` | Wuxia-storm palette (son_jade, son_bone, thuy_cyan, thuy_pearl, ink_sumi, gold_foil, etc.). Tokens: spacing, radius, elevation, motion. Type slots: `display_brush`, `body_serif`, `mono` (mono is declared but unset). |
-| `Fonts.{h,cpp}` | Inter Regular / Inter Bold / Bebas Neue. **Loaded with `LoadFontEx(..., nullptr, 0)` → ASCII 32–126 only.** Vietnamese diacritics + UTF-8 box-drawing chars currently render as `?`. |
-| `UIComponents.{h,cpp}` | UIC namespace: `drawPrimaryButton`, `drawTitle`, `drawHintBar`. State enum (Rest/Focused/Pressed/Disabled). Stateless free functions. |
+| `Theme.{h,cpp}` | Wuxia-storm palette (son_jade, son_bone, thuy_cyan, thuy_pearl, ink_sumi, gold_foil, etc.). Tokens: spacing, radius, elevation, motion. Type slots `display_brush`/`body_serif`/`mono` are declared but **unassigned** — code uses the `Fonts::` globals directly, not `Theme::type`. |
+| `Fonts.{h,cpp}` | Globals `body`/`bold`/`title` = **Terminus-Regular/Bold** (pixel/CRT look); `mono` = **JetBrainsMono-Regular**. All via `LoadFontEx` with **extended codepoints (full precomposed Vietnamese + Latin-1; mono adds box-drawing)** → diacritics and `╔═╗` panels render correctly. (Inter + BebasNeue no longer loaded.) |
+| `MultiplayerScreen.{h,cpp}` | LAN/online lobby UI (View: Root/LanHost/LanJoin/OnlineHost/OnlineJoin/Waiting). Collects name/IP/port/room-code; emits one `MultiplayerAction`/frame via `consumeAction()`. |
+| `NetworkSession.{h,cpp}` | TCP networking on a bg `std::thread`. LAN = direct P2P; Online = relay (CREATE/JOIN room codes). TAB-delimited text protocol (HELLO/START/MOVE/APPLY/…). `NetEvent` queue drained by `pollEvents()`. |
+| `ServerConfig.{h,cpp}` | Namespace resolving the online endpoint. Env: `CARO_SERVER_HOST/PORT/ENV`. CMake cache: `CARO_PRODUCTION_SERVER_HOST/PORT`. Default port 34567. |
+| `StoryMode.{h,cpp}` | Campaign state: 4 sets (Set1 Easy / Set2 Med / Set3 Hard / FinalBoss), best-of-3 each, linh-vật charges (Voi/Gà/Ngựa), boss cheat, per-set reset. See "Story Mode" below. |
+| `StoryContent.{h,cpp}` | All Vietnamese narrative text (8 intro pages, per-set intro/win/lose, unlock lines, epilogue, ASCII boss art). |
+| `StorySigil.{h,cpp}` | Tam-thái triangle HUD widget: 3 orbs track best-of-3, screen-wash + caption FX, optional textured orbs. |
+| `ViewBackgrounds.{h,cpp}` | Lazy wuxia PNG backdrops for Settings/Multiplayer/SaveLoad screens (gradient fallback if file missing). |
+| `UIComponents.{h,cpp}` | UIC namespace: `drawPrimaryButton`, `drawTitle`, `drawHintBar`, box-drawing panels (via `Fonts::mono`). State enum (Rest/Focused/Pressed/Disabled). Stateless free functions. |
 | `UI.h` | One inline helper: `mouseMoved()` — true only on frames the mouse delta is non-zero. |
 
 ### Build optimizations (CMakeLists.txt)
@@ -103,6 +110,8 @@ intro-oop1/
 - **PCH** for CaroTests: `<catch2/catch_test_macros.hpp>`, `<vector>`, `<string>`
 - raylib 5.5 via FetchContent (URL fallback when system pkg absent)
 - POST_BUILD copies `assets/` next to BOTH `CaroGame` and `CaroGallery` binaries
+- **Multiplayer**: CMake cache vars `CARO_PRODUCTION_SERVER_HOST` (default empty) / `CARO_PRODUCTION_SERVER_PORT` (34567) bake the online relay endpoint; `CARO_ENABLE_ENDPOINT_OVERRIDE` forced ON in Debug. Windows links `ws2_32`; POSIX sockets need no extra lib (pthread comes transitively via raylib's `Threads::Threads`)
+- `BUILD_TESTS` option (default ON) gates the `CaroTests` target + Catch2 v3.8.0 FetchContent
 
 ### Where new code goes
 
@@ -256,7 +265,7 @@ Exception: `execute_run_configuration` is fine for launching a built exe (Run �
 - **Cloud instance `c.scale` is world-units, not jitter**: After `baseScale = 10.0f / maxSpan` and `c.scale = baseScale * jitter`, `c.scale` ranges ~3.0–35.0 world units, NOT the input jitter ~0.3–3.5. Any extent math (fade radius, bbox checks) must use `c.scale * 0.5` for half-width — not `c.scale * 5`.
 - **Renderer default camera distance = 35**: Sanity-check any world-space radius against this. A fade-out radius >35 means every object sits inside its own invisibility ring at default zoom.
 - **GLB model stripping**: Remove node mesh refs with Python, then `npx @gltf-transform/cli prune in.glb out.glb` to shrink file
-- **Working directory**: Must run `./CaroGame` from `doancaro/build/` — assets use relative paths. Running from another dir causes silent asset load failures.
+- **Working directory**: Must run `./CaroGame` from the build output dir (`cmake-build-debug/doancaro/`) — assets use relative paths. Running from another dir causes silent asset load failures.
 - **GLFW init error**: Kill old game process before relaunching: `pkill -f CaroGame`
 - **New .cpp files**: See "Where new code goes" table above — destination depends on target (CaroGame `SOURCES`, `CaroUI` lib, `GameLogic` lib, or `CaroTests`).
 
@@ -264,15 +273,16 @@ Exception: `execute_run_configuration` is fine for launching a built exe (Run �
 
 CMake POST_BUILD copies the entire `assets/` tree next to BOTH `CaroGame` and `CaroGallery` binaries. Raw/original sources live in `doancaro/.raw-assets/` (gitignored, not bundled).
 
-### `assets/fonts/` — 3 TTFs
+### `assets/fonts/` — 5 TTFs (all loaded with extended Vietnamese codepoints)
 
-| File | Role | Notes |
+| File | Loaded as | Role |
 |---|---|---|
-| `Inter-Regular.ttf` | body / HUD | Currently loaded ASCII-only |
-| `Inter-Bold.ttf` | emphasis / player names | Currently loaded ASCII-only |
-| `BebasNeue.ttf` | titles / big text | Currently loaded ASCII-only |
+| `Terminus-Regular.ttf` | `Fonts::body` | body / HUD (pixel / CRT look) |
+| `Terminus-Bold.ttf` | `Fonts::bold`, `Fonts::title` (48px) | emphasis + titles |
+| `JetBrainsMono-Regular.ttf` | `Fonts::mono` | box-drawing panels (`╔═╗`), code-like text |
+| `Inter-Regular.ttf`, `Inter-Bold.ttf` | — | in the tree but **no longer loaded** (replaced by Terminus) |
 
-**No monospace font yet** — `Theme::type.mono` slot is declared in Theme.h but never assigned. Required for any UTF-8 box-drawing layout (panels with `╔═╗`).
+Fonts load via `LoadFontEx` with a precomposed-Vietnamese + Latin-1 codepoint set (mono adds box-drawing), so diacritics and box panels render correctly. `Theme::type.{display_brush,body_serif,mono}` pointer slots stay unassigned — the code references the `Fonts::` globals directly. (`BebasNeue.ttf` was removed.)
 
 ### `assets/models/` — 7 GLBs
 
@@ -301,7 +311,7 @@ CMake POST_BUILD copies the entire `assets/` tree next to BOTH `CaroGame` and `C
 
 `AudioManager::updateMusic()` rerolls a random track when the current one ends.
 
-### `assets/images/` — menu chrome
+### `assets/images/` — menu chrome + story art
 
 | Path | Role |
 |---|---|
@@ -309,6 +319,8 @@ CMake POST_BUILD copies the entire `assets/` tree next to BOTH `CaroGame` and `C
 | `menu-button.png` | Menu button base sprite |
 | `buttons/` | exit/play-via-internet/play-with-ai/settings PNGs |
 | `menu-frames/` | **121-frame animated menu background** (~200 MB VRAM — `MenuScreen::preload/shutdown` manages it) |
+| `view-backgrounds/` | 3 wuxia backdrops for Settings/Multiplayer/SaveLoad (`ViewBackgrounds`) |
+| `story/` | ~76 Story Mode images: `intro/` (8 pages) · `set-intro//set-win//set-lose/` (4 sets each) · `set-picker/` (4 cards) · `sigil/` (base + 3 orb states) · `unlock/` · `epilogue/` · linh-vật character art (voi/gà/ngựa) |
 
 ### `assets/videos/`, `assets/textures/`
 
@@ -320,12 +332,27 @@ CMake POST_BUILD copies the entire `assets/` tree next to BOTH `CaroGame` and `C
 
 ### Runtime config
 
-- `settings.cfg` in build dir — persists `vsAI` and `aiDepth` between restarts
-- Save slots: `slot0.cdat` (autosave) … `slot3.cdat` in user dir, NOT bundle dir
+- `settings.cfg` in build dir — persists `vsAI`, `aiDepth`, and `storyMaxUnlocked` (story progress) between restarts
+- Save slots: `autosave.caro` (slot 0) + `slot1.caro`…`slot3.caro` in `saves/` relative to the binary's cwd (= the build dir). Multiplayer games are never autosaved.
 
-## Story Mode (storyline_final.org)
+## Story Mode (Cô Sử Tiên 4-set arc) — IMPLEMENTED
 
-`MenuScreen::MenuChoice` already includes `StoryMode` — wired into the enum, no impl yet. The narrative spec is in `doancaro/storyline/storyline_final.org` ("Cô Sử Tiên 4-set arc"). Three sets at fixed difficulties (Easy/Medium/Hard) plus a final boss set, each with intro / win / lose narration beats and per-set linh-vật unlock lines (Voi 9 ngà / Gà 9 cựa / Ngựa 9 hồng mao).
+Narrative spec: `doancaro/storyline/storyline_final.md`. Modules: `StoryMode` (state), `StoryContent` (Vietnamese text), `StorySigil` (HUD widget), `ViewBackgrounds`. Flow through GameState: `StoryPickSet` (campaign picker) → `StoryIntro` (8-page monologue) → `StoryBeat` (per-set intro / win / lose / unlock / epilogue) → `Playing`.
+
+- **4 sets, fixed difficulty:** Set1 (Easy, AI depth 1), Set2 (Medium, 2), Set3 (Hard, 3), FinalBoss (depth 4). Every set is **best-of-3** (incl. FinalBoss). Losing a set restarts it; winning advances and shows a linh-vật unlock beat.
+- **Linh-vật powers** (charges reset per set, NOT cumulative): **Voi** = undo last 5 moves (Set2+); **Gà** = AI plays a random move this turn, 3 uses (Set3+); **Ngựa** = auto-saves you once on a match loss (FinalBoss only).
+- **FinalBoss cheat:** every 4th player move, the boss removes 4 pieces from the board (`tickBossCheat`).
+- **Tam-thái sigil HUD** (`StorySigil`): 3 orbs track the best-of-3 outcomes, with screen-wash + caption FX; 4 sigil textures load from `assets/images/story/sigil/`.
+- **Progress:** `storyMaxUnlocked` persists in `settings.cfg`; the `cheatUnlockAll` toggle (Settings) opens all 4 sets. Story matches save with `SaveGameMode::Story` (save v4 story fields).
+
+## Multiplayer / Networking
+
+Modules: `NetworkSession` (sockets + bg thread), `ServerConfig` (endpoint resolution), `MultiplayerScreen` (lobby UI). Reached via `MenuChoice::Multiplayer` → `GameState::Multiplayer`.
+
+- **Transport:** raw TCP (`SOCK_STREAM`) — POSIX sockets on Linux/Mac, Winsock2 on Windows (`ws2_32` linked). No third-party net library. The socket loop runs on a dedicated `std::thread`; `NetEvent`s post to a mutex-guarded queue drained by `pollEvents()` on the main thread.
+- **LAN:** direct peer-to-peer. Host listens + accepts one client; the **host applies moves** (`localAppliesMoves()`), client receives `APPLY`.
+- **Online:** clients connect to an external **relay** (`CREATE` → room code; `JOIN <code>`); the relay assigns marks (`START`) and re-broadcasts `APPLY` to both. **No relay server ships in this repo** — `CARO_PRODUCTION_SERVER_HOST` is empty by default, so online play needs `CARO_SERVER_HOST`/`CARO_SERVER_PORT` env vars (or a CMake-baked host).
+- **Wire protocol:** newline-delimited, TAB-separated text (`HELLO`, `START`, `MOVE`, `APPLY`, `CREATE`, `JOIN`, `ROOM`, `WAIT`, `INFO`, `ERROR`, `QUIT`). Default port **34567** (LAN + local + production).
 
 ## Homework Structure (MANDATORY — applies to ALL homework except Caro project)
 
