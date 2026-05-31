@@ -16,4 +16,6 @@ add_executable(week3 week3/source/main.cpp
         week3/source/Equation.cpp
 )
 
+add_executable(week8_hello week8/source/hello.cpp)
+
 add_subdirectory(doancaro)
